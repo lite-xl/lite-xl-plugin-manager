@@ -1,0 +1,3 @@
+lpm
+*.o
+lpm.lua.c
