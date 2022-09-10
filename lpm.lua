@@ -447,6 +447,11 @@ function common.basename(path)
 end
 
 
+function common.merge(src, merge)
+  for k, v in pairs(merge) do src[k] = v end
+  return src
+end
+
 function common.copy(src, dst)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
@@ -462,13 +467,49 @@ end
 
 local HOME, USERDIR, CACHEDIR, JSON, repositories
 
+local Plugin = {}
+
+local Plugin = { __index = function(self, idx) return rawget(self, idx) or Plugin[idx] end }
+function Plugin.new(repository, metadata)
+  local self = setmetatable(common.merge({
+    repository = repository,
+    tags = {},
+    remote = nil,
+    path = nil,
+    status = "available",
+    version = "1.0",
+    dependencies = {},
+    local_path = repository.local_path .. PATHSEP .. "repo" .. PATHSEP .. metadata.name,
+    install_path = USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. metadata.name,
+  }, metadata), Plugin)
+  -- Directory.
+  if system.stat(self.install_path) then
+    self.status = "installed"
+  end
+  -- Single file.
+  if system.stat(self.install_path .. ".lua") then
+    self.status = "installed"
+  end
+  return self
+end
+
+function Plugin:install()
+  common.copy(self.local_path, self.install_path)
+end
+
+
+function Plugin:uninstall()
+  common.rmrf(self.install_path)
+end
+
+
 local Repository = {}
 function Repository.__index(self, idx) return rawget(self, idx) or Repository[idx] end
 function Repository.new(hash)
   if not hash.remote then error("requires a remote") end
   local self = setmetatable({ 
     commit = hash.commit,
-    remote = hash.remote, 
+    remote = hash.remote,
     branch = hash.branch,
     plugins = nil,
     local_path = CACHEDIR .. PATHSEP .. system.hash(hash.remote),
@@ -491,12 +532,11 @@ function Repository:parse_manifest()
   if self.manifest then return self.manifest end
   if system.stat(self.local_path) and system.stat(self.local_path .. PATHSEP .. (self.commit or self.branch)) then
     self.manifest_path = self.local_path .. PATHSEP .. (self.commit or self.branch) .. PATHSEP .. "manifest.json"
-    if system.stat(self.manifest_path) then 
-      self.manifest = json.parse(io.open(manifest_path, "rb"):read("*all")) 
-      self.plugins = {}
-      for i, metadata in ipairs(self.manifest["plugins"]) do
-        table.insert(self.plugins, Plugin.new(self, metadata))
-      end
+    if not system.stat(self.manifest_path) then self:generate_manifest() end
+    self.manifest = json.decode(io.open(self.manifest_path, "rb"):read("*all")) 
+    self.plugins = {}
+    for i, metadata in ipairs(self.manifest["plugins"]) do
+      table.insert(self.plugins, Plugin.new(self, metadata))
     end
   end
   return self.manifest
@@ -504,9 +544,27 @@ end
 
 
 -- in the cases where we don't have a manifest, assume generalized structure, take plugins folder, trawl through it, build manifest that way
--- assuming each .lua file under 
+-- assuming each .lua file under the `plugins` folder is a plugin.
 function Repository:generate_manifest()
-  
+  if not self.commit and not self.branch then error("requires an instantiation") end
+  local path = self.local_path .. PATHSEP .. (self.commit or self.branch)
+  local plugin_dir = system.stat(path .. PATHSEP .. "plugins") and PATHSEP .. "plugins" .. PATHSEP or PATHSEP
+  local plugins = {}
+  for i, file in ipairs(system.ls(path .. plugin_dir)) do
+    if file:find("%.lua$") then
+      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), dependencies = {}, ["mod-version"] = 3, version = "1.0", tags = {}, path = plugin_dir .. file  }
+      for line in io.lines(path .. plugin_dir .. file) do
+        local _, _, mod_version = line:find("--.*mod-version:%s*(%w+)")
+        if mod_version then plugin["mod-version"] = mod_version end
+        local _, _, lite_version = line:find("--.*lite-xl%s*:?%s*(%w+)")
+        if lite_version then plugin["lite-version"] = lite_version end
+        local _, _, required_plugin = line:find("require [\"']plugins.(%w+)")
+        if required_plugin then plugin.dependencies[required_plugin] = ">=1.0" end
+      end
+      table.insert(plugins, plugin)
+    end
+  end
+  io.open(path .. PATHSEP .. "manifest.json", "wb"):write(json.encode({ plugins = plugins })):flush()
 end
 
 function Repository:add()
@@ -549,28 +607,6 @@ function Repository:remove()
   common.rmrf(self.path)
 end
 
-
-local Plugin = { __index = function(self, idx) return rawget(self, idx) or Plugin[idx] end }
-function Plugin.new(repository, metadata)
-  return setmetatable(common.merge({
-    repository = repository,
-    tags = {},
-    remote = nil,
-    path = nil,
-    version = "1.0",
-    local_path = repository.local_path .. PATHSEP .. "repo" .. PATHSEP .. (metadata.path or metadata.name),
-    install_path = USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. (metadata.path or metadata.name),
-  }, metadata), Plugin)
-end
-
-function Plugin:install()
-  common.copy(self.local_path, self.install_path)
-end
-
-
-function Plugin:uninstall()
-  common.rmrf(self.install_path)
-end
 
 
 local function get_repository(url)
@@ -646,13 +682,24 @@ local function lpm_list()
   for i,repo in ipairs(repositories) do
     if not repo.plugins then error("can't find plugins for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
     for j,plugin in ipairs(repo.plugins) do
-      table.insert(result.plugins, plugin)
+      table.insert(result.plugins, {
+        name = plugin.name,
+        status = plugin.status,
+        version = "" .. plugin.version,
+        dependencies = plugin.dependencies
+      })
     end
   end
   if JSON then
     io.stdout:write(json.encode(result))
   else
-    
+    for i, plugin in ipairs(result.plugins) do
+      if i ~= 0 then print("---------------------------") end
+      print("Name:          " .. plugin.name)
+      print("Version:       " .. plugin.version)
+      print("Status:        " .. plugin.status)
+      print("Dependencies:  " .. json.encode(plugin.dependencies))
+    end
   end
 end
 
@@ -661,10 +708,26 @@ local function lpm_purge()
   common.rmrf(CACHEDIR)
 end
 
+local function parse_arguments(arguments, options)
+  local args = {}
+  for i=1, #arguments do
+    local s,e = arguments[i]:find("%-%-")
+    if s then
+      local type = options[arguments[i]:sub(e + 1)]
+      if type == "flag" then
+        args[arguments[i]:sub(e + 1)] = true
+      end
+    else
+      table.insert(args, arguments[i])
+    end
+  end
+  return args
+end
 
 local status = 0
 xpcall(function()
-  JSON = os.getenv("LPM_JSON")
+  local ARGS = parse_arguments(ARGV, { json = "flag" })
+  JSON = ARGS["json"] or os.getenv("LPM_JSON")
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
   USERDIR = os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
        or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
@@ -678,16 +741,18 @@ xpcall(function()
     for i, remote_hash in ipairs(system.ls(CACHEDIR)) do
       local remote
       for j, commit_or_branch in ipairs(system.ls(CACHEDIR .. PATHSEP .. remote_hash)) do
-        if system.stat(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") then
-          for line in io.lines(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") do
-            local s,e = line:find("url = ") 
-            if s then remote = line:sub(s+1) break end
-          end
-          if remote then
-            if #commit_or_branch == 40 and not commit_or_branch:find("[^a-z0-9]") then
-              table.insert(repositories, Repository.new({ remote = remote, commit = commit_or_branch }))
-            else
-              table.insert(repositories, Repository.new({ remote = remote, branch = commit_or_branch }))
+        if commit_or_branch ~= repositories[1].branch and remote_hash ~= system.hash(repositories[1].remote) then
+          if system.stat(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") then
+            for line in io.lines(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") do
+              local s,e = line:find("url = ") 
+              if s then remote = line:sub(e+1) break end
+            end
+            if remote then
+              if #commit_or_branch == 40 and not commit_or_branch:find("[^a-z0-9]") then
+                table.insert(repositories, Repository.new({ remote = remote, commit = commit_or_branch }))
+              else
+                table.insert(repositories, Repository.new({ remote = remote, branch = commit_or_branch }))
+              end
             end
           end
         end
