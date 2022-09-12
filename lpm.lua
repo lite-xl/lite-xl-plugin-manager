@@ -443,7 +443,7 @@ end
 function common.basename(path)
   local s = path:reverse():find(PATHSEP)
   if not s then return path end
-  return path:sub(#path - s + 1)
+  return path:sub(#path - s + 2)
 end
 
 
@@ -452,24 +452,52 @@ function common.merge(src, merge)
   return src
 end
 
+
+function common.map(list, predicate)
+  local t = {}
+  for i, v in ipairs(list) do table.insert(t, predicate(v)) end
+  return t
+end
+
+
+function common.grep(list, predicate)
+  local t = {}
+  for i, v in ipairs(list) do if predicate(v) then table.insert(t, v) end end
+  return t
+end
+
 function common.copy(src, dst)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
   if dst_stat and dst_stat.type == "dir" and src_stat.type == "file" then return common.copy(src, dst .. PATHSEP .. common.basename(src)) end
-  if dst_stat then error("path " .. dst .. " exists") end
-  local src_io, dst_io = io.open(src, "rb"), io.write(dst, "wb")
+  local src_io, dst_io = io.open(src, "rb"), io.open(dst, "wb")
   while true do
     local chunk = src_io:read(16*1024)
     if not chunk then break end
     dst_io:write(chunk)
   end
+  dst_io:flush()
 end
 
-local HOME, USERDIR, CACHEDIR, JSON, repositories
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, repositories
+
+local actions = {}
+local function log_action(message)
+  if JSON then
+    table.insert(actions, message)
+  else
+    print(message)
+  end
+end
+
+
+local function match_version(version, pattern)
+  return not pattern or version == pattern
+end
+
 
 local Plugin = {}
-
-local Plugin = { __index = function(self, idx) return rawget(self, idx) or Plugin[idx] end }
+function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
   local self = setmetatable(common.merge({
     repository = repository,
@@ -479,26 +507,52 @@ function Plugin.new(repository, metadata)
     status = "available",
     version = "1.0",
     dependencies = {},
-    local_path = repository.local_path .. PATHSEP .. "repo" .. PATHSEP .. metadata.name,
-    install_path = USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. metadata.name,
+    local_path = repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. PATHSEP .. (metadata.path:gsub("^/", "") or metadata.name),
+    install_path = USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. (metadata.path and common.basename(metadata.path) or metadata.name),
   }, metadata), Plugin)
   -- Directory.
-  if system.stat(self.install_path) then
+  local stat = system.stat(self.install_path)
+  if stat then
     self.status = "installed"
-  end
-  -- Single file.
-  if system.stat(self.install_path .. ".lua") then
-    self.status = "installed"
+    self.type = stat.type == "dir" and "complex" or "singleton"
   end
   return self
 end
 
+function Plugin:is_incompatible(plugin)
+  if dependencies[plugin.name] then
+    if not match_version(plugin.version, dependencies[plugin.name]) then return true end
+  end
+  return false
+end
+
+function Plugin:get_dependencies()
+  local t = {}
+  for plugin, version in pairs(self.dependencies) do
+    local potential_plugins = get_plugin(plugin, version)
+    for i, potential_plugin in ipairs(potential_plugins) do
+      
+    end
+  end
+  return t
+end
+
+
 function Plugin:install()
-  common.copy(self.local_path, self.install_path)
+  if self.status == "installed" then error("plugin " .. self.name .. " is already installed") end
+  if self.status == "upgradable" then 
+    log_action("Upgrading plugin located at " .. self.local_path .. " to " .. self.install_path)
+    common.rmrf(self.install_path) 
+    common.copy(self.local_path, self.install_path)
+  else
+    log_action("Installing plugin located at " .. self.local_path .. " to " .. self.install_path)
+    common.copy(self.local_path, self.install_path)
+  end
 end
 
 
 function Plugin:uninstall()
+  log_action("Uninstalling plugin located at " .. self.install_path)
   common.rmrf(self.install_path)
 end
 
@@ -597,6 +651,7 @@ function Repository:update()
     local path = self.local_path .. PATHSEP .. self.branch
     system.fetch(path)
     system.reset(path, "refs/remotes/origin/" .. self.branch, "hard")
+    log_action("Updated " .. self.remote .. ":" .. (self.commit or self.branch))
     self.manifest = nil
     self:parse_manifest()
   end
@@ -618,25 +673,24 @@ local function get_repository(url)
 end
 
 
-local function match_version(version, pattern)
-  return not pattern or version == pattern
-end
-
-
-local function get_plugin(name, version)
+local function get_plugin(name, version, filter)
   local candidates = {}
+  filter = filter or {}
   for i,repo in ipairs(repositories) do
     for j,plugin in ipairs(repo.plugins) do
-      if match_version(plugin.version, version) then
-        table.insert(candidates, plugin)
+      if plugin.name == name and match_version(plugin.version, version) then
+        if (not filter.lite_version or plugin["lite-version"] == filter.lite_version) and (not filter.mod_version or plugin["mod-version"] == filter.mod_version) then
+          table.insert(candidates, plugin)
+        end
       end
     end
   end
-  return table.unpack(table.sort(candidates, function (a,b) return a.version < b.version end))
+  table.sort(candidates, function (a,b) return a.version < b.version end)
+  return table.unpack(candidates)
 end
 
 
-local function lpm_add(url)
+local function lpm_repo_add(url)
   local idx, repo = get_repository(url)
   if repo then -- if we're alreayd a repo, put this at the head of the resolution list
     table.remove(repositories, idx)
@@ -648,7 +702,7 @@ local function lpm_add(url)
 end
 
 
-local function lpm_rm(url)
+local function lpm_repo_rm(url)
   local idx, repo = get_repository(url)
   if not repo then error("cannot find repository " .. url) end
   table.remove(repositories, idx)
@@ -656,28 +710,43 @@ local function lpm_rm(url)
 end
 
 
-local function lpm_update(url)
+local function lpm_repo_update(url)
   local repo = url and get_repository(url)
   for i,v in ipairs(repositories) do if not repo or v == repo then v:update() end end
 end
 
 
-local function lpm_install(name, version)
+local function lpm_plugin_install(name, version)
   local plugin = get_plugin(name, version)
   if not plugin then error("can't find plugin " .. name) end
   plugin:install()
 end
 
 
-local function lpm_uninstall(name)
-  local plugin = get_plugin(name, version)
-  if not plugin then error("can't find plugin " .. name) end
-  if not plugin.installed then error("plugin " .. name .. " not installed") end
-  plugin:uninstall()
+local function lpm_plugin_uninstall(name)
+  local plugins = { get_plugin(name) }
+  if #plugins == 0 then error("can't find plugin " .. name) end
+  local installed_plugins = common.grep(plugins, function(plugin) return plugin.status == "installed" or plugin.status == "upgradable" end)
+  if #installed_plugins == 0 then error("plugin " .. name .. " not installed") end
+  for i, plugin in ipairs(installed_plugins) do plugin:uninstall() end
 end
 
 
-local function lpm_list() 
+local function lpm_repo_list() 
+  if JSON then
+    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch)  } end) }))
+  else
+    for i, repository in ipairs(repositories) do
+      if i ~= 0 then print("---------------------------") end
+      print("Remote:  " .. repository.remote)
+      print("Branch:  " .. repository.branch)
+      print("Commit:  " .. (repository.commit or "nil"))
+      print("Path  :  " .. repository.local_path .. PATHSEP .. (repository.commit or repository.branch))
+    end
+  end
+end
+
+local function lpm_plugin_list() 
   local result = { plugins = { } }
   for i,repo in ipairs(repositories) do
     if not repo.plugins then error("can't find plugins for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
@@ -686,7 +755,10 @@ local function lpm_list()
         name = plugin.name,
         status = plugin.status,
         version = "" .. plugin.version,
-        dependencies = plugin.dependencies
+        dependencies = plugin.dependencies,
+        ["lite-version"] = plugin["lite-version"],
+        ["mod-version"] = plugin["mod-version"],
+        repository = repo.remote .. ":" .. (repo.commit or repo.branch)
       })
     end
   end
@@ -698,6 +770,9 @@ local function lpm_list()
       print("Name:          " .. plugin.name)
       print("Version:       " .. plugin.version)
       print("Status:        " .. plugin.status)
+      print("Repository:    " .. plugin.repository)
+      print("Mod-Version:   " .. (plugin["mod-version"] or "unknown"))
+      print("Lite-Version:  " .. (plugin["lite-version"] or "unknown"))
       print("Dependencies:  " .. json.encode(plugin.dependencies))
     end
   end
@@ -710,49 +785,69 @@ end
 
 local function parse_arguments(arguments, options)
   local args = {}
-  for i=1, #arguments do
-    local s,e = arguments[i]:find("%-%-")
+  local i = 1
+  while i <= #arguments do
+    local s,e, option, value = arguments[i]:find("%-%-(%w+)=?(.*)")
     if s then
-      local type = options[arguments[i]:sub(e + 1)]
-      if type == "flag" then
-        args[arguments[i]:sub(e + 1)] = true
+      local flag_type = options[option]
+      if flag_type == "flag" then
+        args[option] = true
+      elseif flag_type == "string" or flag_type == "number" then
+        if not value then
+          if i < #arguments then error("option " .. option .. " requires a " .. flag_type) end
+          value = arguments[i+1]
+          i = i + 1
+        end
+        if flag_type == "number" and tonumber(flag_type) == nil then error("option " .. option .. " should be a number") end
+        args[option] = value
       end
     else
       table.insert(args, arguments[i])
     end
+    i = i + 1
   end
   return args
 end
 
 local status = 0
 xpcall(function()
-  local ARGS = parse_arguments(ARGV, { json = "flag" })
+  local ARGS = parse_arguments(ARGV, { json = "flag", userdir = "string", cachedir = "string", verbose = "flag", version = "string", modversion = "string" })
+  VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
-  USERDIR = os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
+  USERDIR = ARGS["userdir"] or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
        or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
-  CACHEDIR = os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
+  CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   repositories = {}
-  repositories = { Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "master" }) }
-  if not system.stat(CACHEDIR) or not system.stat(repositories[1].local_path) then 
-    common.mkdirp(repositories[1].local_path)
-    repositories[1]:add()
-  else
-    for i, remote_hash in ipairs(system.ls(CACHEDIR)) do
-      local remote
-      for j, commit_or_branch in ipairs(system.ls(CACHEDIR .. PATHSEP .. remote_hash)) do
-        if commit_or_branch ~= repositories[1].branch and remote_hash ~= system.hash(repositories[1].remote) then
-          if system.stat(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") then
-            for line in io.lines(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") do
-              local s,e = line:find("url = ") 
-              if s then remote = line:sub(e+1) break end
-            end
-            if remote then
-              if #commit_or_branch == 40 and not commit_or_branch:find("[^a-z0-9]") then
-                table.insert(repositories, Repository.new({ remote = remote, commit = commit_or_branch }))
-              else
-                table.insert(repositories, Repository.new({ remote = remote, branch = commit_or_branch }))
-              end
+  repositories = { Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "master" }), Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "2.1" }) }
+  local original_repositories = {}
+  for i, repository in ipairs(repositories) do
+    if not system.stat(CACHEDIR) or not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
+      common.mkdirp(repository.local_path)
+      repository:add()
+    end
+    table.insert(original_repositories, repository)
+  end
+  for i, remote_hash in ipairs(system.ls(CACHEDIR)) do
+    local remote
+    for j, commit_or_branch in ipairs(system.ls(CACHEDIR .. PATHSEP .. remote_hash)) do
+      local is_original = false
+      for i, repository in ipairs(original_repositories) do
+        if commit_or_branch == repository.branch and remote_hash == system.hash(repository.remote) then
+          is_original = true
+        end
+      end
+      if not is_original then
+        if system.stat(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") then
+          for line in io.lines(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") do
+            local s,e = line:find("url = ") 
+            if s then remote = line:sub(e+1) break end
+          end
+          if remote then
+            if #commit_or_branch == 40 and not commit_or_branch:find("[^a-z0-9]") then
+              table.insert(repositories, Repository.new({ remote = remote, commit = commit_or_branch }))
+            else
+              table.insert(repositories, Repository.new({ remote = remote, branch = commit_or_branch }))
             end
           end
         end
@@ -760,33 +855,55 @@ xpcall(function()
     end
   end
 
-  if ARGV[2] == "add" then return lpm_add(ARGV[3]) end
-  if ARGV[2] == "rm" then  return lpm_rm(ARGV[3]) end
-  if ARGV[2] == "update" then return lpm_update(ARGV[3]) end
-  if ARGV[2] == "install" then return lpm_install(ARGV[3]) end
-  if ARGV[2] == "uninstall" then return lpm_uninstall(ARGV[3]) end
-  if ARGV[2] == "purge" then return lpm_purge(ARGV[4]) end
-  if ARGV[2] == "list" then return lpm_list() end
-  io.stderr:write([[
-Usage: lpm COMMAND
+  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(ARGS[4])
+  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(ARGS[4])
+  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(ARGS[4])
+  elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list(ARGS[4])
+  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(ARGS[4])
+  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(ARGS[4])
+  elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list()
+  elseif ARGS[2] == "purge" then lpm_purge()
+  else
+    io.stderr:write([[
+Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
+It's designed to install packages from our central github repository (and
+affiliated repositories), directly into your lite-xl user directory. It can
+be called independently, for from the lite-xl `plugin_manager` plugin.
+
+LPM will always use https://github.com/lite-xl/lite-xl-plugins as its base
+repository, though others can be added.
+
 It has the following commands:
 
-lpm add <repository remote>
-lpm rm <repository remote>
-lpm update [<repository remote>]
-lpm install <plugin name>
-lpm uninstall <plugin name>
-lpm list
-]])
-end, function(err)
+lpm repo list                                -- List all extant repos.
+lpm repo add <repository remote>             -- Add a source repository.
+lpm repo rm <repository remote>              -- Remove a source repository.
+lpm repo update [<repository remote>]        -- Update all/the specified repository.
+lpm plugin install <plugin name> [<version>] -- Install the specific plugin in question.
+lpm plugin uninstall <plugin name>           -- Uninstall the specific plugin.
+lpm plugin list                              -- List all known plugins.
+lpm purge                                    -- Completely purge all state for LPM.
+]]
+    )
+  end
   if JSON then
-    io.stderr:write(json.encode({ error = err, traceback = debug.traceback() }))
+    io.stdout:write(json.encode({ actions = actions }))
+  end
+end, function(err)
+  local s, e = err:find(":%d+")
+  local message = err:sub(e + 3)
+  if JSON then
+    if VERBOSE then 
+      io.stderr:write(json.encode({ error = err, actions = actions, traceback = debug.traceback() }))
+    else
+      io.stderr:write(json.encode({ error = message or err, actions = actions }))
+    end
   else
-    io.stderr:write(err .. "\n")
-    io.stderr:write(debug.traceback() .. "\n")
+    io.stderr:write((not VERBOSE and message or err) .. "\n")
+    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
   end
   status = -1
 end)

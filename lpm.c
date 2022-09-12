@@ -383,8 +383,8 @@ int main(int argc, char* argv[]) {
     lua_pushliteral(L, "/");
   #endif
   lua_setglobal(L, "PATHSEP");
-  if (luaL_loadstring(L, luafile)) {
-  //if (luaL_loadfile(L, "lpm.lua")) {
+  //if (luaL_loadstring(L, luafile)) {
+  if (luaL_loadfile(L, "lpm.lua")) {
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
   }
