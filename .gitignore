@@ -1,3 +1,4 @@
 lpm
 *.o
 lpm.lua.c
+lib/prefix
