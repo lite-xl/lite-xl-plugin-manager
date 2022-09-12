@@ -61,6 +61,56 @@ static int lpm_hash(lua_State* L) {
 }
 
 /** BEGIN STOLEN LITE CODE **/
+
+#if _WIN32
+#define UTFCONV_ERROR_INVALID_CONVERSION "Input contains invalid byte sequences."
+static LPWSTR utfconv_utf8towc(const char *str) {
+  LPWSTR output;
+  int len;
+
+  // len includes \0
+  len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+  if (len == 0)
+    return NULL;
+
+  output = (LPWSTR) malloc(sizeof(WCHAR) * len);
+  if (output == NULL)
+    return NULL;
+
+  len = MultiByteToWideChar(CP_UTF8, 0, str, -1, output, len);
+  if (len == 0) {
+    free(output);
+    return NULL;
+  }
+
+  return output;
+}
+
+static char *utfconv_wctoutf8(LPCWSTR str) {
+  char *output;
+  int len;
+
+  // len includes \0
+  len = WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
+  if (len == 0)
+    return NULL;
+
+  output = (char *) malloc(sizeof(char) * len);
+  if (output == NULL)
+    return NULL;
+
+  len = WideCharToMultiByte(CP_UTF8, 0, str, -1, output, len, NULL, NULL);
+  if (len == 0) {
+    free(output);
+    return NULL;
+  }
+
+  return output;
+}
+#endif
+
+
+
 static int lpm_ls(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
 
@@ -86,7 +136,7 @@ static int lpm_ls(lua_State *L) {
   free(wpath);
   if (find_handle == INVALID_HANDLE_VALUE) {
     lua_pushnil(L);
-    push_win32_error(L, GetLastError());
+    lua_pushinteger(L, GetLastError());
     return 2;
   }
 
@@ -107,7 +157,7 @@ static int lpm_ls(lua_State *L) {
 
   if (GetLastError() != ERROR_NO_MORE_FILES) {
     lua_pushnil(L);
-    push_win32_error(L, GetLastError());
+    lua_pushinteger(L, GetLastError());
     FindClose(find_handle);
     return 2;
   }
@@ -149,7 +199,7 @@ static int lpm_rmdir(lua_State *L) {
     lua_pushboolean(L, 1);
   } else {
     lua_pushboolean(L, 0);
-    push_win32_error(L, GetLastError());
+    lua_pushinteger(L, GetLastError());
     return 2;
   }
 #else
@@ -354,18 +404,23 @@ int lpm_status(lua_State* L) {
 
 
 static const luaL_Reg system_lib[] = {
-  { "ls",    lpm_ls    }, // Returns an array of files.
-  { "stat",  lpm_stat  }, // Returns info about a single file.
-  { "mkdir", lpm_mkdir }, // Makes a directory.
-  { "rmdir", lpm_rmdir }, // Removes a directory.
-  { "hash",  lpm_hash  }, // Returns a hexhash.
-  { "init",  lpm_init }, // Initializes a git repository with the specified remote.
+  { "ls",     lpm_ls    }, // Returns an array of files.
+  { "stat",   lpm_stat  }, // Returns info about a single file.
+  { "mkdir",  lpm_mkdir }, // Makes a directory.
+  { "rmdir",  lpm_rmdir }, // Removes a directory.
+  { "hash",   lpm_hash  }, // Returns a hexhash.
+  { "init",   lpm_init }, // Initializes a git repository with the specified remote.
   { "fetch",  lpm_fetch }, // Updates a git repository with the specified remote.
   { "reset",  lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
   { "status", lpm_status } // Returns the git repository in question's current branch, if any, and commit hash.
 };
 
-extern const char* luafile;
+#ifndef LPM_VERSION
+  #define LPM_VERSION "unknown"
+#endif
+
+extern const char lpm_lua[];
+extern unsigned int lpm_lua_len;
 int main(int argc, char* argv[]) {
   git_libgit2_init();
   lua_State* L = luaL_newstate();
@@ -376,6 +431,8 @@ int main(int argc, char* argv[]) {
     lua_pushstring(L, argv[i]);
     lua_rawseti(L, -2, i+1);
   }
+  lua_pushliteral(L, LPM_VERSION);
+  lua_setglobal(L, "VERSION");
   lua_setglobal(L, "ARGV");
   #if _WIN32 
     lua_pushliteral(L, "\\");
@@ -383,7 +440,7 @@ int main(int argc, char* argv[]) {
     lua_pushliteral(L, "/");
   #endif
   lua_setglobal(L, "PATHSEP");
-  if (luaL_loadstring(L, luafile)) {
+  if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
   //if (luaL_loadfile(L, "lpm.lua")) {
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;

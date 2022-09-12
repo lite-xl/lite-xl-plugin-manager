@@ -880,7 +880,11 @@ end
 
 local status = 0
 xpcall(function()
-  local ARGS = parse_arguments(ARGV, { json = "flag", userdir = "string", cachedir = "string", verbose = "flag", quiet = "flag", version = "string", modversion = "string" })
+  local ARGS = parse_arguments(ARGV, { json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", quiet = "flag", version = "string", modversion = "string" })
+  if ARGS["version"] then
+    io.stdout:write(VERSION .. "\n")
+    os.exit(0)
+  end
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
@@ -946,7 +950,7 @@ xpcall(function()
   else
     io.stderr:write([[
 Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
-  [--verbose] [--version=2.1] [--modversion=3] [--quiet]
+  [--verbose] [--liteversion=2.1] [--modversion=3] [--quiet] [--version]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
