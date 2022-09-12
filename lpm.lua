@@ -466,6 +466,14 @@ function common.grep(list, predicate)
   return t
 end
 
+
+function common.join(list, joiner)
+  local s = ""
+  for i, v in ipairs(list) do if i > 1 then s = s .. joiner .. v else s = v end end
+  return s
+end
+
+
 function common.copy(src, dst)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
@@ -479,20 +487,21 @@ function common.copy(src, dst)
   dst_io:flush()
 end
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, repositories
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, QUIET, repositories
 
 local actions = {}
 local function log_action(message)
-  if JSON then
-    table.insert(actions, message)
-  else
-    print(message)
-  end
+  if JSON then table.insert(actions, message) end
+  if not QUIET then io.stderr:write(message .. "\n") end
 end
 
 
 local function match_version(version, pattern)
   return not pattern or version == pattern
+end
+
+local function compare_version(a, b)
+  return a and b and tonumber(a) < tonumber(b)
 end
 
 
@@ -512,11 +521,15 @@ function Plugin.new(repository, metadata)
   }, metadata), Plugin)
   -- Directory.
   local stat = system.stat(self.install_path)
-  if stat then
+  if stat and (not metadata.lite_version or metadata.lite_version == LITE_VERSION) and (not metadata.mod_version or metadata.mod_version == MOD_VERSION) then
     self.status = "installed"
     self.type = stat.type == "dir" and "complex" or "singleton"
   end
   return self
+end
+
+function Plugin:is_installed()
+  return self.status == "installed" or self.status == "upgradable"
 end
 
 function Plugin:is_incompatible(plugin)
@@ -526,20 +539,66 @@ function Plugin:is_incompatible(plugin)
   return false
 end
 
-function Plugin:get_dependencies()
-  local t = {}
-  for plugin, version in pairs(self.dependencies) do
-    local potential_plugins = get_plugin(plugin, version)
-    for i, potential_plugin in ipairs(potential_plugins) do
-      
+function Plugin:get_compatibilities()
+  local compatible_plugins = {}
+  local incompatible_plugins = {}
+  local installed_plugins = {}
+  for i, repo in ipairs(repositories) do
+    for j, plugin in ipairs(repositories.plugins) do
+      if plugin:is_installed() then
+        table.insert(installed_plugins, plugin)
+      end
     end
   end
-  return t
+  for plugin, version in pairs(self.dependencies) do
+    local potential_plugins = get_plugin(plugin, version, { mod_version = MODVERSION, lite_version = LITE_VERSION })
+    local has_at_least_one = false
+    local incomaptibilities = {}
+    for i, potential_plugin in ipairs(potential_plugins) do
+      for j, installed_plugin in ipairs(installed_plugins) do
+        if installed_plugin:is_incompatible(potential_plugin) then
+          table.insert(incomaptibilities, installed_plugin)
+        end
+      end
+      if #incomaptibilities == 0 then
+        if not compatible_plugins[plugin] or
+          potential_plugin:is_installed() or
+          (compare_version(compatible_plugins[plugin].version, potential_plugin.version) and not compatible_plugins[plugin]:is_installed())
+        then
+          compatible_plugins[plugin] = potential_plugin
+        end
+      else
+        incompatible_plugins[plugin] = incompatibilities
+      end
+    end
+  end
+  return compatible_plugins, incompatible_plugins
 end
 
 
-function Plugin:install()
+local core_plugins = {
+  autocomplete = true, autoreload = true, contextmenu = true, detectindent = true, drawwhitespace = true, language_c = true, language_cpp = true, language_css = true, language_html = true, language_js = true, language_lua = true, language_md = true, language_python = true, language_xml = true, lineguide = true, linewrapping = true, macro = true, projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true
+}
+
+function Plugin:install(installing)
+  installing = installing or {}
+  installing[self.name] = true
   if self.status == "installed" then error("plugin " .. self.name .. " is already installed") end
+  local compatible, incompatible = self:get_compatibilities()
+  for plugin, version in pairs(self.dependencies) do
+    if incompatible[plugin] then error("can't install " .. self.name .. ": incompatible with " .. incompatible[plugin][1].name .. ":" .. incompatible[plugin][1].version) end
+  end
+  for plugin, version in pairs(self.dependencies) do
+    if not core_plugins[plugin] and not compatible[plugin] then error("can't find dependency " .. plugin .. ":" .. version) end
+  end
+  for plugin, version in pairs(self.dependencies) do
+    if not core_plugins[plugin] and not compatible[plugin]:is_installed() then
+      if installing[plugin] then
+        error("circular dependency detected in " .. self.name .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.name)
+      end
+      compatible[plugin]:install(installing)
+    end
+  end
   if self.status == "upgradable" then 
     log_action("Upgrading plugin located at " .. self.local_path .. " to " .. self.install_path)
     common.rmrf(self.install_path) 
@@ -575,6 +634,8 @@ function Repository.new(hash)
       self.branch = "master"
     elseif system.stat(self.local_path .. PATHSEP .. PATHSEP .. "main") then
       self.branch = "main"
+    else
+      error("can't find branch for " .. self.remote)
     end
   end
   self:parse_manifest()
@@ -606,14 +667,14 @@ function Repository:generate_manifest()
   local plugins = {}
   for i, file in ipairs(system.ls(path .. plugin_dir)) do
     if file:find("%.lua$") then
-      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), dependencies = {}, ["mod-version"] = 3, version = "1.0", tags = {}, path = plugin_dir .. file  }
+      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), dependencies = {}, mod_version = 3, version = "1.0", tags = {}, path = plugin_dir .. file  }
       for line in io.lines(path .. plugin_dir .. file) do
-        local _, _, mod_version = line:find("--.*mod-version:%s*(%w+)")
-        if mod_version then plugin["mod-version"] = mod_version end
-        local _, _, lite_version = line:find("--.*lite-xl%s*:?%s*(%w+)")
-        if lite_version then plugin["lite-version"] = lite_version end
-        local _, _, required_plugin = line:find("require [\"']plugins.(%w+)")
-        if required_plugin then plugin.dependencies[required_plugin] = ">=1.0" end
+        local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
+        if mod_version then plugin.mod_version = mod_version end
+        local _, _, lite_version = line:find("%-%-.*lite%-xl%s*:?%s*(%w+)")
+        if lite_version then plugin.lite_version = "" .. lite_version end
+        local _, _, required_plugin = line:find("require [\"']plugins.([%w_]+)")
+        if required_plugin then if required_plugin ~= plugin.name then plugin.dependencies[required_plugin] = ">=1.0" end end
       end
       table.insert(plugins, plugin)
     end
@@ -626,6 +687,7 @@ function Repository:add()
   if not self.branch and not self.commit then 
     local path = self.local_path .. PATHSEP .. "master"
     common.mkdirp(path)
+    log_action("Retrieving " .. self.remote .. ":master/main...")
     system.init(path, self.remote)
     if not pcall(system.reset, "refs/heads/master") then
       if pcall(system.reset, "refs/heads/main") then
@@ -634,12 +696,15 @@ function Repository:add()
         error("Can't find master or main.")
       end
     end
+    log_action("Retrieved " .. self.remote .. ":master/main.")
   else
     local path = self.local_path .. PATHSEP .. (self.commit or self.branch)
     common.mkdirp(path)
+    log_action("Retrieving " .. self.remote .. ":master/main...")
     system.init(path, self.remote)
     system.fetch(path)
     system.reset(path, self.commit or ("refs/remotes/origin/" .. self.branch), "hard")
+    log_action("Retrieved " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
     self.manifest = nil
     self:parse_manifest()
   end
@@ -679,7 +744,7 @@ local function get_plugin(name, version, filter)
   for i,repo in ipairs(repositories) do
     for j,plugin in ipairs(repo.plugins) do
       if plugin.name == name and match_version(plugin.version, version) then
-        if (not filter.lite_version or plugin["lite-version"] == filter.lite_version) and (not filter.mod_version or plugin["mod-version"] == filter.mod_version) then
+        if (not filter.lite_version or plugin.lite_version == filter.lite_version) and (not filter.mod_version or plugin.mod_version == filter.mod_version) then
           table.insert(candidates, plugin)
         end
       end
@@ -717,8 +782,8 @@ end
 
 
 local function lpm_plugin_install(name, version)
-  local plugin = get_plugin(name, version)
-  if not plugin then error("can't find plugin " .. name) end
+  local plugin = get_plugin(name, version, { mod_version = MOD_VERSION, lite_version = LITE_VERSION })
+  if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any') .. " and lite-version: " .. (LITE_VERSION or 'any')) end
   plugin:install()
 end
 
@@ -726,7 +791,7 @@ end
 local function lpm_plugin_uninstall(name)
   local plugins = { get_plugin(name) }
   if #plugins == 0 then error("can't find plugin " .. name) end
-  local installed_plugins = common.grep(plugins, function(plugin) return plugin.status == "installed" or plugin.status == "upgradable" end)
+  local installed_plugins = common.grep(plugins, function(plugin) return plugin:is_installed() end)
   if #installed_plugins == 0 then error("plugin " .. name .. " not installed") end
   for i, plugin in ipairs(installed_plugins) do plugin:uninstall() end
 end
@@ -751,13 +816,15 @@ local function lpm_plugin_list()
   for i,repo in ipairs(repositories) do
     if not repo.plugins then error("can't find plugins for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
     for j,plugin in ipairs(repo.plugins) do
+      -- print("MOD VERSION " .. plugin.mod_version)
       table.insert(result.plugins, {
         name = plugin.name,
         status = plugin.status,
         version = "" .. plugin.version,
         dependencies = plugin.dependencies,
-        ["lite-version"] = plugin["lite-version"],
-        ["mod-version"] = plugin["mod-version"],
+        lite_version = plugin.lite_version,
+        mod_version = plugin.mod_version,
+        tags = plugin.tags,
         repository = repo.remote .. ":" .. (repo.commit or repo.branch)
       })
     end
@@ -771,15 +838,17 @@ local function lpm_plugin_list()
       print("Version:       " .. plugin.version)
       print("Status:        " .. plugin.status)
       print("Repository:    " .. plugin.repository)
-      print("Mod-Version:   " .. (plugin["mod-version"] or "unknown"))
-      print("Lite-Version:  " .. (plugin["lite-version"] or "unknown"))
+      print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
+      print("Lite-Version:  " .. (plugin.lite_version or "unknown"))
       print("Dependencies:  " .. json.encode(plugin.dependencies))
+      print("Tags:          " .. common.join(" ", plugin.tags))
     end
   end
 end
 
 
 local function lpm_purge()
+  log_action("Removed " .. CACHEDIR .. ".")
   common.rmrf(CACHEDIR)
 end
 
@@ -811,9 +880,14 @@ end
 
 local status = 0
 xpcall(function()
-  local ARGS = parse_arguments(ARGV, { json = "flag", userdir = "string", cachedir = "string", verbose = "flag", version = "string", modversion = "string" })
+  local ARGS = parse_arguments(ARGV, { json = "flag", userdir = "string", cachedir = "string", verbose = "flag", quiet = "flag", version = "string", modversion = "string" })
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
+  QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
+  MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION") or 3
+  if MOD_VERSION == "any" then MOD_VERSION = nil end
+  LITE_VERSION = ARGS["lite-version"] or os.getenv("LPM_LITEVERSION") or "2.1"
+  if LITE_VERSION == "any" then LITE_VERSION = nil end
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
   USERDIR = ARGS["userdir"] or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
        or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
@@ -857,15 +931,22 @@ xpcall(function()
 
   if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(ARGS[4])
   elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(ARGS[4])
+  elseif ARGS[2] == "add" then lpm_repo_add(ARGS[3])
+  elseif ARGS[2] == "rm" then lpm_repo_rm(ARGS[3])
+  elseif ARGS[2] == "update" then lpm_repo_update(ARGS[3])
   elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(ARGS[4])
   elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list(ARGS[4])
   elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(ARGS[4])
   elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(ARGS[4])
   elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list()
+  elseif ARGS[2] == "install" then lpm_plugin_install(ARGS[3])
+  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(ARGS[3])
+  elseif ARGS[2] == "list" then return lpm_plugin_list()
   elseif ARGS[2] == "purge" then lpm_purge()
   else
     io.stderr:write([[
 Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
+  [--verbose] [--version=2.1] [--modversion=3] [--quiet]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -878,14 +959,14 @@ repository, though others can be added.
 
 It has the following commands:
 
-lpm repo list                                -- List all extant repos.
-lpm repo add <repository remote>             -- Add a source repository.
-lpm repo rm <repository remote>              -- Remove a source repository.
-lpm repo update [<repository remote>]        -- Update all/the specified repository.
-lpm plugin install <plugin name> [<version>] -- Install the specific plugin in question.
-lpm plugin uninstall <plugin name>           -- Uninstall the specific plugin.
-lpm plugin list                              -- List all known plugins.
-lpm purge                                    -- Completely purge all state for LPM.
+lpm repo list                                  -- List all extant repos.
+lpm [repo] add <repository remote>             -- Add a source repository.
+lpm [repo] rm <repository remote>              -- Remove a source repository.
+lpm [repo] update [<repository remote>]        -- Update all/the specified repository.
+lpm [plugin] install <plugin name> [<version>] -- Install the specific plugin in question.
+lpm [plugin] uninstall <plugin name>           -- Uninstall the specific plugin.
+lpm [plugin] list                              -- List all known plugins.
+lpm purge                                      -- Completely purge all state for LPM.
 ]]
     )
   end
@@ -909,4 +990,4 @@ end, function(err)
 end)
 
 
-return status;
+return status
