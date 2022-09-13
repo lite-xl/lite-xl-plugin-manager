@@ -948,7 +948,7 @@ xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
     quiet = "flag", version = "string", modversion = "string", remotes = "flag", help = "flag",
-    remotes = "flag", ssl_cert = "string"
+    remotes = "flag", ssl_certs = "string"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -1022,10 +1022,10 @@ Flags have the following effects:
   if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
   CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
 
-  if ARGS["ssl_cert"] then 
-    local stat = system.stat(path)
-    if not stat then error("can't find " .. path) end
-    system.set_certs(stat.type, path)
+  if ARGS["ssl_certs"] then 
+    local stat = system.stat(ARGS["ssl_certs"])
+    if not stat then error("can't find " .. ARGS["ssl_certs"]) end
+    system.set_certs(stat.type, ARGS["ssl_certs"])
   elseif not os.getenv("SSL_CERT_DIR") and not os.getenv("SSL_CERT_FILE") then
     local paths = { 
       "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
