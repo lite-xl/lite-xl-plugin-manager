@@ -438,12 +438,22 @@ function common.copy(src, dst)
   dst_io:flush()
 end
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, QUIET, repositories
 
-local actions = {}
+local function is_commit_hash(hash)
+  return #hash == 40 and not hash:find("[^a-z0-9]")
+end
+
+
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, QUIET, AUTO_PULL_REMOTES, repositories
+
+local actions, warnings = {}, {}
 local function log_action(message)
   if JSON then table.insert(actions, message) end
   if not QUIET then io.stderr:write(message .. "\n") end
+end
+local function log_warning(message)
+  if JSON then table.insert(warning, message) end
+  if not QUIET then io.stderr:write("warning: " .. message .. "\n") end
 end
 
 
@@ -589,23 +599,44 @@ function Repository.new(hash)
       error("can't find branch for " .. self.remote)
     end
   end
-  self:parse_manifest()
   return self
 end
 
 
-function Repository:parse_manifest()
-  if self.manifest then return self.manifest end
+function Repository:parse_manifest(already_pulling)
+  if self.manifest then return self.manifest, self.remotes end
   if system.stat(self.local_path) and system.stat(self.local_path .. PATHSEP .. (self.commit or self.branch)) then
     self.manifest_path = self.local_path .. PATHSEP .. (self.commit or self.branch) .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then self:generate_manifest() end
     self.manifest = json.decode(io.open(self.manifest_path, "rb"):read("*all")) 
     self.plugins = {}
-    for i, metadata in ipairs(self.manifest["plugins"]) do
-      table.insert(self.plugins, Plugin.new(self, metadata))
+    self.remotes = {}
+    for i, metadata in ipairs(self.manifest["plugins"] or {}) do
+      if metadata.remote then
+        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(.*)?$")
+        if branch_or_commit and is_commit_hash(branch_or_commit) then
+          repo = Repository.new({ remote = url, commit = branch_or_commit })
+          table.insert(remotes, repo)
+          table.insert(self.plugins, Plugin.new(self, metadata))
+        else
+          log_warning("plugin " .. plugin.name .. " specifies remote as source, but ")
+        end
+      else
+        table.insert(self.plugins, Plugin.new(self, metadata))
+      end
+    end
+    for i, remote in ipairs(self.manifest["remotes"] or {}) do
+      local _, _, url, branch_or_commit = remote:find("^(.-):?(.*)?$")
+      local repo
+      if branch_or_commit and is_commit_hash(branch_or_commit) then
+        repo = Repository.new({ remote = url, commit = branch_or_commit })
+      else
+        repo = Repository.new({ remote = url, branch = branch_or_commit })
+      end
+      table.insert(self.remotes, repo)
     end
   end
-  return self.manifest
+  return self.manifest, self.remotes
 end
 
 
@@ -657,19 +688,38 @@ function Repository:add()
     system.reset(path, self.commit or ("refs/remotes/origin/" .. self.branch), "hard")
     log_action("Retrieved " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
     self.manifest = nil
-    self:parse_manifest()
+  end
+  local manifest, remotes = self:parse_manifest()
+  if AUTO_PULL_REMOTES then -- any remotes we don't have in our listing, call add, and add into the list
+    for i, remote in ipairs(remotes) do 
+      local has = common.grep(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) > 0
+      if #has == 0 then
+        remote:add() 
+        table.insert(repositories, remote)
+      end
+    end
   end
 end
 
 
 function Repository:update()
+  local manifest, remotes = self:parse_manifest()
   if self.branch then
     local path = self.local_path .. PATHSEP .. self.branch
     system.fetch(path)
     system.reset(path, "refs/remotes/origin/" .. self.branch, "hard")
     log_action("Updated " .. self.remote .. ":" .. (self.commit or self.branch))
     self.manifest = nil
-    self:parse_manifest()
+    manifest, remotes = self:parse_manifest()
+  end
+  if AUTO_PULL_REMOTES then -- any remotes we don't have in our listing, call add, and add into the list
+    for i, remote in ipairs(remotes) do 
+      local has = #common.grep(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end)
+      if #has == 0 then
+        remote:add() 
+        table.insert(repositories, remote)
+      end
+    end
   end
 end
 
@@ -848,9 +898,9 @@ local function error_handler(err)
   local message = e and err:sub(e + 3) or err
   if JSON then
     if VERBOSE then 
-      io.stderr:write(json.encode({ error = err, actions = actions, traceback = debug.traceback() }) .. "\n")
+      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback() }) .. "\n")
     else
-      io.stderr:write(json.encode({ error = message or err, actions = actions }) .. "\n")
+      io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
     end
   else
     io.stderr:write((not VERBOSE and message or err) .. "\n")
@@ -879,7 +929,7 @@ local function run_command(ARGS)
     error("unknown command: " .. ARGS[2])
   end
   if JSON then
-    io.stdout:write(json.encode({ actions = actions }))
+    io.stdout:write(json.encode({ actions = actions, warnings = warnings }))
   end
 end
 
@@ -887,7 +937,8 @@ end
 xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
-    quiet = "flag", version = "string", modversion = "string", remotes = "flag", help = "flag"
+    quiet = "flag", version = "string", modversion = "string", remotes = "flag", help = "flag",
+    remotes = "flag"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -939,6 +990,8 @@ Flags have the following effects:
   --lite-version=2.1             Sets the version of lite-xl to use to install plugins against.
   --mod-version=3                Sets the mod version of lite-xl to install plugins against.
   --version                      Returns version information.
+  --remotes                      Automatically adds any specified remotes in the repository to
+                                 the end of the resolution list.
   --help                         Displays this help text.
 ]]
     )
@@ -954,6 +1007,7 @@ Flags have the following effects:
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
   USERDIR = ARGS["userdir"] or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
+  AUTO_PULL_REMOTES = ARGS["remotes"]
   if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
   CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   repositories = {}
@@ -963,6 +1017,8 @@ Flags have the following effects:
     if not system.stat(CACHEDIR) or not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
       common.mkdirp(repository.local_path)
       repository:add()
+    else
+      repository:parse_manifest()
     end
     table.insert(original_repositories, repository)
   end
@@ -982,17 +1038,18 @@ Flags have the following effects:
             if s then remote = line:sub(e+1) break end
           end
           if remote then
-            if #commit_or_branch == 40 and not commit_or_branch:find("[^a-z0-9]") then
+            if is_commit_hash(commit_or_branch) then
               table.insert(repositories, Repository.new({ remote = remote, commit = commit_or_branch }))
             else
               table.insert(repositories, Repository.new({ remote = remote, branch = commit_or_branch }))
             end
+            repositories[#repositories]:parse_manifest()
           end
         end
       end
     end
   end
-
+  
   if ARGS[2] ~= '-' then
     run_command(ARGS)
   else
@@ -1010,7 +1067,7 @@ Flags have the following effects:
       xpcall(function()
         run_command(args)
       end, error_handler)
-      actions = {}
+      actions, warnings = {}, {}
     end
   end
 
