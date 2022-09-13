@@ -417,6 +417,14 @@ function common.join(list, joiner)
 end
 
 
+function common.slice(t, i, l)
+  local n = {}
+  for j = i, i+l do
+    table.insert(n, t[j])
+  end
+  return n
+end
+
 function common.copy(src, dst)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
@@ -698,45 +706,58 @@ local function get_plugin(name, version, filter)
 end
 
 
-local function lpm_repo_add(url)
-  local idx, repo = get_repository(url)
-  if repo then -- if we're alreayd a repo, put this at the head of the resolution list
-    table.remove(repositories, idx)
-  else
-    repo = Repository.new(url):add()
+local function lpm_repo_add(...)
+  for i, url in ipairs({ ... }) do
+    local idx, repo = get_repository(url)
+    if repo then -- if we're alreayd a repo, put this at the head of the resolution list
+      table.remove(repositories, idx)
+    else
+      repo = Repository.new(url):add()
+    end
+    table.insert(repositories, 1, repo)
+    repo:update()
   end
-  table.insert(repositories, 1, repo)
-  repo:update()
 end
 
 
-local function lpm_repo_rm(url)
-  local idx, repo = get_repository(url)
-  if not repo then error("cannot find repository " .. url) end
-  table.remove(repositories, idx)
-  repo:remove()
+local function lpm_repo_rm(...)
+  for i, url in ipairs({ ... }) do
+    local idx, repo = get_repository(url)
+    if not repo then error("cannot find repository " .. url) end
+    table.remove(repositories, idx)
+    repo:remove()
+  end
 end
 
 
-local function lpm_repo_update(url)
-  local repo = url and get_repository(url)
-  for i,v in ipairs(repositories) do if not repo or v == repo then v:update() end end
+local function lpm_repo_update(...)
+  local t = { ... }
+  if #t == 0 then table.insert(t, nil) end
+  for i, url in ipairs({ ... }) do
+    local repo = url and get_repository(url)
+    for i,v in ipairs(repositories) do if not repo or v == repo then v:update() end end
+  end
 end
 
 
-local function lpm_plugin_install(name, version)
-  local plugin = get_plugin(name, version, { mod_version = MOD_VERSION, lite_version = LITE_VERSION })
-  if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any') .. " and lite-version: " .. (LITE_VERSION or 'any')) end
-  plugin:install()
+local function lpm_plugin_install(...)
+  for i, identifier in ipairs({ ... }) do
+    local _, _, name, version = identifier:find("^(%w+):?(%w+)?$")
+    local plugin = get_plugin(name, version, { mod_version = MOD_VERSION, lite_version = LITE_VERSION })
+    if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any') .. " and lite-version: " .. (LITE_VERSION or 'any')) end
+    plugin:install()
+  end
 end
 
 
-local function lpm_plugin_uninstall(name)
-  local plugins = { get_plugin(name) }
-  if #plugins == 0 then error("can't find plugin " .. name) end
-  local installed_plugins = common.grep(plugins, function(plugin) return plugin:is_installed() end)
-  if #installed_plugins == 0 then error("plugin " .. name .. " not installed") end
-  for i, plugin in ipairs(installed_plugins) do plugin:uninstall() end
+local function lpm_plugin_uninstall(...)
+  for i, name in ipairs({ ... }) do
+    local plugins = { get_plugin(name) }
+    if #plugins == 0 then error("can't find plugin " .. name) end
+    local installed_plugins = common.grep(plugins, function(plugin) return plugin:is_installed() end)
+    if #installed_plugins == 0 then error("plugin " .. name .. " not installed") end
+    for i, plugin in ipairs(installed_plugins) do plugin:uninstall() end
+  end
 end
 
 
@@ -801,6 +822,7 @@ local function parse_arguments(arguments, options)
     local s,e, option, value = arguments[i]:find("%-%-(%w+)=?(.*)")
     if s then
       local flag_type = options[option]
+      if not flag_type then error("unknown flag --" .. option) end
       if flag_type == "flag" then
         args[option] = true
       elseif flag_type == "string" or flag_type == "number" then
@@ -839,18 +861,18 @@ end
 
 local function run_command(ARGS)
   if not ARGS[2]:find("%S") then return end
-  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(ARGS[4])
-  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(ARGS[4])
-  elseif ARGS[2] == "add" then lpm_repo_add(ARGS[3])
-  elseif ARGS[2] == "rm" then lpm_repo_rm(ARGS[3])
-  elseif ARGS[2] == "update" then lpm_repo_update(ARGS[3])
-  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(ARGS[4])
-  elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list(ARGS[4])
-  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(ARGS[4])
-  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(ARGS[4])
+  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(table.unpack(slice(ARGS, 4)))
+  elseif ARGS[2] == "add" then lpm_repo_add(table.unpack(slice(ARGS, 3)))
+  elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(slice(ARGS, 3)))
+  elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(slice(ARGS, 3)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list()
+  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(table.unpack(slice(ARGS, 4)))
+  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(table.unpack(slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list()
-  elseif ARGS[2] == "install" then lpm_plugin_install(ARGS[3])
-  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(ARGS[3])
+  elseif ARGS[2] == "install" then lpm_plugin_install(table.unpack(slice(ARGS, 3)))
+  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(table.unpack(slice(ARGS, 3)))
   elseif ARGS[2] == "list" then return lpm_plugin_list()
   elseif ARGS[2] == "purge" then lpm_purge()
   else
@@ -863,16 +885,19 @@ end
 
 
 xpcall(function()
-  local ARGS = parse_arguments(ARGV, { json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", quiet = "flag", version = "string", modversion = "string" })
+  local ARGS = parse_arguments(ARGV, { 
+    json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
+    quiet = "flag", version = "string", modversion = "string", remotes = "flag", help = "flag"
+  })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
     return 0
   end
-  if ARGS["help"] then
+  if ARGS["help"] or #ARGS == 1 or ARGS[2] == "help" then
     io.stderr:write([[
 Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
-  [--verbose] [--liteversion=2.1] [--modversion=3] [--quiet] [--version]
-  [--help]
+  [--verbose] [--lite-version=2.1] [--mod-version=3] [--quiet] [--version]
+  [--help] [--remotes]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -885,14 +910,36 @@ repository, though others can be added.
 
 It has the following commands:
 
-lpm repo list                                  -- List all extant repos.
-lpm [repo] add <repository remote>             -- Add a source repository.
-lpm [repo] rm <repository remote>              -- Remove a source repository.
-lpm [repo] update [<repository remote>]        -- Update all/the specified repository.
-lpm [plugin] install <plugin name> [<version>] -- Install the specific plugin in question.
-lpm [plugin] uninstall <plugin name>           -- Uninstall the specific plugin.
-lpm [plugin] list                              -- List all known plugins.
-lpm purge                                      -- Completely purge all state for LPM.
+  lpm repo list                                      List all extant repos.
+  lpm [repo] add <repository remote>                 Add a source repository.
+    [...<repository remote>] 
+  lpm [repo] rm <repository remote>                  Remove a source repository.
+    [...<repository remote>]
+  lpm [repo] update [<repository remote>]            Update all/the specified repositories.
+    [...<repository remote>]        
+  lpm [plugin] install <plugin name>[:<version>]     Install the specific plugins in question.
+    [...<plugin name>:<version>] 
+  lpm [plugin] uninstall <plugin name>               Uninstall the specific plugin.
+    [...<plugin name>]
+  lpm [plugin] list                                  List all known plugins.
+  lpm purge                                          Completely purge all state for LPM.
+  lpm -                                              Read these commands from stdin in an 
+                                                     interactive print-eval loop.
+  lpm help                                           Displays this help text.
+
+Flags have the following effects:
+
+  --json                         Performs all communication in JSON, rather than human-readable.
+  --userdir=directory            Treats the specified directory as the lite-xl userdir.
+                                 By default, this is set based on the normal lite-xl logic.
+  --cachedir=directory           Sets the directory to store all repositories.
+  --verbose                      Spits out more information, including intermediate steps to
+                                 install and whatnot.
+  --quiet                        Outputs nothing but explicit returning information from actions.
+  --lite-version=2.1             Sets the version of lite-xl to use to install plugins against.
+  --mod-version=3                Sets the mod version of lite-xl to install plugins against.
+  --version                      Returns version information.
+  --help                         Displays this help text.
 ]]
     )
     return 0
@@ -946,7 +993,7 @@ lpm purge                                      -- Completely purge all state for
     end
   end
 
-  if #ARGS > 1 then
+  if ARGS[2] ~= '-' then
     run_command(ARGS)
   else
     while true do
