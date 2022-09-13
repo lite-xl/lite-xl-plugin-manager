@@ -369,6 +369,17 @@ int lpm_fetch(lua_State* L) {
 }
 
 
+int lpm_set_certs(lua_State* L) {
+  const char* type = luaL_checkstring(L, 1);
+  const char* path = luaL_checkstring(L, 2);
+  if (strcmp(type, "dir") == 0)
+    git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
+  else
+    git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
+  return 0;
+}
+
+
 int lpm_status(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   git_repository* repository;
@@ -393,7 +404,8 @@ static const luaL_Reg system_lib[] = {
   { "init",   lpm_init }, // Initializes a git repository with the specified remote.
   { "fetch",  lpm_fetch }, // Updates a git repository with the specified remote.
   { "reset",  lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
-  { "status", lpm_status } // Returns the git repository in question's current branch, if any, and commit hash.
+  { "status", lpm_status }, // Returns the git repository in question's current branch, if any, and commit hash.
+  { "set_certs", lpm_set_certs } // Returns the git repository in question's current branch, if any, and commit hash.
 };
 
 #ifndef LPM_VERSION
@@ -416,13 +428,16 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "VERSION");
   lua_setglobal(L, "ARGV");
   #if _WIN32 
+    lus_pushliteral(L, "windows");
     lua_pushliteral(L, "\\");
   #else
+    lua_pushliteral(L, "posix");
     lua_pushliteral(L, "/");
   #endif
   lua_setglobal(L, "PATHSEP");
+  lua_setglobal(L, "PLATFORM");
   if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
-  //if (luaL_loadfile(L, "lpm.lua")) {
+  // if (luaL_loadfile(L, "lpm.lua")) {
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
   }

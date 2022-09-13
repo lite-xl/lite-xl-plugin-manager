@@ -4,6 +4,7 @@
 [submodule "lib/libgit2"]
 	path = lib/libgit2
 	url = https://github.com/libgit2/libgit2.git
+	branch = main
 [submodule "lib/openssl"]
 	path = lib/openssl
 	url = https://github.com/openssl/openssl.git

@@ -1,4 +1,4 @@
-setmetatable(_G, { __newindex = function(t, k) error("cannot set global variable: " .. k, 2) end  })
+setmetatable(_G, { __index = function(t, k) if not rawget(t, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k) error("cannot set global variable: " .. k, 2) end  })
 
 -- Begin rxi JSON library.
 local json = { _version = "0.1.2" }
@@ -419,7 +419,7 @@ end
 
 function common.slice(t, i, l)
   local n = {}
-  for j = i, i+l do
+  for j = i, l ~= nil and (i - l) or #t do
     table.insert(n, t[j])
   end
   return n
@@ -641,12 +641,21 @@ end
 
 
 -- in the cases where we don't have a manifest, assume generalized structure, take plugins folder, trawl through it, build manifest that way
--- assuming each .lua file under the `plugins` folder is a plugin.
+-- assuming each .lua file under the `plugins` folder is a plugin. also parse the README, if present, and see if any of the plugins 
 function Repository:generate_manifest()
   if not self.commit and not self.branch then error("requires an instantiation") end
   local path = self.local_path .. PATHSEP .. (self.commit or self.branch)
   local plugin_dir = system.stat(path .. PATHSEP .. "plugins") and PATHSEP .. "plugins" .. PATHSEP or PATHSEP
-  local plugins = {}
+  local plugins, plugin_map = {}, {}
+  if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
+    for line in io.lines(path .. PATHSEP .. "README.md") do
+      local _, _, name, path, description = line:find("^%s*%|%s*%[`(%w+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
+      if name then
+        plugin_map[name] = { name = name, description = description }
+        plugin_map[path:find("^http") and "remote" or "path"] = path
+      end
+    end
+  end
   for i, file in ipairs(system.ls(path .. plugin_dir)) do
     if file:find("%.lua$") then
       local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), dependencies = {}, mod_version = 3, version = "1.0", tags = {}, path = plugin_dir .. file  }
@@ -658,6 +667,7 @@ function Repository:generate_manifest()
         local _, _, required_plugin = line:find("require [\"']plugins.([%w_]+)")
         if required_plugin then if required_plugin ~= plugin.name then plugin.dependencies[required_plugin] = ">=1.0" end end
       end
+      if plugin_map[plugin.name] then plugin = common.merge(plugin, plugin_map[plugin.name]) end
       table.insert(plugins, plugin)
     end
   end
@@ -913,23 +923,21 @@ end
 
 local function run_command(ARGS)
   if not ARGS[2]:find("%S") then return end
-  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(slice(ARGS, 4)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(table.unpack(slice(ARGS, 4)))
-  elseif ARGS[2] == "add" then lpm_repo_add(table.unpack(slice(ARGS, 3)))
-  elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(slice(ARGS, 3)))
-  elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(slice(ARGS, 3)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(slice(ARGS, 4)))
+  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list()
-  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(table.unpack(slice(ARGS, 4)))
-  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(table.unpack(slice(ARGS, 4)))
+  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list()
-  elseif ARGS[2] == "install" then lpm_plugin_install(table.unpack(slice(ARGS, 3)))
-  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(table.unpack(slice(ARGS, 3)))
+  elseif ARGS[2] == "install" then lpm_plugin_install(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "list" then return lpm_plugin_list()
   elseif ARGS[2] == "purge" then lpm_purge()
-  else
-    error("unknown command: " .. ARGS[2])
-  end
+  else error("unknown command: " .. ARGS[2]) end
   if JSON then
     io.stdout:write(json.encode({ actions = actions, warnings = warnings }))
   end
@@ -940,7 +948,7 @@ xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
     quiet = "flag", version = "string", modversion = "string", remotes = "flag", help = "flag",
-    remotes = "flag"
+    remotes = "flag", ssl_cert = "string"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -950,7 +958,7 @@ xpcall(function()
     io.stderr:write([[
 Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
   [--verbose] [--lite-version=2.1] [--mod-version=3] [--quiet] [--version]
-  [--help] [--remotes]
+  [--help] [--remotes] [--ssl_certs=directory/file]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -995,6 +1003,7 @@ Flags have the following effects:
   --remotes                      Automatically adds any specified remotes in the repository to
                                  the end of the resolution list.
   --help                         Displays this help text.
+  --ssl_certs                    Sets the SSL certificate store to specified location.
 ]]
     )
     return 0
@@ -1012,6 +1021,35 @@ Flags have the following effects:
   AUTO_PULL_REMOTES = ARGS["remotes"]
   if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
   CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
+
+  if ARGS["ssl_cert"] then 
+    local stat = system.stat(path)
+    if not stat then error("can't find " .. path) end
+    system.set_certs(stat.type, path)
+  elseif not os.getenv("SSL_CERT_DIR") and not os.getenv("SSL_CERT_FILE") then
+    local paths = { 
+      "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
+      "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
+      "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
+      "/etc/pki/tls/cacert.pem",                           -- OpenELEC
+      "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
+      "/etc/ssl/cert.pem",                                 -- Alpine Linux
+      "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
+      "/system/etc/security/cacerts",                      -- Android
+      "/usr/local/share/certs",                            -- FreeBSD
+      "/etc/pki/tls/certs",                                -- Fedora/RHEL
+      "/etc/openssl/certs",                                -- NetBSD
+      "/var/ssl/certs",                                    -- AIX
+    }
+    for i, path in ipairs(paths) do
+      local stat = system.stat(path) 
+      if stat then 
+        system.set_certs(stat.type, path) 
+        break 
+      end
+    end
+  end
+  
   repositories = {}
   repositories = { Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "master" }), Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "2.1" }) }
   local original_repositories = {}
