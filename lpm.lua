@@ -813,14 +813,16 @@ end
 
 local function lpm_repo_list() 
   if JSON then
-    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch)  } end) }) .. "\n")
+    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch), remotes = common.map(repository.remotes or {}, function(r) return remote.remote .. ":" .. (remote.commit or remote.branch) end)  } end) }) .. "\n")
   else
     for i, repository in ipairs(repositories) do
+      local _, remotes = repository:parse_manifest()
       if i ~= 0 then print("---------------------------") end
-      print("Remote:  " .. repository.remote)
-      print("Branch:  " .. repository.branch)
-      print("Commit:  " .. (repository.commit or "nil"))
-      print("Path  :  " .. repository.local_path .. PATHSEP .. (repository.commit or repository.branch))
+      print("Remote :  " .. repository.remote)
+      print("Branch :  " .. repository.branch)
+      print("Commit :  " .. (repository.commit or "nil"))
+      print("Path   :  " .. repository.local_path .. PATHSEP .. (repository.commit or repository.branch))
+      print("Remotes:  " .. json.encode(common.map(repository.remotes or {}, function(r) return remote.remote .. ":" .. (remote.commit or remote.branch) end)))
     end
   end
 end

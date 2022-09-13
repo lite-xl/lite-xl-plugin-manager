@@ -1,22 +1,3 @@
-/* lpm.c - Core of the lite package manager. 
-
-LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
-
-It has the following commands:
-
-lpm add <repository remote>
-lpm rm <repository remote>
-lpm update [<repository remote>]
-lpm install <plugin name>
-lpm uninstall <plugin name>
-lpm list
-
-It stores files in a cache directory in the follwoing format:
-
-<remote url>:<branch_name|commit_name>
-
-*/
-
 #include <git2.h>
 #include <string.h>
 #include <stdio.h>
