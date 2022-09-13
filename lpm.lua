@@ -1,60 +1,8 @@
-local strict = {}
-strict.defined = {}
+setmetatable(_G, { __newindex = function(t, k) error("cannot set global variable: " .. k, 2) end  })
 
--- used to define a global variable
-function global(t)
-  for k, v in pairs(t) do
-    strict.defined[k] = true
-    rawset(_G, k, v)
-  end
-end
-
-function strict.__newindex(t, k, v)
-  error("cannot set undefined variable: " .. k, 2)
-end
-
-function strict.__index(t, k)
-  if not strict.defined[k] then
-    error("cannot get undefined variable: " .. k, 2)
-  end
-end
-
-setmetatable(_G, strict)
-
-
--- Begin JSON library.
---
--- json.lua
---
--- Copyright (c) 2020 rxi
---
--- Permission is hereby granted, free of charge, to any person obtaining a copy of
--- this software and associated documentation files (the "Software"), to deal in
--- the Software without restriction, including without limitation the rights to
--- use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
--- of the Software, and to permit persons to whom the Software is furnished to do
--- so, subject to the following conditions:
---
--- The above copyright notice and this permission notice shall be included in all
--- copies or substantial portions of the Software.
---
--- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
--- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
--- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
--- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
--- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
--- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
--- SOFTWARE.
---
-
+-- Begin rxi JSON library.
 local json = { _version = "0.1.2" }
-
--------------------------------------------------------------------------------
--- Encode
--------------------------------------------------------------------------------
-
 local encode
-
 local escape_char_map = {
   [ "\\" ] = "\\",
   [ "\"" ] = "\"",
@@ -159,11 +107,6 @@ end
 function json.encode(val)
   return ( encode(val) )
 end
-
-
--------------------------------------------------------------------------------
--- Decode
--------------------------------------------------------------------------------
 
 local parse
 
@@ -521,7 +464,7 @@ function Plugin.new(repository, metadata)
   }, metadata), Plugin)
   -- Directory.
   local stat = system.stat(self.install_path)
-  if stat and (not metadata.lite_version or metadata.lite_version == LITE_VERSION) and (not metadata.mod_version or metadata.mod_version == MOD_VERSION) then
+  if stat and (not metadata.lite_version or metadata.lite_version == LITE_VERSION) and (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION)) then
     self.status = "installed"
     self.type = stat.type == "dir" and "complex" or "singleton"
   end
@@ -544,7 +487,7 @@ function Plugin:get_compatibilities()
   local incompatible_plugins = {}
   local installed_plugins = {}
   for i, repo in ipairs(repositories) do
-    for j, plugin in ipairs(repositories.plugins) do
+    for j, plugin in ipairs(repo.plugins) do
       if plugin:is_installed() then
         table.insert(installed_plugins, plugin)
       end
@@ -744,7 +687,7 @@ local function get_plugin(name, version, filter)
   for i,repo in ipairs(repositories) do
     for j,plugin in ipairs(repo.plugins) do
       if plugin.name == name and match_version(plugin.version, version) then
-        if (not filter.lite_version or plugin.lite_version == filter.lite_version) and (not filter.mod_version or plugin.mod_version == filter.mod_version) then
+        if (not filter.lite_version or not plugin.lite_version or plugin.lite_version == filter.lite_version) and (not filter.mod_version or not plugin.mod_version or tonumber(plugin.mod_version) == tonumber(filter.mod_version)) then
           table.insert(candidates, plugin)
         end
       end
@@ -799,7 +742,7 @@ end
 
 local function lpm_repo_list() 
   if JSON then
-    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch)  } end) }))
+    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch)  } end) }) .. "\n")
   else
     for i, repository in ipairs(repositories) do
       if i ~= 0 then print("---------------------------") end
@@ -816,7 +759,6 @@ local function lpm_plugin_list()
   for i,repo in ipairs(repositories) do
     if not repo.plugins then error("can't find plugins for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
     for j,plugin in ipairs(repo.plugins) do
-      -- print("MOD VERSION " .. plugin.mod_version)
       table.insert(result.plugins, {
         name = plugin.name,
         status = plugin.status,
@@ -830,7 +772,7 @@ local function lpm_plugin_list()
     end
   end
   if JSON then
-    io.stdout:write(json.encode(result))
+    io.stdout:write(json.encode(result) .. "\n")
   else
     for i, plugin in ipairs(result.plugins) do
       if i ~= 0 then print("---------------------------") end
@@ -879,11 +821,81 @@ local function parse_arguments(arguments, options)
 end
 
 local status = 0
+local function error_handler(err)
+  local s, e = err:find(":%d+")
+  local message = e and err:sub(e + 3) or err
+  if JSON then
+    if VERBOSE then 
+      io.stderr:write(json.encode({ error = err, actions = actions, traceback = debug.traceback() }) .. "\n")
+    else
+      io.stderr:write(json.encode({ error = message or err, actions = actions }) .. "\n")
+    end
+  else
+    io.stderr:write((not VERBOSE and message or err) .. "\n")
+    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
+  end
+  status = -1
+end
+
+local function run_command(ARGS)
+  if not ARGS[2]:find("%S") then return end
+  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(ARGS[4])
+  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(ARGS[4])
+  elseif ARGS[2] == "add" then lpm_repo_add(ARGS[3])
+  elseif ARGS[2] == "rm" then lpm_repo_rm(ARGS[3])
+  elseif ARGS[2] == "update" then lpm_repo_update(ARGS[3])
+  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(ARGS[4])
+  elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list(ARGS[4])
+  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(ARGS[4])
+  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(ARGS[4])
+  elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list()
+  elseif ARGS[2] == "install" then lpm_plugin_install(ARGS[3])
+  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(ARGS[3])
+  elseif ARGS[2] == "list" then return lpm_plugin_list()
+  elseif ARGS[2] == "purge" then lpm_purge()
+  else
+    error("unknown command: " .. ARGS[2])
+  end
+  if JSON then
+    io.stdout:write(json.encode({ actions = actions }))
+  end
+end
+
+
 xpcall(function()
   local ARGS = parse_arguments(ARGV, { json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", quiet = "flag", version = "string", modversion = "string" })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
-    os.exit(0)
+    return 0
+  end
+  if ARGS["help"] then
+    io.stderr:write([[
+Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
+  [--verbose] [--liteversion=2.1] [--modversion=3] [--quiet] [--version]
+  [--help]
+
+LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
+
+It's designed to install packages from our central github repository (and
+affiliated repositories), directly into your lite-xl user directory. It can
+be called independently, for from the lite-xl `plugin_manager` plugin.
+
+LPM will always use https://github.com/lite-xl/lite-xl-plugins as its base
+repository, though others can be added.
+
+It has the following commands:
+
+lpm repo list                                  -- List all extant repos.
+lpm [repo] add <repository remote>             -- Add a source repository.
+lpm [repo] rm <repository remote>              -- Remove a source repository.
+lpm [repo] update [<repository remote>]        -- Update all/the specified repository.
+lpm [plugin] install <plugin name> [<version>] -- Install the specific plugin in question.
+lpm [plugin] uninstall <plugin name>           -- Uninstall the specific plugin.
+lpm [plugin] list                              -- List all known plugins.
+lpm purge                                      -- Completely purge all state for LPM.
+]]
+    )
+    return 0
   end
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
@@ -894,7 +906,8 @@ xpcall(function()
   if LITE_VERSION == "any" then LITE_VERSION = nil end
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
   USERDIR = ARGS["userdir"] or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
-       or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
+    or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
+  if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
   CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   repositories = {}
   repositories = { Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "master" }), Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "2.1" }) }
@@ -933,65 +946,28 @@ xpcall(function()
     end
   end
 
-  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(ARGS[4])
-  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(ARGS[4])
-  elseif ARGS[2] == "add" then lpm_repo_add(ARGS[3])
-  elseif ARGS[2] == "rm" then lpm_repo_rm(ARGS[3])
-  elseif ARGS[2] == "update" then lpm_repo_update(ARGS[3])
-  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(ARGS[4])
-  elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list(ARGS[4])
-  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(ARGS[4])
-  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(ARGS[4])
-  elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list()
-  elseif ARGS[2] == "install" then lpm_plugin_install(ARGS[3])
-  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(ARGS[3])
-  elseif ARGS[2] == "list" then return lpm_plugin_list()
-  elseif ARGS[2] == "purge" then lpm_purge()
+  if #ARGS > 1 then
+    run_command(ARGS)
   else
-    io.stderr:write([[
-Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
-  [--verbose] [--liteversion=2.1] [--modversion=3] [--quiet] [--version]
-
-LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
-
-It's designed to install packages from our central github repository (and
-affiliated repositories), directly into your lite-xl user directory. It can
-be called independently, for from the lite-xl `plugin_manager` plugin.
-
-LPM will always use https://github.com/lite-xl/lite-xl-plugins as its base
-repository, though others can be added.
-
-It has the following commands:
-
-lpm repo list                                  -- List all extant repos.
-lpm [repo] add <repository remote>             -- Add a source repository.
-lpm [repo] rm <repository remote>              -- Remove a source repository.
-lpm [repo] update [<repository remote>]        -- Update all/the specified repository.
-lpm [plugin] install <plugin name> [<version>] -- Install the specific plugin in question.
-lpm [plugin] uninstall <plugin name>           -- Uninstall the specific plugin.
-lpm [plugin] list                              -- List all known plugins.
-lpm purge                                      -- Completely purge all state for LPM.
-]]
-    )
-  end
-  if JSON then
-    io.stdout:write(json.encode({ actions = actions }))
-  end
-end, function(err)
-  local s, e = err:find(":%d+")
-  local message = err:sub(e + 3)
-  if JSON then
-    if VERBOSE then 
-      io.stderr:write(json.encode({ error = err, actions = actions, traceback = debug.traceback() }))
-    else
-      io.stderr:write(json.encode({ error = message or err, actions = actions }))
+    while true do
+      local line = io.stdin:read("*line")
+      if line == "quit" or line == "exit" then return 0 end
+      local args = { ARGS[1] }
+      local s = 1
+      while true do
+        local a,e = line:find("%s+", s)
+        table.insert(args, line:sub(s, a and (a - 1) or #line))
+        if not e then break end
+        s = e + 1
+      end
+      xpcall(function()
+        run_command(args)
+      end, error_handler)
+      actions = {}
     end
-  else
-    io.stderr:write((not VERBOSE and message or err) .. "\n")
-    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
   end
-  status = -1
-end)
+
+end, error_handler)
 
 
 return status
