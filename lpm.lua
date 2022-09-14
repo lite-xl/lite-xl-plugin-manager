@@ -485,6 +485,8 @@ function Plugin.new(repository, metadata)
   if stat and (not metadata.lite_version or metadata.lite_version == LITE_VERSION) and (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION)) then
     self.status = "installed"
     self.type = stat.type == "dir" and "complex" or "singleton"
+  else
+    self.type = self.files or self.remote and "complex" or "singleton"
   end
   return self
 end
@@ -561,12 +563,36 @@ function Plugin:install(installing)
     end
   end
   if self.status == "upgradable" then 
-    log_action("Upgrading plugin located at " .. self.local_path .. " to " .. self.install_path)
+    log_action("Upgrading " .. self.type .. "plugin located at " .. self.local_path .. " to " .. self.install_path)
     common.rmrf(self.install_path) 
-    common.copy(self.local_path, self.install_path)
   else
-    log_action("Installing plugin located at " .. self.local_path .. " to " .. self.install_path)
+    log_action("Installing " .. self.type .. " plugin located at " .. self.local_path .. " to " .. self.install_path)
+  end
+  
+  if self.url then
+    log_action("Downloading file " .. self.url .. "...")
+    local path = self.install_path .. (self.type == 'singleton' and (PATHSEP .. "init.lua") or "")
+    system.get(file.url, path)
+    log_action("Downloaded file " .. self.url .. " to " .. path)
+    if system.hash(path, "file") ~= file.checksum then error("checksum doesn't match") end
+  elseif self.remote then
+    log_action("Cloning repository " .. self.remote .. " into " .. self.install_path)
+    common.mkdirp(self.install_path)
+    local _, _, url, branch = self.remote:find("^(.*):(.*)$")
+    system.init(self.install_path, url)
+    system.reset(self.install_path, branch)
+  else
     common.copy(self.local_path, self.install_path)
+  end
+  for i,file in ipairs(self.files) do
+    if not file.arch or file.arch == ARCH then
+      if not file.checksum then error("requires a checksum") end
+      local path = self.install_path .. PATHSEP .. (file.path or common.basename(file.url))
+      log_action("Downloading file " .. file.url .. "...")
+      system.get(file.url, path)
+      log_action("Downloaded file " .. file.url .. " to " .. path)
+      if system.hash(path, "file") ~= file.checksum then error("checksum doesn't match") end
+    end
   end
 end
 
@@ -651,9 +677,14 @@ function Repository:generate_manifest()
     for line in io.lines(path .. PATHSEP .. "README.md") do
       local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
       if name then
-        plugin_map[name] = { name = name, description = description }
+        plugin_map[name] = { name = name, description = description, files = {} }
         if path:find("^http") then
-          plugin_map[name].remote = path
+          if path:find("%.lua") then
+            plugin_map[name].url = path
+            plugin_map[name].checksum = system.hash(system.get(path))
+          else
+            plugin_map[name].remote = path
+          end
         else
           plugin_map[name].path = path:gsub("%?.*$", "")
         end 
@@ -662,7 +693,7 @@ function Repository:generate_manifest()
   end
   for i, file in ipairs(system.ls(path .. plugin_dir)) do
     if file:find("%.lua$") then
-      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), dependencies = {}, mod_version = 3, version = "1.0", tags = {}, path = plugin_dir .. file  }
+      local plugin = { description = nil, files = {}, name = common.basename(file):gsub("%.lua$", ""), dependencies = {}, mod_version = 3, version = "1.0", tags = {}, path = plugin_dir .. file  }
       for line in io.lines(path .. plugin_dir .. file) do
         local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
         if mod_version then plugin.mod_version = mod_version end
@@ -1037,6 +1068,7 @@ Flags have the following effects:
     )
     return 0
   end
+  
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
@@ -1051,6 +1083,7 @@ Flags have the following effects:
   if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
   CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
 
+  if ARGS[2] == "purge" then return lpm_purge() end
   if ARGS["ssl_certs"] then 
     local stat = system.stat(ARGS["ssl_certs"])
     if not stat then error("can't find " .. ARGS["ssl_certs"]) end

@@ -24,14 +24,35 @@ static char hexDigits[] = "0123456789abcdef";
 static int lpm_hash(lua_State* L) {
   size_t len;
   const char* data = luaL_checklstring(L, 1, &len);
+  const char* type = luaL_checkstring(L, 2);
   unsigned char buffer[SHA256_DIGEST_LENGTH];
+  SHA256_CTX c
+  SHA256_Init(&c);
+  if (strcmp(type, "file") == 0) {
+    FILE* file = fopen(data, "rb");
+    if (!file) {
+      SHA256_Final(buffer, &c)
+      return luaL_error(L, "can't open %s", data);
+    }
+    while (true) {
+      unsigned char chunk[4096];
+      size_t bytes = fread(chunk, 1, sizeof(chunk), file);
+      SHA256_Update(&c, chunk, bytes);
+      if (bytes < 4096)
+        break;
+    }
+    fclose(file);
+  } else {
+    SHA256_Update(&c, data, len);
+  }
+  SHA256_Final(buffer, &c)
   char hexBuffer[SHA256_DIGEST_LENGTH * 2];
   SHA256(data, len, buffer);
-  for (size_t i = 0; i < len; ++i) {
+  for (size_t i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
     hexBuffer[i*2+0] = hexDigits[buffer[i] >> 4];
     hexBuffer[i*2+1] = hexDigits[buffer[i] & 0xF];
   }
-  lua_pushlstring(L, buffer, SHA256_DIGEST_LENGTH * 2);
+  lua_pushlstring(L, hexBuffer, SHA256_DIGEST_LENGTH * 2);
   return 1;
 }
 
@@ -363,17 +384,20 @@ static int lpm_fetch(lua_State* L) {
 }
 
 
+static CURL *curl;
 static int lpm_set_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
   const char* path = luaL_checkstring(L, 2);
-  if (strcmp(type, "dir") == 0)
+  if (strcmp(type, "dir") == 0) {
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
-  else
+    curl_easy_setopt(curl, CURLOPT_CAINFO, path);
+  } else {
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
+    curl_easy_setopt(curl, CURLOPT_CAPATH, path);
+  }
   return 0;
 }
 
-static CURL *curl;
 static int lpm_status(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   git_repository* repository;
@@ -398,17 +422,33 @@ static size_t lpm_curl_write_callback(char *ptr, size_t size, size_t nmemb, void
 
 static int lpm_get(lua_State* L) {
   const char* url = luaL_checkstring(L, 1);
-  curl_easy_reset(curl);
+  const char* path = luaL_optstring(L, 2, NULL);
+  // curl_easy_reset(curl);
   curl_easy_setopt(curl, CURLOPT_URL, url);
-  CURLcode res = curl_easy_perform(curl);
-  if (res != CURLE_OK)
-    return luaL_error(L, "curl error: %d", res);
-  luaL_Buffer B;
-  luaL_buffinit(L, &B);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, lpm_curl_write_callback);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &B);
-  luaL_pushresult(&B);
-  lua_newtable(L);
+  if (path) {
+    FILE* file = fopen(path, "wb");
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+      fclose(file);
+      return luaL_error(L, "curl error: %d", res);
+    }
+    fclose(file);
+    lua_pushnil(L);
+    lua_newtable(L);
+    return 2;
+  } else {
+    luaL_Buffer B;
+    luaL_buffinit(L, &B);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, lpm_curl_write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &B);
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK)
+      return luaL_error(L, "curl error: %d", res);
+    luaL_pushresult(&B);
+    lua_newtable(L);
+  }
   return 2;
 }
 
@@ -431,6 +471,26 @@ static const luaL_Reg system_lib[] = {
 #ifndef LPM_VERSION
   #define LPM_VERSION "unknown"
 #endif
+
+
+#ifndef LITE_ARCH_TUPLE
+  #if __x86_64__ || _WIN64 || __MINGW64__
+    #define ARCH_PROCESSOR "x86_64"
+  #else
+    #define ARCH_PROCESSOR "x86"
+  #endif
+  #if _WIN32
+    #define ARCH_PLATFORM "windows"
+  #elif __linux__
+    #define ARCH_PLATFORM "linux"
+  #elif __APPLE__
+    #define ARCH_PLATFORM "darwin"
+  #else
+    #error "Please define -DLITE_ARCH_TUPLE."
+  #endif
+  #define LITE_ARCH_TUPLE ARCH_PROCESSOR "-" ARCH_PLATFORM
+#endif
+
 
 extern const char lpm_lua[];
 extern unsigned int lpm_lua_len;
@@ -459,8 +519,10 @@ int main(int argc, char* argv[]) {
   #endif
   lua_setglobal(L, "PATHSEP");
   lua_setglobal(L, "PLATFORM");
-  // if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
-  if (luaL_loadfile(L, "lpm.lua")) {
+  lua_pushliteral(L, LITE_ARCH_TUPLE);
+  lua_setglobal(L, "ARCH");
+  if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
+  //if (luaL_loadfile(L, "lpm.lua")) {
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
   }
