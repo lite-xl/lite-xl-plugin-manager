@@ -11,6 +11,8 @@
 
 #include <sys/stat.h>
 #include <git2.h>
+#include <openssl/sha.h>
+#include <curl/curl.h>
 
 #ifdef _WIN32
   #include <direct.h>
@@ -18,26 +20,18 @@
   #include <fileapi.h>
 #endif
 
-/* 64bit fnv-1a hash */
-typedef unsigned long long hash_t;
 static char hexDigits[] = "0123456789abcdef";
-#define FNV_64_PRIME ((hash_t)0x100000001b3ULL)
 static int lpm_hash(lua_State* L) {
-  hash_t hval = 0;
   size_t len;
   const char* data = luaL_checklstring(L, 1, &len);
-  const unsigned char *bp = (unsigned char*)data;
-  const unsigned char *be = data + len;
-  while (bp < be) {
-    hval *= FNV_64_PRIME;
-    hval ^= (unsigned long long)*bp++;
-  }
-  char buffer[16];
+  unsigned char buffer[SHA256_DIGEST_LENGTH];
+  char hexBuffer[SHA256_DIGEST_LENGTH * 2];
+  SHA256(data, len, buffer);
   for (size_t i = 0; i < len; ++i) {
-    buffer[i*2+0] = hexDigits[data[i] >> 4];
-    buffer[i*2+1] = hexDigits[data[i] & 0xF];
+    hexBuffer[i*2+0] = hexDigits[buffer[i] >> 4];
+    hexBuffer[i*2+1] = hexDigits[buffer[i] & 0xF];
   }
-  lua_pushlstring(L, buffer, 16);
+  lua_pushlstring(L, buffer, SHA256_DIGEST_LENGTH * 2);
   return 1;
 }
 
@@ -310,7 +304,7 @@ static git_commit* git_retrieve_commit(git_repository* repository, const char* c
 }
 
 
-int lpm_reset(lua_State* L) {
+static int lpm_reset(lua_State* L) {
   git_repository* repository = luaL_checkgitrepo(L, 1);
   const char* commit_name = luaL_checkstring(L, 2);
   const char* type = luaL_checkstring(L, 3);
@@ -333,7 +327,7 @@ int lpm_reset(lua_State* L) {
 }
 
 
-int lpm_init(lua_State* L) {
+static int lpm_init(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   const char* url = luaL_checkstring(L, 2);
   git_repository* repository;
@@ -350,7 +344,7 @@ int lpm_init(lua_State* L) {
 }
 
 
-int lpm_fetch(lua_State* L) {
+static int lpm_fetch(lua_State* L) {
   git_repository* repository = luaL_checkgitrepo(L, 1);
   git_remote* remote;
   if (git_remote_lookup(&remote, repository, "origin")) {
@@ -369,7 +363,7 @@ int lpm_fetch(lua_State* L) {
 }
 
 
-int lpm_set_certs(lua_State* L) {
+static int lpm_set_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
   const char* path = luaL_checkstring(L, 2);
   if (strcmp(type, "dir") == 0)
@@ -379,8 +373,8 @@ int lpm_set_certs(lua_State* L) {
   return 0;
 }
 
-
-int lpm_status(lua_State* L) {
+static CURL *curl;
+static int lpm_status(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   git_repository* repository;
   if (git_repository_open(&repository, path))
@@ -395,18 +389,44 @@ int lpm_status(lua_State* L) {
 }
 
 
+static size_t lpm_curl_write_callback(char *ptr, size_t size, size_t nmemb, void *BL) {
+  luaL_Buffer* B = BL;
+  luaL_addlstring(B, ptr, size*nmemb);
+  return size*nmemb;
+}
+
+
+static int lpm_get(lua_State* L) {
+  const char* url = luaL_checkstring(L, 1);
+  curl_easy_reset(curl);
+  curl_easy_setopt(curl, CURLOPT_URL, url);
+  CURLcode res = curl_easy_perform(curl);
+  if (res != CURLE_OK)
+    return luaL_error(L, "curl error: %d", res);
+  luaL_Buffer B;
+  luaL_buffinit(L, &B);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, lpm_curl_write_callback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &B);
+  luaL_pushresult(&B);
+  lua_newtable(L);
+  return 2;
+}
+
+
 static const luaL_Reg system_lib[] = {
-  { "ls",     lpm_ls    }, // Returns an array of files.
-  { "stat",   lpm_stat  }, // Returns info about a single file.
-  { "mkdir",  lpm_mkdir }, // Makes a directory.
-  { "rmdir",  lpm_rmdir }, // Removes a directory.
-  { "hash",   lpm_hash  }, // Returns a hexhash.
-  { "init",   lpm_init }, // Initializes a git repository with the specified remote.
-  { "fetch",  lpm_fetch }, // Updates a git repository with the specified remote.
-  { "reset",  lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
-  { "status", lpm_status }, // Returns the git repository in question's current branch, if any, and commit hash.
+  { "ls",        lpm_ls    }, // Returns an array of files.
+  { "stat",      lpm_stat  }, // Returns info about a single file.
+  { "mkdir",     lpm_mkdir }, // Makes a directory.
+  { "rmdir",     lpm_rmdir }, // Removes a directory.
+  { "hash",      lpm_hash  }, // Returns a hex sha256 hash.
+  { "init",      lpm_init }, // Initializes a git repository with the specified remote.
+  { "fetch",     lpm_fetch }, // Updates a git repository with the specified remote.
+  { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
+  { "status",    lpm_status }, // Returns the git repository in question's current branch, if any, and commit hash.
+  { "get",       lpm_get }, // HTTP(s) GET request.
   { "set_certs", lpm_set_certs } // Returns the git repository in question's current branch, if any, and commit hash.
 };
+
 
 #ifndef LPM_VERSION
   #define LPM_VERSION "unknown"
@@ -415,6 +435,9 @@ static const luaL_Reg system_lib[] = {
 extern const char lpm_lua[];
 extern unsigned int lpm_lua_len;
 int main(int argc, char* argv[]) {
+  curl = curl_easy_init();
+  if (!curl)
+    return -1;
   git_libgit2_init();
   lua_State* L = luaL_newstate();
   luaL_openlibs(L);
@@ -436,8 +459,8 @@ int main(int argc, char* argv[]) {
   #endif
   lua_setglobal(L, "PATHSEP");
   lua_setglobal(L, "PLATFORM");
-  if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
-  // if (luaL_loadfile(L, "lpm.lua")) {
+  // if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
+  if (luaL_loadfile(L, "lpm.lua")) {
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
   }
@@ -445,5 +468,6 @@ int main(int argc, char* argv[]) {
   int status = lua_tointeger(L, -1);
   lua_close(L);
   git_libgit2_shutdown();
+  curl_easy_cleanup(curl);
   return status;
 }

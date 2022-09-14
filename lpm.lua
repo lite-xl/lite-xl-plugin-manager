@@ -619,7 +619,7 @@ function Repository:parse_manifest(already_pulling)
           table.insert(remotes, repo)
           table.insert(self.plugins, Plugin.new(self, metadata))
         else
-          log_warning("plugin " .. plugin.name .. " specifies remote as source, but ")
+          log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
         end
       else
         table.insert(self.plugins, Plugin.new(self, metadata))
@@ -649,10 +649,14 @@ function Repository:generate_manifest()
   local plugins, plugin_map = {}, {}
   if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
     for line in io.lines(path .. PATHSEP .. "README.md") do
-      local _, _, name, path, description = line:find("^%s*%|%s*%[`(%w+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
+      local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
       if name then
         plugin_map[name] = { name = name, description = description }
-        plugin_map[path:find("^http") and "remote" or "path"] = path
+        if path:find("^http") then
+          plugin_map[name].remote = path
+        else
+          plugin_map[name].path = path:gsub("%?.*$", "")
+        end 
       end
     end
   end
@@ -667,8 +671,16 @@ function Repository:generate_manifest()
         local _, _, required_plugin = line:find("require [\"']plugins.([%w_]+)")
         if required_plugin then if required_plugin ~= plugin.name then plugin.dependencies[required_plugin] = ">=1.0" end end
       end
-      if plugin_map[plugin.name] then plugin = common.merge(plugin, plugin_map[plugin.name]) end
+      if plugin_map[plugin.name] then 
+        plugin = common.merge(plugin, plugin_map[plugin.name])
+        plugin_map[plugin.name].plugin = plugin 
+      end
       table.insert(plugins, plugin)
+    end
+  end
+  for k, v in pairs(plugin_map) do
+    if not v.plugin then 
+      table.insert(plugins, common.merge({ dependencies = {}, mod_version = 3, version = "1.0", tags = {} }, v))
     end
   end
   io.open(path .. PATHSEP .. "manifest.json", "wb"):write(json.encode({ plugins = plugins })):flush()
@@ -871,6 +883,18 @@ local function lpm_plugin_list()
   end
 end
 
+local function lpm_plugin_upgrade()
+  for i,repo in ipairs(repositories) do
+    if not repo.plugins then error("can't find plugins for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
+    for j,plugin in ipairs(repo.plugins) do
+      if plugin:is_installed() then
+        local compatibles = get_plugin(plugin.name, ">" .. plugin.version)
+        table.sort(compatibles, function(a, b) return compare_version(b.version, a.version) end)
+        compatibles[1]:install()
+      end
+    end
+  end
+end
 
 local function lpm_purge()
   log_action("Removed " .. CACHEDIR .. ".")
@@ -932,10 +956,12 @@ local function run_command(ARGS)
   elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list()
   elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list()
+  elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "plugin" and ARGS[3] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_plugin_install(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "list" then return lpm_plugin_list()
+  elseif ARGS[2] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "purge" then lpm_purge()
   else error("unknown command: " .. ARGS[2]) end
   if JSON then
@@ -979,10 +1005,13 @@ It has the following commands:
   lpm [repo] update [<repository remote>]            Update all/the specified repositories.
     [...<repository remote>]        
   lpm [plugin] install <plugin name>[:<version>]     Install the specific plugins in question.
-    [...<plugin name>:<version>] 
+    [...<plugin name>:<version>]                     If the plugin is installed, upgrades it.
   lpm [plugin] uninstall <plugin name>               Uninstall the specific plugin.
     [...<plugin name>]
-  lpm [plugin] list                                  List all known plugins.
+  lpm [plugin] list <repository remote>              List all/associated plugins.
+    [...<repository remote>]    
+  lpm [plugin] upgrade                               Upgrades all installed plugins to new version
+                                                     if applicable.
   lpm purge                                          Completely purge all state for LPM.
   lpm -                                              Read these commands from stdin in an 
                                                      interactive print-eval loop.
@@ -1027,7 +1056,7 @@ Flags have the following effects:
     if not stat then error("can't find " .. ARGS["ssl_certs"]) end
     system.set_certs(stat.type, ARGS["ssl_certs"])
   elseif not os.getenv("SSL_CERT_DIR") and not os.getenv("SSL_CERT_FILE") then
-    local paths = { 
+    local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
       "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
       "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
       "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
