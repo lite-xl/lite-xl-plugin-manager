@@ -6,6 +6,8 @@ Can be used by a package manager plugin that works from inside the editor and ca
 
 Releases forthcoming, should be available on Windows, Mac, Linux and FreeBSD.
 
+Also contains a plugin_manager.lua plugin to integrate the binary with lite in the form of an easy-to-use GUI.
+
 ## Quickstart
 
 If you have a C compiler, and `git`, and want to compile from scratch, you can do:

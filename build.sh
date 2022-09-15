@@ -38,4 +38,4 @@ xxd -i lpm.lua > lpm.lua.c
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && LDFLAGS="$LDFLAGS -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4"
 
 [[ "$@" != *" -g "* || "$@" != *" -O"* ]] && CFLAGS="$CFLAGS -O3" && LDFLAGS="$LDFLAGS -s"
-$CC $CFLAGS $SRCS $@ -o lpm $LDFLAGS 
+$CC $CFLAGS $SRCS $@ -o $BIN $LDFLAGS 
