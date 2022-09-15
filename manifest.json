@@ -1,0 +1,18 @@
+{
+  "plugins":[{
+    "name": "plugin_manager",
+    "version": "0.1",
+    "description": "A GUI interface to the Adam's lite plugin manager.",
+    "path": "plugins/plugin_manager.lua",
+    "provides": ["plugin-manager"],
+    "files": [{
+      "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/0.1/lpm-x86_64-linux",
+      "arch": "x86_64-linux",
+      "checksum": "440cd5dfdcbb63351c078422541631bca07b0ef659cc45d2a9ee779dadee8b43"
+    }, {
+      "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/0.1/lpm-x86_64-windows",
+      "arch": "x86_64-windows",
+      "checksum": "440cd5dfdcbb63351c078422541631bca07b0ef659cc45d2a9ee779dadee8b43"
+    }]
+  }]
+}
