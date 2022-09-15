@@ -444,7 +444,7 @@ local function is_commit_hash(hash)
 end
 
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, QUIET, AUTO_PULL_REMOTES, repositories
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, repositories
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -452,7 +452,7 @@ local function log_action(message)
   if not QUIET then io.stderr:write(message .. "\n") end
 end
 local function log_warning(message)
-  if JSON then table.insert(warning, message) end
+  if JSON then table.insert(warnings, message) end
   if not QUIET then io.stderr:write("warning: " .. message .. "\n") end
 end
 
@@ -477,16 +477,18 @@ function Plugin.new(repository, metadata)
     status = "available",
     version = "1.0",
     dependencies = {},
-    local_path = repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. PATHSEP .. (metadata.path:gsub("^/", "") or metadata.name),
+    local_path = repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. PATHSEP .. (metadata.path and metadata.path:gsub("^/", "") or metadata.name),
     install_path = USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. (metadata.path and common.basename(metadata.path) or metadata.name),
   }, metadata), Plugin)
   -- Directory.
   local stat = system.stat(self.install_path)
-  if stat and (not metadata.lite_version or metadata.lite_version == LITE_VERSION) and (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION)) then
+  local compatible = (not metadata.lite_version or metadata.lite_version == LITE_VERSION) and (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION))
+  if stat and compatible then
     self.status = "installed"
     self.type = stat.type == "dir" and "complex" or "singleton"
   else
-    self.type = self.files or self.remote and "complex" or "singleton"
+    if not compatible then self.status = "incompatible" end
+    self.type = (self.files or self.remote) and "complex" or "singleton"
   end
   return self
 end
@@ -574,7 +576,7 @@ function Plugin:install(installing)
     local path = self.install_path .. (self.type == 'singleton' and (PATHSEP .. "init.lua") or "")
     system.get(file.url, path)
     log_action("Downloaded file " .. self.url .. " to " .. path)
-    if system.hash(path, "file") ~= file.checksum then error("checksum doesn't match") end
+    if system.hash(path, "file") ~= file.checksum then _G[FORCE and "error" or "log_warning"]("checksum doesn't match for " .. path) end
   elseif self.remote then
     log_action("Cloning repository " .. self.remote .. " into " .. self.install_path)
     common.mkdirp(self.install_path)
@@ -591,7 +593,7 @@ function Plugin:install(installing)
       log_action("Downloading file " .. file.url .. "...")
       system.get(file.url, path)
       log_action("Downloaded file " .. file.url .. " to " .. path)
-      if system.hash(path, "file") ~= file.checksum then error("checksum doesn't match") end
+      if system.hash(path, "file") ~= file.checksum then _G[FORCE and "error" or "log_warning"]("checksum doesn't match for " .. path) end
     end
   end
 end
@@ -681,7 +683,8 @@ function Repository:generate_manifest()
         if path:find("^http") then
           if path:find("%.lua") then
             plugin_map[name].url = path
-            plugin_map[name].checksum = system.hash(system.get(path))
+            local file = system.get(path)
+            plugin_map[name].checksum = system.hash(file)
           else
             plugin_map[name].remote = path
           end
@@ -845,7 +848,8 @@ end
 
 local function lpm_plugin_install(...)
   for i, identifier in ipairs({ ... }) do
-    local _, _, name, version = identifier:find("^(%w+):?(%w+)?$")
+    local _, _, name, version = identifier:find("^(%w-):?([%d%.]*)$")
+    if not name then error('unrecognized plugin identifier ' .. identifier) end
     local plugin = get_plugin(name, version, { mod_version = MOD_VERSION, lite_version = LITE_VERSION })
     if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any') .. " and lite-version: " .. (LITE_VERSION or 'any')) end
     plugin:install()
@@ -890,7 +894,7 @@ local function lpm_plugin_list()
         status = plugin.status,
         version = "" .. plugin.version,
         dependencies = plugin.dependencies,
-        lite_version = plugin.lite_version,
+        description = plugin.description,
         mod_version = plugin.mod_version,
         tags = plugin.tags,
         repository = repo.remote .. ":" .. (repo.commit or repo.branch)
@@ -906,8 +910,8 @@ local function lpm_plugin_list()
       print("Version:       " .. plugin.version)
       print("Status:        " .. plugin.status)
       print("Repository:    " .. plugin.repository)
+      print("Description:   " .. (plugin.description or ""))
       print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
-      print("Lite-Version:  " .. (plugin.lite_version or "unknown"))
       print("Dependencies:  " .. json.encode(plugin.dependencies))
       print("Tags:          " .. common.join(" ", plugin.tags))
     end
@@ -936,7 +940,7 @@ local function parse_arguments(arguments, options)
   local args = {}
   local i = 1
   while i <= #arguments do
-    local s,e, option, value = arguments[i]:find("%-%-(%w+)=?(.*)")
+    local s,e, option, value = arguments[i]:find("%-%-([^=]+)=?(.*)")
     if s then
       local flag_type = options[option]
       if not flag_type then error("unknown flag --" .. option) end
@@ -1004,8 +1008,8 @@ end
 xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
-    quiet = "flag", version = "string", modversion = "string", remotes = "flag", help = "flag",
-    remotes = "flag", ssl_certs = "string"
+    quiet = "flag", version = "string", ["mod-version"] = "string", remotes = "flag", help = "flag",
+    remotes = "flag", ssl_certs = "string", force = "string"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -1014,8 +1018,8 @@ xpcall(function()
   if ARGS["help"] or #ARGS == 1 or ARGS[2] == "help" then
     io.stderr:write([[
 Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
-  [--verbose] [--lite-version=2.1] [--mod-version=3] [--quiet] [--version]
-  [--help] [--remotes] [--ssl_certs=directory/file]
+  [--verbose] [--mod-version=3] [--quiet] [--version] [--help] [--remotes]
+  [--ssl_certs=directory/file] [--force]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1057,13 +1061,13 @@ Flags have the following effects:
   --verbose                      Spits out more information, including intermediate steps to
                                  install and whatnot.
   --quiet                        Outputs nothing but explicit returning information from actions.
-  --lite-version=2.1             Sets the version of lite-xl to use to install plugins against.
-  --mod-version=3                Sets the mod version of lite-xl to install plugins against.
+  --modversion=3                Sets the mod version of lite-xl to install plugins against.
   --version                      Returns version information.
   --remotes                      Automatically adds any specified remotes in the repository to
                                  the end of the resolution list.
   --help                         Displays this help text.
   --ssl_certs                    Sets the SSL certificate store to specified location.
+  --force                        Ignores checksum inconsitencies. Not recommended.
 ]]
     )
     return 0
@@ -1072,6 +1076,7 @@ Flags have the following effects:
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
+  FORCE = ARGS["force"]
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION") or 3
   if MOD_VERSION == "any" then MOD_VERSION = nil end
   LITE_VERSION = ARGS["lite-version"] or os.getenv("LPM_LITEVERSION") or "2.1"

@@ -11,7 +11,7 @@
 
 #include <sys/stat.h>
 #include <git2.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <curl/curl.h>
 
 #ifdef _WIN32
@@ -20,39 +20,42 @@
   #include <fileapi.h>
 #endif
 
-static char hexDigits[] = "0123456789abcdef";
+static char hex_digits[] = "0123456789abcdef";
 static int lpm_hash(lua_State* L) {
   size_t len;
   const char* data = luaL_checklstring(L, 1, &len);
-  const char* type = luaL_checkstring(L, 2);
-  unsigned char buffer[SHA256_DIGEST_LENGTH];
-  SHA256_CTX c
-  SHA256_Init(&c);
+  const char* type = luaL_optstring(L, 2, "string");
+  unsigned char buffer[EVP_MAX_MD_SIZE];
+  EVP_MD_CTX* c = EVP_MD_CTX_new();
+  EVP_MD_CTX_init(c);
+  EVP_DigestInit_ex(c, EVP_sha256(), NULL);
   if (strcmp(type, "file") == 0) {
     FILE* file = fopen(data, "rb");
     if (!file) {
-      SHA256_Final(buffer, &c)
+      EVP_DigestFinal(c, buffer, NULL);
       return luaL_error(L, "can't open %s", data);
     }
-    while (true) {
+    while (1) {
       unsigned char chunk[4096];
       size_t bytes = fread(chunk, 1, sizeof(chunk), file);
-      SHA256_Update(&c, chunk, bytes);
+      EVP_DigestUpdate(c, chunk, bytes);
       if (bytes < 4096)
         break;
     }
     fclose(file);
   } else {
-    SHA256_Update(&c, data, len);
+    EVP_DigestUpdate(c, data, len);
   }
-  SHA256_Final(buffer, &c)
-  char hexBuffer[SHA256_DIGEST_LENGTH * 2];
-  SHA256(data, len, buffer);
-  for (size_t i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
-    hexBuffer[i*2+0] = hexDigits[buffer[i] >> 4];
-    hexBuffer[i*2+1] = hexDigits[buffer[i] & 0xF];
+  int digest_length;
+  EVP_DigestFinal(c, buffer, &digest_length);
+  EVP_MD_CTX_free(c);
+  char hex_buffer[EVP_MAX_MD_SIZE * 2];
+  for (size_t i = 0; i < digest_length; ++i) {
+    hex_buffer[i*2+0] = hex_digits[buffer[i] >> 4];
+    hex_buffer[i*2+1] = hex_digits[buffer[i] & 0xF];
   }
-  lua_pushlstring(L, hexBuffer, SHA256_DIGEST_LENGTH * 2);
+  lua_pushlstring(L, hex_buffer, digest_length * 2);
+  hex_buffer[digest_length*2]=0;
   return 1;
 }
 
@@ -521,8 +524,11 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "PLATFORM");
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
+  #if LPM_LIVE
+  if (luaL_loadfile(L, "lpm.lua")) {
+  #else
   if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
-  //if (luaL_loadfile(L, "lpm.lua")) {
+  #endif
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
   }
