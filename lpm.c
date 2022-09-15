@@ -514,7 +514,7 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "VERSION");
   lua_setglobal(L, "ARGV");
   #if _WIN32 
-    lus_pushliteral(L, "windows");
+    lua_pushliteral(L, "windows");
     lua_pushliteral(L, "\\");
   #else
     lua_pushliteral(L, "posix");
