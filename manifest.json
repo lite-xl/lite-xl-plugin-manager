@@ -4,6 +4,7 @@
     "version": "0.1",
     "description": "A GUI interface to the Adam's lite plugin manager.",
     "path": "plugins/plugin_manager.lua",
+    "mod_version": 3,
     "provides": ["plugin-manager"],
     "files": [{
       "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/0.1/lpm-x86_64-linux",
@@ -13,6 +14,13 @@
       "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/0.1/lpm-x86_64-windows",
       "arch": "x86_64-windows",
       "checksum": "440cd5dfdcbb63351c078422541631bca07b0ef659cc45d2a9ee779dadee8b43"
-    }]
+    }],
+    "dependencies": { "json": { } }
+  }, {
+    "name": "support_json",
+    "version": "1.0",
+    "description": "JSON support plugin, provides encoding/decoding.",
+    "path": "plugins/support_json.lua",
+    "provides": ["json"]
   }]
 }

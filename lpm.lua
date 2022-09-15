@@ -630,6 +630,15 @@ function Repository.new(hash)
   return self
 end
 
+function Repository.url(url)
+  local _, _, remote, branch_or_commit = url:find("^(.*):?(.*)$")
+  local repo
+  if branch_or_commit == "" then branch_or_commit = nil end
+  if branch_or_commit and is_commit_hash(branch_or_commit) then
+    return Repository.new({ remote = remote, commit = branch_or_commit })
+  end
+  return Repository.new({ remote = remote, branch = branch_or_commit })
+end
 
 function Repository:parse_manifest(already_pulling)
   if self.manifest then return self.manifest, self.remotes end
@@ -654,14 +663,7 @@ function Repository:parse_manifest(already_pulling)
       end
     end
     for i, remote in ipairs(self.manifest["remotes"] or {}) do
-      local _, _, url, branch_or_commit = remote:find("^(.-):?(.*)?$")
-      local repo
-      if branch_or_commit and is_commit_hash(branch_or_commit) then
-        repo = Repository.new({ remote = url, commit = branch_or_commit })
-      else
-        repo = Repository.new({ remote = url, branch = branch_or_commit })
-      end
-      table.insert(self.remotes, repo)
+      table.insert(self.remotes, Repository.url(remote))
     end
   end
   return self.manifest, self.remotes
@@ -727,12 +729,16 @@ function Repository:add()
     common.mkdirp(path)
     log_action("Retrieving " .. self.remote .. ":master/main...")
     system.init(path, self.remote)
-    if not pcall(system.reset, "refs/heads/master") then
-      if pcall(system.reset, "refs/heads/main") then
+    system.fetch(path)
+    if not pcall(system.reset, path, "refs/remotes/origin/master", "hard") then
+      if pcall(system.reset, path, "refs/remotes/origin/main", "hard") then
         os.rename(path, self.local_path .. PATHSEP .. "main")
+        self.branch = "main"
       else
-        error("Can't find master or main.")
+        error("can't find master or main.")
       end
+    else
+      self.branch = "master"
     end
     log_action("Retrieved " .. self.remote .. ":master/main.")
   else
@@ -755,6 +761,7 @@ function Repository:add()
       end
     end
   end
+  return self
 end
 
 
@@ -818,7 +825,7 @@ local function lpm_repo_add(...)
     if repo then -- if we're alreayd a repo, put this at the head of the resolution list
       table.remove(repositories, idx)
     else
-      repo = Repository.new(url):add()
+      repo = Repository.url(url):add()
     end
     table.insert(repositories, 1, repo)
     repo:update()
@@ -1145,11 +1152,7 @@ Flags have the following effects:
             if s then remote = line:sub(e+1) break end
           end
           if remote then
-            if is_commit_hash(commit_or_branch) then
-              table.insert(repositories, Repository.new({ remote = remote, commit = commit_or_branch }))
-            else
-              table.insert(repositories, Repository.new({ remote = remote, branch = commit_or_branch }))
-            end
+            table.insert(repositories, Repository.url(remote .. ":" .. commit_or_branch))
             repositories[#repositories]:parse_manifest()
           end
         end
