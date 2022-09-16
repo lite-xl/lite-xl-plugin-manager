@@ -388,7 +388,7 @@ static int lpm_fetch(lua_State* L) {
 
 
 static CURL *curl;
-static int lpm_set_certs(lua_State* L) {
+static int lpm_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
   const char* path = luaL_checkstring(L, 2);
   if (strcmp(type, "dir") == 0) {
@@ -430,6 +430,8 @@ static int lpm_get(lua_State* L) {
   curl_easy_setopt(curl, CURLOPT_URL, url);
   if (path) {
     FILE* file = fopen(path, "wb");
+    if (!file)
+      return luaL_error(L, "error opening file %s: %s", path, strerror(errno));
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
     CURLcode res = curl_easy_perform(curl);
@@ -467,7 +469,7 @@ static const luaL_Reg system_lib[] = {
   { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
   { "status",    lpm_status }, // Returns the git repository in question's current branch, if any, and commit hash.
   { "get",       lpm_get }, // HTTP(s) GET request.
-  { "set_certs", lpm_set_certs } // Returns the git repository in question's current branch, if any, and commit hash.
+  { "certs",     lpm_certs } // Sets the SSL certificate chain folder/file.
 };
 
 

@@ -429,7 +429,10 @@ function common.copy(src, dst)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
   if dst_stat and dst_stat.type == "dir" and src_stat.type == "file" then return common.copy(src, dst .. PATHSEP .. common.basename(src)) end
-  local src_io, dst_io = io.open(src, "rb"), io.open(dst, "wb")
+  local src_io, err1 = io.open(src, "rb")
+  if err1 then error("can't open for reading " .. src .. ": " .. err1) end
+  local dst_io, err2 = io.open(dst, "wb")
+  if err2 then error("can't open for writing " .. src .. ": " .. err2) end
   while true do
     local chunk = src_io:read(16*1024)
     if not chunk then break end
@@ -444,7 +447,7 @@ local function is_commit_hash(hash)
 end
 
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, LITE_VERSION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, repositories
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, repositories
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -454,6 +457,9 @@ end
 local function log_warning(message)
   if JSON then table.insert(warnings, message) end
   if not QUIET then io.stderr:write("warning: " .. message .. "\n") end
+end
+local function fatal_warning(message)
+  if not FORCE then error(message) else log_warning(message) end
 end
 
 
@@ -478,11 +484,11 @@ function Plugin.new(repository, metadata)
     version = "1.0",
     dependencies = {},
     local_path = repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. PATHSEP .. (metadata.path and metadata.path:gsub("^/", "") or metadata.name),
-    install_path = USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. (metadata.path and common.basename(metadata.path) or metadata.name),
+    install_path = USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. (metadata.path and common.basename(metadata.path):gsub("%.lua$", "") or metadata.name),
   }, metadata), Plugin)
   -- Directory.
   local stat = system.stat(self.install_path)
-  local compatible = (not metadata.lite_version or metadata.lite_version == LITE_VERSION) and (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION))
+  local compatible = (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION))
   if stat and compatible then
     self.status = "installed"
     self.type = stat.type == "dir" and "complex" or "singleton"
@@ -516,7 +522,7 @@ function Plugin:get_compatibilities()
     end
   end
   for plugin, version in pairs(self.dependencies) do
-    local potential_plugins = get_plugin(plugin, version, { mod_version = MODVERSION, lite_version = LITE_VERSION })
+    local potential_plugins = get_plugin(plugin, version, { mod_version = MODVERSION })
     local has_at_least_one = false
     local incomaptibilities = {}
     for i, potential_plugin in ipairs(potential_plugins) do
@@ -570,13 +576,14 @@ function Plugin:install(installing)
   else
     log_action("Installing " .. self.type .. " plugin located at " .. self.local_path .. " to " .. self.install_path)
   end
-  
+
+  if self.type == "complex" then common.mkdirp(self.install_path) end  
   if self.url then
     log_action("Downloading file " .. self.url .. "...")
-    local path = self.install_path .. (self.type == 'singleton' and (PATHSEP .. "init.lua") or "")
+    local path = self.install_path .. (self.type == 'complex' and (PATHSEP .. "init.lua") or "")
     system.get(file.url, path)
     log_action("Downloaded file " .. self.url .. " to " .. path)
-    if system.hash(path, "file") ~= file.checksum then _G[FORCE and "error" or "log_warning"]("checksum doesn't match for " .. path) end
+    if system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
   elseif self.remote then
     log_action("Cloning repository " .. self.remote .. " into " .. self.install_path)
     common.mkdirp(self.install_path)
@@ -584,7 +591,9 @@ function Plugin:install(installing)
     system.init(self.install_path, url)
     system.reset(self.install_path, branch)
   else
-    common.copy(self.local_path, self.install_path)
+    local path = self.install_path .. (self.type == 'complex' and (PATHSEP .. "init.lua") or "")
+    log_action("Copying " .. self.local_path .. " to " .. path)
+    common.copy(self.local_path, path)
   end
   for i,file in ipairs(self.files) do
     if not file.arch or file.arch == ARCH then
@@ -593,7 +602,7 @@ function Plugin:install(installing)
       log_action("Downloading file " .. file.url .. "...")
       system.get(file.url, path)
       log_action("Downloaded file " .. file.url .. " to " .. path)
-      if system.hash(path, "file") ~= file.checksum then _G[FORCE and "error" or "log_warning"]("checksum doesn't match for " .. path) end
+      if system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
     end
   end
 end
@@ -631,9 +640,10 @@ function Repository.new(hash)
 end
 
 function Repository.url(url)
-  local _, _, remote, branch_or_commit = url:find("^(.*):?(.*)$")
-  local repo
-  if branch_or_commit == "" then branch_or_commit = nil end
+  local e = url:reverse():find(":")
+  local s = #url - e + 1
+  local remote, branch_or_commit = url:sub(1, s and (s-1) or #url), s and url:sub(s+1)
+  if remote == "https" or remote == "file" then remote, branch_or_commit = url, nil end
   if branch_or_commit and is_commit_hash(branch_or_commit) then
     return Repository.new({ remote = remote, commit = branch_or_commit })
   end
@@ -656,7 +666,7 @@ function Repository:parse_manifest(already_pulling)
           table.insert(remotes, repo)
           table.insert(self.plugins, Plugin.new(self, metadata))
         else
-          log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
+          -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
         end
       else
         table.insert(self.plugins, Plugin.new(self, metadata))
@@ -702,8 +712,6 @@ function Repository:generate_manifest()
       for line in io.lines(path .. plugin_dir .. file) do
         local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
         if mod_version then plugin.mod_version = mod_version end
-        local _, _, lite_version = line:find("%-%-.*lite%-xl%s*:?%s*(%w+)")
-        if lite_version then plugin.lite_version = "" .. lite_version end
         local _, _, required_plugin = line:find("require [\"']plugins.([%w_]+)")
         if required_plugin then if required_plugin ~= plugin.name then plugin.dependencies[required_plugin] = ">=1.0" end end
       end
@@ -788,15 +796,16 @@ end
 
 
 function Repository:remove()
-  common.rmrf(self.path)
+  common.rmrf(self.local_path .. PATHSEP .. (self.commit or self.branch))
 end
 
 
 
 local function get_repository(url)
   if not url then error("requires a repository url") end
+  local r = Repository.url(url)
   for i,v in ipairs(repositories) do
-    if v.url == url then return i, v end
+    if v.remote == r.remote and v.branch == r.branch and v.commit == r.commit then return i, v end
   end
   return nil
 end
@@ -808,7 +817,7 @@ local function get_plugin(name, version, filter)
   for i,repo in ipairs(repositories) do
     for j,plugin in ipairs(repo.plugins) do
       if plugin.name == name and match_version(plugin.version, version) then
-        if (not filter.lite_version or not plugin.lite_version or plugin.lite_version == filter.lite_version) and (not filter.mod_version or not plugin.mod_version or tonumber(plugin.mod_version) == tonumber(filter.mod_version)) then
+        if (not filter.mod_version or not plugin.mod_version or tonumber(plugin.mod_version) == tonumber(filter.mod_version)) then
           table.insert(candidates, plugin)
         end
       end
@@ -816,6 +825,18 @@ local function get_plugin(name, version, filter)
   end
   table.sort(candidates, function (a,b) return a.version < b.version end)
   return table.unpack(candidates)
+end
+
+
+local function lpm_repo_init()
+  if not system.stat(CACHEDIR) then
+    for i, repository in ipairs({ Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:master"), Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:2.1") }) do
+      if not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
+        common.mkdirp(repository.local_path)
+        table.insert(repositories, repository:add())
+      end
+    end
+  end
 end
 
 
@@ -845,20 +866,25 @@ end
 
 local function lpm_repo_update(...)
   local t = { ... }
-  if #t == 0 then table.insert(t, nil) end
-  for i, url in ipairs({ ... }) do
+  if #t == 0 then table.insert(t, false) end
+  for i, url in ipairs(t) do
     local repo = url and get_repository(url)
-    for i,v in ipairs(repositories) do if not repo or v == repo then v:update() end end
+    for i,v in ipairs(repositories) do 
+      if not repo or v == repo then 
+        v:update() 
+      end 
+    end
   end
 end
 
 
 local function lpm_plugin_install(...)
   for i, identifier in ipairs({ ... }) do
-    local _, _, name, version = identifier:find("^(%w-):?([%d%.]*)$")
+    local s = identifier:find(":")
+    local name, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
     if not name then error('unrecognized plugin identifier ' .. identifier) end
-    local plugin = get_plugin(name, version, { mod_version = MOD_VERSION, lite_version = LITE_VERSION })
-    if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any') .. " and lite-version: " .. (LITE_VERSION or 'any')) end
+    local plugin = get_plugin(name, version, { mod_version = MOD_VERSION })
+    if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any')) end
     plugin:install()
   end
 end
@@ -1026,7 +1052,7 @@ xpcall(function()
     io.stderr:write([[
 Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
   [--verbose] [--mod-version=3] [--quiet] [--version] [--help] [--remotes]
-  [--ssl_certs=directory/file] [--force]
+  [--ssl_certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1068,12 +1094,13 @@ Flags have the following effects:
   --verbose                      Spits out more information, including intermediate steps to
                                  install and whatnot.
   --quiet                        Outputs nothing but explicit returning information from actions.
-  --modversion=3                Sets the mod version of lite-xl to install plugins against.
+  --modversion=3                 Sets the mod version of lite-xl to install plugins against.
   --version                      Returns version information.
   --remotes                      Automatically adds any specified remotes in the repository to
                                  the end of the resolution list.
   --help                         Displays this help text.
   --ssl_certs                    Sets the SSL certificate store to specified location.
+  --arch                         Overrides the inferred architecture (default: ]] .. _G.ARCH .. [[).
   --force                        Ignores checksum inconsitencies. Not recommended.
 ]]
     )
@@ -1084,10 +1111,9 @@ Flags have the following effects:
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
+  ARCH = ARGS["arch"] or _G.ARCH
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION") or 3
   if MOD_VERSION == "any" then MOD_VERSION = nil end
-  LITE_VERSION = ARGS["lite-version"] or os.getenv("LPM_LITEVERSION") or "2.1"
-  if LITE_VERSION == "any" then LITE_VERSION = nil end
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
   USERDIR = ARGS["userdir"] or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
@@ -1099,7 +1125,7 @@ Flags have the following effects:
   if ARGS["ssl_certs"] then 
     local stat = system.stat(ARGS["ssl_certs"])
     if not stat then error("can't find " .. ARGS["ssl_certs"]) end
-    system.set_certs(stat.type, ARGS["ssl_certs"])
+    system.certs(stat.type, ARGS["ssl_certs"])
   elseif not os.getenv("SSL_CERT_DIR") and not os.getenv("SSL_CERT_FILE") then
     local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
       "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
@@ -1118,43 +1144,25 @@ Flags have the following effects:
     for i, path in ipairs(paths) do
       local stat = system.stat(path) 
       if stat then 
-        system.set_certs(stat.type, path) 
+        system.certs(stat.type, path) 
         break 
       end
     end
   end
   
+  lpm_repo_init()
   repositories = {}
-  repositories = { Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "master" }), Repository.new({ remote = "https://github.com/lite-xl/lite-xl-plugins.git", branch = "2.1" }) }
-  local original_repositories = {}
-  for i, repository in ipairs(repositories) do
-    if not system.stat(CACHEDIR) or not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
-      common.mkdirp(repository.local_path)
-      repository:add()
-    else
-      repository:parse_manifest()
-    end
-    table.insert(original_repositories, repository)
-  end
   for i, remote_hash in ipairs(system.ls(CACHEDIR)) do
     local remote
     for j, commit_or_branch in ipairs(system.ls(CACHEDIR .. PATHSEP .. remote_hash)) do
-      local is_original = false
-      for i, repository in ipairs(original_repositories) do
-        if commit_or_branch == repository.branch and remote_hash == system.hash(repository.remote) then
-          is_original = true
+      if system.stat(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") then
+        for line in io.lines(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") do
+          local s,e = line:find("url = ") 
+          if s then remote = line:sub(e+1) break end
         end
-      end
-      if not is_original then
-        if system.stat(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") then
-          for line in io.lines(CACHEDIR .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") do
-            local s,e = line:find("url = ") 
-            if s then remote = line:sub(e+1) break end
-          end
-          if remote then
-            table.insert(repositories, Repository.url(remote .. ":" .. commit_or_branch))
-            repositories[#repositories]:parse_manifest()
-          end
+        if remote then
+          table.insert(repositories, Repository.url(remote .. ":" .. commit_or_branch))
+          repositories[#repositories]:parse_manifest()
         end
       end
     end
