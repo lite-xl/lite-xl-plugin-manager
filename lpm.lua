@@ -512,7 +512,7 @@ function Plugin.new(repository, metadata)
     install_path = USERDIR .. PATHSEP .. folder .. PATHSEP .. (metadata.path and common.basename(metadata.path):gsub("%.lua$", "") or metadata.name),
   }, metadata), Plugin)
   -- Directory.
-  self.organization = (self.files or self.remote or not self.path) and "complex" or "singleton"
+  self.organization = ((self.files and #self.files > 0) or self.remote or not self.path) and "complex" or "singleton"
   if self.organization == "singleton" then self.install_path = self.install_path .. ".lua" end
   local stat = system.stat(self.install_path)
   local compatible = (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION))
@@ -603,10 +603,10 @@ local core_plugins = {
 }
 
 function Plugin:install(installing)
+  if self.status == "installed" then error("plugin " .. self.name .. " is already installed") end
   local status, err = pcall(function()
     installing = installing or {}
     installing[self.name] = true
-    if self.status == "installed" then error("plugin " .. self.name .. " is already installed") end
     local compatible, incompatible = self:get_compatibilities()
     for plugin, version in pairs(self.dependencies) do
       if incompatible[plugin] then error("can't install " .. self.name .. ": incompatible with " .. incompatible[plugin][1].name .. ":" .. incompatible[plugin][1].version) end
@@ -662,7 +662,7 @@ function Plugin:install(installing)
     end
   end)
   if not status then
-    common.rmrf(self.local_path)
+    common.rmrf(self.install_path)
     error(err)
   end
 end
