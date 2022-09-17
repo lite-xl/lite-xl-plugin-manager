@@ -17,11 +17,11 @@
     }],
     "dependencies": { "json": { } }
   }, {
-    "name": "support_json",
+    "name": "json",
     "version": "1.0",
     "description": "JSON support plugin, provides encoding/decoding.",
     "type": "library",
-    "path": "plugins/support_json.lua",
+    "path": "plugins/json.lua",
     "provides": ["json"]
   }]
 }

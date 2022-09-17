@@ -390,6 +390,13 @@ function common.basename(path)
 end
 
 
+function common.dirname(path)
+  local s = path:reverse():find(PATHSEP)
+  if not s then return path end
+  return path:sub(1, #path - s)
+end
+
+
 function common.merge(src, merge)
   for k, v in pairs(merge) do src[k] = v end
   return src
@@ -491,7 +498,7 @@ local Plugin = {}
 function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
   local type = metadata.type or "plugin"
-  local folder = metadata.type == "library" and "lib" or "plugins"
+  local folder = metadata.type == "library" and "libraries" or "plugins"
   local self = setmetatable(common.merge({
     repository = repository,
     tags = {},
@@ -506,7 +513,7 @@ function Plugin.new(repository, metadata)
   }, metadata), Plugin)
   -- Directory.
   self.organization = (self.files or self.remote or not self.path) and "complex" or "singleton"
-  if self.type == "singleton" then self.install_path = self.install_path .. ".lua" end
+  if self.organization == "singleton" then self.install_path = self.install_path .. ".lua" end
   local stat = system.stat(self.install_path)
   local compatible = (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION))
   if stat and compatible then
@@ -596,7 +603,7 @@ local core_plugins = {
 }
 
 function Plugin:install(installing)
-  xpcall(function()
+  local status, err = pcall(function()
     installing = installing or {}
     installing[self.name] = true
     if self.status == "installed" then error("plugin " .. self.name .. " is already installed") end
@@ -617,6 +624,7 @@ function Plugin:install(installing)
         end
       end
     end
+    common.mkdirp(common.dirname(self.install_path))
     if self.status == "upgradable" then 
       log_action("Upgrading " .. self.organization .. "plugin located at " .. self.local_path .. " to " .. self.install_path)
       common.rmrf(self.install_path) 
@@ -652,10 +660,11 @@ function Plugin:install(installing)
         if system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
       end
     end
-  end, function(err)
+  end)
+  if not status then
     common.rmrf(self.local_path)
     error(err)
-  end)
+  end
 end
 
 function Plugin:depends_on(plugin)
@@ -998,7 +1007,7 @@ local function lpm_plugin_list()
       print("Description:   " .. (plugin.description or ""))
       print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
       print("Dependencies:  " .. json.encode(plugin.dependencies))
-      print("Tags:          " .. common.join(" ", plugin.tags))
+      print("Tags:          " .. common.join(", ", plugin.tags))
     end
   end
 end
