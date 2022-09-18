@@ -477,7 +477,8 @@ static const luaL_Reg system_lib[] = {
   { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
   { "status",    lpm_status }, // Returns the git repository in question's current branch, if any, and commit hash.
   { "get",       lpm_get }, // HTTP(s) GET request.
-  { "certs",     lpm_certs } // Sets the SSL certificate chain folder/file.
+  { "certs",     lpm_certs }, // Sets the SSL certificate chain folder/file.
+  { NULL,        NULL }
 };
 
 
@@ -514,7 +515,8 @@ int main(int argc, char* argv[]) {
   git_libgit2_init();
   lua_State* L = luaL_newstate();
   luaL_openlibs(L);
-  luaL_newlib(L, system_lib); lua_setglobal(L, "system");
+  luaL_newlib(L, system_lib); 
+  lua_setglobal(L, "system");
   lua_newtable(L);
   for (int i = 0; i < argc; ++i) {
     lua_pushstring(L, argv[i]);
