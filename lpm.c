@@ -429,6 +429,7 @@ static int lpm_get(lua_State* L) {
   const char* path = luaL_optstring(L, 2, NULL);
   // curl_easy_reset(curl);
   curl_easy_setopt(curl, CURLOPT_URL, url);
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
   if (path) {
     FILE* file = fopen(path, "wb");
     if (!file)

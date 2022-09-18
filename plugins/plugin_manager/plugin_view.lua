@@ -9,7 +9,7 @@ local View = require "core.view"
 local keymap = require "core.keymap"
 local RootView = require "core.rootview"
 local ContextMenu = require "core.contextmenu"
-
+local PluginManager = require "plugins.plugin_manager"
 
 local PluginView = View:extend()
 
@@ -34,11 +34,15 @@ function PluginView:new()
   self.scrollable = true
   self.show_incompatible_plugins = false
   self.plugin_table_columns = { "Name", "Version", "Modversion", "Status", "Tags", "Description" }
-  self:refresh()
   self.hovered_plugin = nil
   self.hovered_plugin_idx = nil
   self.selected_plugin = nil
   self.selected_plugin_idx = nil
+  self.initialized = false
+  PluginManager.initialized:done(function()
+    self.initialized = true
+    self:refresh()
+  end)
   plugin_view = self
 end
 
@@ -82,11 +86,13 @@ end
 
 function PluginView:on_mouse_moved(x, y, dx, dy)
   PluginView.super.on_mouse_moved(self, x, y, dx, dy)
-  local th = style.font:get_height()
-  local lh = th + style.padding.y
-  local offset = math.floor((y - self.position.y + self.scroll.y) / lh)
-  self.hovered_plugin = offset > 0 and self:get_plugins()[offset]
-  self.hovered_plugin_idx = offset > 0 and offset
+  if self.initialized then
+    local th = style.font:get_height()
+    local lh = th + style.padding.y
+    local offset = math.floor((y - self.position.y + self.scroll.y) / lh)
+    self.hovered_plugin = offset > 0 and self:get_plugins()[offset]
+    self.hovered_plugin_idx = offset > 0 and offset
+  end
 end
 
 
@@ -105,13 +111,14 @@ end
 
 
 function PluginView:get_plugins()
-  if self.show_incompatible_plugins then return PluginManager.plugins end
-  return PluginManager.valid_plugins
+  return self.show_incompatible_plugins and PluginManager.plugins or PluginManager.valid_plugins
 end
 
 
 function PluginView:get_scrollable_size()
+  if not self.initialized then return math.huge end
   local th = style.font:get_height() + style.padding.y
+  local plugins = self:get_plugins()
   return th * #self:get_plugins()
 end
 
@@ -123,6 +130,7 @@ end
 
 function PluginView:draw()
   self:draw_background(style.background)
+  if not self.initialized then return end
   
   local th = style.font:get_height()
   local lh = th + style.padding.y
@@ -174,6 +182,14 @@ function PluginView:uninstall(plugin)
 end
 
 
+command.add(nil, {
+  ["plugin-manager:show"] = function()
+    local node = core.root_view:get_active_node_default()
+    node:add_view(PluginView())
+  end
+})
+
+
 command.add(PluginView, {
   ["plugin-manager:select"] = function(x, y) 
     plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx 
@@ -199,5 +215,14 @@ command.add(function()
 end, {
   ["plugin-manager:uninstall-hovered"] = function() plugin_view:uninstall(plugin_view.hovered_plugin) end
 })
+
+
+keymap.add {
+  ["up"]          = "plugin-manager:select-prev",
+  ["down"]        = "plugin-manager:select-next",
+  ["lclick"]      = "plugin-manager:select",
+  ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
+}
+
 
 return PluginView

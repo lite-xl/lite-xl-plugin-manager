@@ -471,7 +471,7 @@ local function log_warning(message)
   if not QUIET then io.stderr:write("warning: " .. message .. "\n") end
 end
 local function fatal_warning(message)
-  if not FORCE then error(message) else log_warning(message) end
+  if not FORCE then error(message .. "; use --force to override") else log_warning(message) end
 end
 local function prompt(message)
   io.stderr:write(message .. " [Y/n]: ")
@@ -1108,7 +1108,7 @@ xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
     quiet = "flag", version = "string", ["mod-version"] = "string", remotes = "flag", help = "flag",
-    remotes = "flag", ssl_certs = "string", force = "string", arch = "string", ["assume-yes"] = "flag"
+    remotes = "flag", ssl_certs = "string", force = "flag", arch = "string", ["assume-yes"] = "flag"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")

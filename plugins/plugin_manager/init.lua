@@ -5,8 +5,6 @@ local common = require "core.common"
 local config = require "core.config"
 local command = require "core.command"
 local json = require "libraries.json"
-local keymap = require "core.keymap"
-local PluginView = require "plugins.plugin_manager.plugin_view"
 
 
 local PluginManager = {
@@ -23,7 +21,11 @@ config.plugins.plugin_manager = common.merge({
   -- Path to the folder that holds user-specified plugins.
   userdir = USERDIR,
   -- Path to ssl certificate directory.
-  ssl_certs = nil
+  ssl_certs = nil,
+  -- Whether or not to force install things.
+  force = false,
+  -- Dumps commands that run to stdout, as well as responses from lpm.
+  debug = true
 }, config.plugins.plugin_manager)
 
 if not config.plugins.plugin_manager.lpm_binary_path then
@@ -68,8 +70,10 @@ local function run(cmd)
   table.insert(cmd, "--mod-version=" .. MOD_VERSION)
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--userdir=" .. USERDIR)
-  -- print(table.unpack(cmd))
+  table.insert(cmd, "--assume-yes")
+  if config.plugins.plugin_manager.force then table.insert(cmd, "--force") end
   local proc = process.start(cmd)
+  if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do print((i > 1 and " " or "") .. v) end end
   local promise = Promise.new()
   table.insert(running_processes, { proc, promise, "" })
   if #running_processes == 1 then
@@ -83,6 +87,7 @@ local function run(cmd)
           local still_running = true
           while true do
             local chunk = v[1]:read_stdout(2048)
+            if config.plugins.plugin_manager.debug then print(chunk) end
             if chunk and #chunk == 0 then break end
             if chunk ~= nil then 
               v[3] = v[3] .. chunk 
@@ -125,6 +130,19 @@ function PluginManager:refresh()
     end
     self.last_refresh = os.time()
   end)
+end
+
+
+function PluginManager:get_plugins()
+  local prom = Promise.new()
+  if self.plugins then 
+    prom:resolve(self.plugins) 
+  else
+    self:refresh():done(function()
+      prom:resolve(self.plugins)
+    end)
+  end
+  return prom
 end
 
 
@@ -195,15 +213,11 @@ command.add(nil, {
   ["plugin-manager:refresh"] = function() PluginManager:refresh():done(function() core.log("Successfully refreshed plugin listing.") end) end,
 })
 
-PluginManager.view = PluginView
-PluginManager:refresh()
+PluginManager.promise = Promise
+PluginManager.initialized = Promise.new()
+PluginManager:refresh():done(function()
+  PluginManager.initialized:resolve()
+end)
 
-
-keymap.add {
-  ["up"]          = "plugin-manager:select-prev",
-  ["down"]        = "plugin-manager:select-next",
-  ["lclick"]      = "plugin-manager:select",
-  ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
-}
 
 return PluginManager
