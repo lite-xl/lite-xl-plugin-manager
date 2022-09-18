@@ -435,17 +435,22 @@ end
 function common.copy(src, dst)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
-  if dst_stat and dst_stat.type == "dir" and src_stat.type == "file" then return common.copy(src, dst .. PATHSEP .. common.basename(src)) end
-  local src_io, err1 = io.open(src, "rb")
-  if err1 then error("can't open for reading " .. src .. ": " .. err1) end
-  local dst_io, err2 = io.open(dst, "wb")
-  if err2 then error("can't open for writing " .. src .. ": " .. err2) end
-  while true do
-    local chunk = src_io:read(16*1024)
-    if not chunk then break end
-    dst_io:write(chunk)
+  if dst_stat and dst_stat.type == "dir" then return common.copy(src, dst .. PATHSEP .. common.basename(src)) end
+  if src_stat.type == "dir" then
+    common.mkdirp(dst)
+    for i, file in ipairs(system.ls(src)) do common.copy(src .. PATHSEP .. file, dst .. PATHSEP .. file) end
+  else
+    local src_io, err1 = io.open(src, "rb")
+    if err1 then error("can't open for reading " .. src .. ": " .. err1) end
+    local dst_io, err2 = io.open(dst, "wb")
+    if err2 then error("can't open for writing " .. src .. ": " .. err2) end
+    while true do
+      local chunk = src_io:read(16*1024)
+      if not chunk then break end
+      dst_io:write(chunk)
+    end
+    dst_io:flush()
   end
-  dst_io:flush()
 end
 
 
@@ -632,7 +637,7 @@ function Plugin:install(installing)
       log_action("Installing " .. self.organization .. " plugin located at " .. self.local_path .. " to " .. self.install_path)
     end
 
-    if self.organization == "complex" and self.path then common.mkdirp(self.install_path) end  
+    if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(self.install_path) end  
     if self.url then
       log_action("Downloading file " .. self.url .. "...")
       local path = self.install_path .. (self.organization == 'complex' and (PATHSEP .. "init.lua") or "")
@@ -646,7 +651,7 @@ function Plugin:install(installing)
       system.init(self.install_path, url)
       system.reset(self.install_path, branch)
     else
-      local path = self.install_path .. (self.organization == 'complex' and self.path and (PATHSEP .. "init.lua") or "")
+      local path = self.install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       log_action("Copying " .. self.local_path .. " to " .. path)
       common.copy(self.local_path, path)
     end

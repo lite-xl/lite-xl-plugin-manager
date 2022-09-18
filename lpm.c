@@ -424,6 +424,7 @@ static size_t lpm_curl_write_callback(char *ptr, size_t size, size_t nmemb, void
 
 
 static int lpm_get(lua_State* L) {
+  long response_code;
   const char* url = luaL_checkstring(L, 1);
   const char* path = luaL_optstring(L, 2, NULL);
   // curl_easy_reset(curl);
@@ -440,6 +441,9 @@ static int lpm_get(lua_State* L) {
       return luaL_error(L, "curl error: %d", res);
     }
     fclose(file);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+    if (response_code != 200)
+      return luaL_error(L, "curl error, non-200 response code: %d", response_code);
     lua_pushnil(L);
     lua_newtable(L);
     return 2;
@@ -451,6 +455,9 @@ static int lpm_get(lua_State* L) {
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK)
       return luaL_error(L, "curl error: %d", res);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+    if (response_code != 200)
+      return luaL_error(L, "curl error, non-200 response code: %d", response_code);
     luaL_pushresult(&B);
     lua_newtable(L);
   }
