@@ -26,7 +26,8 @@ PluginView.menu = ContextMenu()
 
 PluginView.menu:register(nil, {
   { text = "Install", command = "plugin-manager:install-hovered" },
-  { text = "Uninstall", command = "plugin-manager:uninstall-hovered" }
+  { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
+  { text = "View Source", command = "plugin-manager:view-source-hovered" }
 })
 
 function PluginView:new()
@@ -189,7 +190,6 @@ command.add(nil, {
   end
 })
 
-
 command.add(PluginView, {
   ["plugin-manager:select"] = function(x, y) 
     plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx 
@@ -214,6 +214,22 @@ command.add(function()
   return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and plugin_view.hovered_plugin.status == "installed"
 end, {
   ["plugin-manager:uninstall-hovered"] = function() plugin_view:uninstall(plugin_view.hovered_plugin) end
+})
+command.add(function()
+  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and plugin_view.hovered_plugin.status == "installed"
+end, {
+  ["plugin-manager:view-source-hovered"] = function() 
+    local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
+    local opened = false
+    for i, path in ipairs({ USERDIR .. PATHSEP .. directory .. PATHSEP .. plugin_view.hovered_plugin.name .. ".lua", USERDIR .. PATHSEP .. directory .. PATHSEP .. plugin_view.hovered_plugin.name .. PATHSEP .. "init.lua" }) do
+      local stat = system.get_file_info(path)
+      if stat and stat.type == "file" then
+        core.root_view:open_doc(core.open_doc(path))
+        opened = true
+      end
+    end
+    if not opened then core.error("Can't find source for plugin.") end
+  end
 })
 
 

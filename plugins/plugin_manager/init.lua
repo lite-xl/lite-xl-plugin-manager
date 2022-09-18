@@ -1,4 +1,4 @@
--- mod-version:3 --lite-xl 2.1
+-- mod-version:3 --lite-xl 2.1 --priority:5
 
 local core = require "core"
 local common = require "core.common"
@@ -25,8 +25,10 @@ config.plugins.plugin_manager = common.merge({
   -- Whether or not to force install things.
   force = false,
   -- Dumps commands that run to stdout, as well as responses from lpm.
-  debug = true
+  debug = false
 }, config.plugins.plugin_manager)
+
+package.path = package.path .. ";" .. USERDIR .. "libraries/?.lua" .. ";" .. USERDIR .. "libraries/?/init.lua"
 
 if not config.plugins.plugin_manager.lpm_binary_path then
   local paths = { 
@@ -73,7 +75,7 @@ local function run(cmd)
   table.insert(cmd, "--assume-yes")
   if config.plugins.plugin_manager.force then table.insert(cmd, "--force") end
   local proc = process.start(cmd)
-  if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do print((i > 1 and " " or "") .. v) end end
+  if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") end
   local promise = Promise.new()
   table.insert(running_processes, { proc, promise, "" })
   if #running_processes == 1 then
@@ -119,7 +121,8 @@ end
 
 
 function PluginManager:refresh()
-  return run({ "plugin", "list" }):done(function(plugins)
+  local prom = Promise.new()
+  run({ "plugin", "list" }):done(function(plugins)
     self.plugins = json.decode(plugins)["plugins"]
     table.sort(self.plugins, function(a,b) return a.name < b.name end)
     self.valid_plugins = {}
@@ -129,7 +132,12 @@ function PluginManager:refresh()
       end
     end
     self.last_refresh = os.time()
+    prom:resolve(plugins)
+    run({ "repo", "list" }):done(function(repositories)
+      self.repositories = repositories
+    end)
   end)
+  return prom 
 end
 
 
@@ -172,22 +180,7 @@ function PluginManager:uninstall(plugin)
 end
 
 
-local function get_suggestions(text)
-  local items = {}
-  if not PluginManager.plugins then return end
-  for i, plugin in ipairs(PluginManager.plugins) do
-    if not plugin.mod_version or tostring(plugin.mod_version) == tostring(MOD_VERSION) then
-      table.insert(items, plugin.name .. ":" .. plugin.version)
-    end
-  end
-  return common.fuzzy_match(items, text)
-end
-
 command.add(nil, {
-  ["plugin-manager:show"] = function()
-    local node = core.root_view:get_active_node_default()
-    node:add_view(PluginView())
-  end,
   ["plugin-manager:install"] = function() 
     core.command_view:enter("Enter plugin name", 
       function(name)  
@@ -196,7 +189,16 @@ command.add(nil, {
           core.log("Successfully installed plugin " .. name .. ".")
         end) 
       end, 
-      function(text) return get_suggestions(text) end
+      function(text) 
+        local items = {}
+        if not PluginManager.plugins then return end
+        for i, plugin in ipairs(PluginManager.plugins) do
+          if not plugin.mod_version or tostring(plugin.mod_version) == tostring(MOD_VERSION) then
+            table.insert(items, plugin.name .. ":" .. plugin.version)
+          end
+        end
+        return common.fuzzy_match(items, text)
+      end
     )
   end,
   ["plugin-manager:remove"] = function() 
@@ -207,7 +209,38 @@ command.add(nil, {
           core.log("Successfully removed plugin " .. name .. ".")
         end)
       end, 
-      function(text)  return get_suggestions(PluginManager.local_plugins, text) end
+      function(text) 
+        local items = {}
+        if not PluginManager.plugins then return end
+        for i, plugin in ipairs(PluginManager.plugins) do
+          if plugin.status == "installed" then
+            table.insert(items, plugin.name .. ":" .. plugin.version)
+          end
+        end
+        return common.fuzzy_match(items, text)
+      end
+    )
+  end,
+  ["plugin-manager:add-repository"] = function()
+    core.command_view:enter("Enter repository url",
+      function(url)  
+        PluginManager:add(url):done(function()
+          core.log("Successfully added repository " .. url .. ".")
+        end)
+      end, 
+      function(text)  return get_suggestions(text) end
+    )
+  end,
+  ["plugin-manager:remove-repository"] = function()
+    core.command_view:enter("Enter repository url",
+      function(url)  
+        PluginManager:add(url):done(function()
+          core.log("Successfully removed repository " .. url .. ".")
+        end)
+      end, 
+      function(text)  
+        return get_suggestions(text) 
+      end
     )
   end,
   ["plugin-manager:refresh"] = function() PluginManager:refresh():done(function() core.log("Successfully refreshed plugin listing.") end) end,
@@ -217,6 +250,7 @@ PluginManager.promise = Promise
 PluginManager.initialized = Promise.new()
 PluginManager:refresh():done(function()
   PluginManager.initialized:resolve()
+  PluginManager.view = require "plugins.plugin_manager.plugin_view"
 end)
 
 
