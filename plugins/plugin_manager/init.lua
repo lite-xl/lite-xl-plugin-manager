@@ -76,7 +76,7 @@ local function run(cmd)
   table.insert(cmd, "--assume-yes")
   if config.plugins.plugin_manager.force then table.insert(cmd, "--force") end
   local proc = process.start(cmd)
-  if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") end
+  if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") io.stdout:flush() end
   local promise = Promise.new()
   table.insert(running_processes, { proc, promise, "" })
   if #running_processes == 1 then
@@ -90,7 +90,7 @@ local function run(cmd)
           local still_running = true
           while true do
             local chunk = v[1]:read_stdout(2048)
-            if config.plugins.plugin_manager.debug then io.stdout:write(chunk) end
+            if config.plugins.plugin_manager.debug and chunk ~= nil then io.stdout:write(chunk) io.stdout:flush() end
             if chunk and v[1]:running() and #chunk == 0 then break end
             if chunk ~= nil and #chunk > 0 then 
               v[3] = v[3] .. chunk 
@@ -181,14 +181,40 @@ function PluginManager:uninstall(plugin)
 end
 
 
+function PluginManager:get_plugin(name_and_version)
+  local promise = Promise.new()
+  PluginManager:get_plugins():done(function()
+    local s = name_and_version:find(":")
+    local name, version = name_and_version, nil
+    if s then
+      name = name_and_version:sub(1, s-1)
+      version = name_and_version:sub(s+1)
+    end
+    local match = false
+    for i, plugin in ipairs(PluginManager.plugins) do
+      if not plugin.mod_version or tostring(plugin.mod_version) == tostring(MOD_VERSION) and (plugin.version == version or version == nil) then
+        promise:resolve(plugin)
+        match = true
+        break
+      end
+    end
+    if not match then promise:reject() end
+  end)
+  return promise
+end
+
 command.add(nil, {
   ["plugin-manager:install"] = function() 
     core.command_view:enter("Enter plugin name", 
       function(name)  
-        core.log("Attempting to install plugin " .. name .. "...")
-        PluginManager:install(name, nil):done(function()
-          core.log("Successfully installed plugin " .. name .. ".")
-        end) 
+        PluginManager:get_plugin(name):done(function(plugin)
+          core.log("Attempting to install plugin " .. name .. "...")
+          PluginManager:install(plugin):done(function()
+            core.log("Successfully installed plugin " .. plugin.name .. ".")
+          end) 
+        end):fail(function()
+          core.error("Unknown plugin " .. name .. ".")
+        end)
       end, 
       function(text) 
         local items = {}
@@ -202,12 +228,16 @@ command.add(nil, {
       end
     )
   end,
-  ["plugin-manager:remove"] = function() 
+  ["plugin-manager:uninstall"] = function() 
     core.command_view:enter("Enter plugin name",
       function(name)  
-        core.log("Attempting to remove plugin " .. name .. "...")
-        PluginManager:uninstall(name):done(function()
-          core.log("Successfully removed plugin " .. name .. ".")
+        PluginManager:get_plugin(name):done(function(plugin)
+          core.log("Attempting to uninstall plugin " .. plugn.name .. "...")
+          PluginManager:install(plugin):done(function()
+            core.log("Successfully uninstalled plugin " .. plugin.name .. ".")
+          end) 
+        end):fail(function()
+          core.error("Unknown plugin " .. name .. ".")
         end)
       end, 
       function(text) 
