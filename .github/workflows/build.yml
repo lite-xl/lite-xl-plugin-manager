@@ -1,6 +1,6 @@
 name: CI
 on: { push: { branches: [master] } }
-env: { VERSION: "0.1.0" }
+env: { VERSION: "0.1" }
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,16 +15,21 @@ jobs:
       - name: Build Linux
         run: |
           ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
+          cp lpm lpm.x86_64-linux
       - name: Package Debian/Ubuntu
         env: { REV: "1", ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
         run: |
-          export NAME=lite-xl_$VERSION-$REV""_$ARCH
+          export NAME=lpm_$VERSION.0-$REV""_$ARCH
           mkdir -p $NAME/usr/bin $NAME/DEBIAN && cp lpm $NAME/usr/bin
           printf "Package: lpm\nVersion: $VERSION\nArchitecture: $ARCH\nMaintainer: $MAINTAINER\nDescription: $DESCRIPTION\n" > $NAME/DEBIAN/control
           dpkg-deb --build --root-owner-group $NAME
       - name: Build Windows
         run: |
-          sudo apt-get install mingw-w64 && ./build.sh clean && CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CURL_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" GIT2_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DBUILD_CLAR=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DDLLTOOL=x86_64-w64-mingw32-dlltool" SSL_CONFIGURE=mingw ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && zip -r lpm-$VERSION-x86_64-win32.zip lpm.exe
-      - name: Create Release
+          sudo apt-get install mingw-w64 && ./build.sh clean && CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CURL_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" GIT2_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DBUILD_CLAR=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DDLLTOOL=x86_64-w64-mingw32-dlltool" SSL_CONFIGURE=mingw ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"' && zip -r lpm-$VERSION-x86_64-win32.zip lpm.exe
+          cp lpm.exe lpm.x86_64-windows.exe
+      - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
-        run: gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz *.deb
+        run: |
+          gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz *.deb
+          [[ `git describe HEAD --tags` == "v"* ]] && gh release delete -y `git describe HEAD --tags` || true; 
+          [[ `git describe HEAD --tags` == "v"* ]] && gh release create -t `git describe HEAD --tags` `git describe HEAD --tags` lpm.x86_64-linux lpm.x86_64-windows.exe
