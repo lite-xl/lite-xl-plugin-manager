@@ -11,8 +11,9 @@ local PluginManager = {
   last_refresh = nil,
   requires_restart = false
 }
+local binary_extension = (PLATFORM == "Windows" and ".exe" or "")
 config.plugins.plugin_manager = common.merge({
-  lpm_binary_name = "lpm." .. ARCH .. (PLATFORM == "Windows" and ".exe" or ""),
+  lpm_binary_name = "lpm." .. ARCH .. binary_extension,
   lpm_binary_path = nil,
   -- Restarts the plugin manager on changes.
   restart_on_change = true,
@@ -34,13 +35,13 @@ if not config.plugins.plugin_manager.lpm_binary_path then
   local paths = { 
     DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
     DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
-    USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm",
-    USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm",
+    USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm" .. binary_extension,
+    USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm" .. binary_extension,
   }
   local path, s = os.getenv("PATH"), 1
   while true do
     local _, e = path:find(":", s)
-    table.insert(paths, path:sub(s, e and (e-1) or #path) .. PATHSEP .. "lpm")
+    table.insert(paths, path:sub(s, e and (e-1) or #path) .. PATHSEP .. "lpm" .. binary_extension)
     if not e then break end
     s = e + 1
   end

@@ -384,7 +384,7 @@ end
 
 
 function common.basename(path)
-  local s = path:reverse():find(PATHSEP)
+  local s = path:reverse():find("[/\\]")
   if not s then return path end
   return path:sub(#path - s + 2)
 end
@@ -459,7 +459,7 @@ local function is_commit_hash(hash)
 end
 
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, repositories
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, INSTALL_OPTIONAL, repositories
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -504,6 +504,7 @@ function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
   local type = metadata.type or "plugin"
   local folder = metadata.type == "library" and "libraries" or "plugins"
+  if metadata.path then metadata.path = metadata.path:gsub("/", PATHSEP) end
   local self = setmetatable(common.merge({
     repository = repository,
     tags = {},
@@ -517,7 +518,7 @@ function Plugin.new(repository, metadata)
     install_path = USERDIR .. PATHSEP .. folder .. PATHSEP .. (metadata.path and common.basename(metadata.path):gsub("%.lua$", "") or metadata.name),
   }, metadata), Plugin)
   -- Directory.
-  self.organization = ((self.files and #self.files > 0) or self.remote or not self.path) and "complex" or "singleton"
+  self.organization = ((self.files and #self.files > 0) or self.remote or (not self.path and not self.url)) and "complex" or "singleton"
   if self.organization == "singleton" then self.install_path = self.install_path .. ".lua" end
   local stat = system.stat(self.install_path)
   local compatible = (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION))
@@ -640,10 +641,10 @@ function Plugin:install(installing)
     if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(self.install_path) end  
     if self.url then
       log_action("Downloading file " .. self.url .. "...")
-      local path = self.install_path .. (self.organization == 'complex' and (PATHSEP .. "init.lua") or "")
-      system.get(file.url, path)
+      local path = self.install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      system.get(self.url, path)
       log_action("Downloaded file " .. self.url .. " to " .. path)
-      if system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
+      if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     elseif self.remote then
       log_action("Cloning repository " .. self.remote .. " into " .. self.install_path)
       common.mkdirp(self.install_path)
@@ -1108,7 +1109,8 @@ xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
     quiet = "flag", version = "string", ["mod-version"] = "string", remotes = "flag", help = "flag",
-    remotes = "flag", ssl_certs = "string", force = "flag", arch = "string", ["assume-yes"] = "flag"
+    remotes = "flag", ssl_certs = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
+    ["install-optional"] = "flag"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -1128,7 +1130,8 @@ affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, for from the lite-xl `plugin_manager` plugin.
 
 LPM will always use https://github.com/lite-xl/lite-xl-plugins as its base
-repository, though others can be added.
+repository, if none are present, and the cache directory does't exist,
+but others can be added, and this base one can be removed.
 
 It has the following commands:
 
@@ -1170,6 +1173,8 @@ Flags have the following effects:
   --arch                         Overrides the inferred architecture (default: ]] .. _G.ARCH .. [[).
   --force                        Ignores checksum inconsitencies. Not recommended.
   --assume-yes                   Ignores any prompts, and automatically answers yes to all.
+  --install-optional             On install, any dependencies marked as optional that can be installed
+                                 will be installled.
 ]]
     )
     return 0
@@ -1179,6 +1184,7 @@ Flags have the following effects:
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
+  INSTALL_OPTIONAL = ARGS["install-optional"]
   ARCH = ARGS["arch"] or _G.ARCH
   ASSUME_YES = ARGS["assume-yes"] or FORCE
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION") or 3

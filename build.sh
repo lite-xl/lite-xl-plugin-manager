@@ -26,7 +26,7 @@ if [[ "$@" != *"-lgit2"* ]]; then
   LDFLAGS="-Llib/libgit2/build -l:libgit2.a $LDFLAGS  -Llib/prefix/lib -Llib/prefix/lib64" && CFLAGS="$CFLAGS -Ilib/prefix/include"
 fi
 if [[ "$@" != *"-lcurl"* ]]; then
-  [ ! -e "lib/curl/build" ] && cd lib/curl && mkdir build && cd build && cmake .. $CURL_CONFIGURE -DCURL_DISABLE_LDAPS=ON -DCURL_DISABLE_LDAP=ON -DCMAKE_INSTALL_PREFIX=`pwd`/../../prefix -DUSE_LIBIDN2=OFF -DENABLE_UNICODE=OFF -DBUILD_CURL_EXE=OFF -DCURL_USE_LIBSSH2=OFF -DOPENSSL_ROOT_DIR=`pwd`/../../prefix -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=lib && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/curl/build" ] && cd lib/curl && mkdir build && cd build && cmake .. $CURL_CONFIGURE -DCURL_DISABLE_LDAPS=ON -DUSE_OPENSSL=ON -DCURL_DISABLE_LDAP=ON -DCMAKE_INSTALL_PREFIX=`pwd`/../../prefix -DUSE_LIBIDN2=OFF -DENABLE_UNICODE=OFF -DBUILD_CURL_EXE=OFF -DCURL_USE_LIBSSH2=OFF -DOPENSSL_ROOT_DIR=`pwd`/../../prefix -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=lib && $MAKE -j $JOBS && $MAKE install && cd ../../../
   LDFLAGS="-Llib/curl/build -Llib/prefix/lib -l:libcurl.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include -DCURL_STATICLIB"
 fi
 [[ "$@" != *"-llua"* ]] && CFLAGS="$CFLAGS -Ilib/lua -DMAKE_LIB=1" && SRCS="$SRCS lib/lua/onelua.c"

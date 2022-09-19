@@ -430,6 +430,9 @@ static int lpm_get(lua_State* L) {
   // curl_easy_reset(curl);
   curl_easy_setopt(curl, CURLOPT_URL, url);
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
+  #ifdef _WIN32
+    curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+  #endif
   if (path) {
     FILE* file = fopen(path, "wb");
     if (!file)
@@ -439,12 +442,12 @@ static int lpm_get(lua_State* L) {
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
       fclose(file);
-      return luaL_error(L, "curl error: %d", res);
+      return luaL_error(L, "curl error accessing %s: %s", url, curl_easy_strerror(res));
     }
     fclose(file);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
     if (response_code != 200)
-      return luaL_error(L, "curl error, non-200 response code: %d", response_code);
+      return luaL_error(L, "curl error accessing %s, non-200 response code: %d", url, response_code);
     lua_pushnil(L);
     lua_newtable(L);
     return 2;
@@ -455,10 +458,10 @@ static int lpm_get(lua_State* L) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &B);
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK)
-      return luaL_error(L, "curl error: %d", res);
+      return luaL_error(L, "curl error accessing %s: %s", url, curl_easy_strerror(res));
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
     if (response_code != 200)
-      return luaL_error(L, "curl error, non-200 response code: %d", response_code);
+      return luaL_error(L, "curl error accessing %s, non-200 response code: %d", url, response_code);
     luaL_pushresult(&B);
     lua_newtable(L);
   }
