@@ -31,5 +31,5 @@ jobs:
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz *.deb
-          [[ `git describe HEAD --tags` == "v"* ]] && gh release delete -y `git describe HEAD --tags` || true; 
-          [[ `git describe HEAD --tags` == "v"* ]] && gh release create -t `git describe HEAD --tags` `git describe HEAD --tags` lpm.x86_64-linux lpm.x86_64-windows.exe
+          [[ `git describe HEAD --tags --match=v* | head -c 4` == "v"* ]] && gh release delete -y `git describe HEAD --tags --match=v* | head -c 4` || true; 
+          [[ `git describe HEAD --tags --match=v* | head -c 4` == "v"* ]] && gh release create -t `git describe HEAD --tags --match=v* | head -c 4` `git describe HEAD --tags --match=v* | head -c 4` lpm.x86_64-linux lpm.x86_64-windows.exe

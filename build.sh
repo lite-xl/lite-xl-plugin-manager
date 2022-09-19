@@ -18,7 +18,7 @@ if [[ "$@" != *"-lz"* ]]; then
   LDFLAGS="$LDFLAGS -Llib/libz/build -l:libz.a" && CFLAGS="$CFLAGS -Ilib/prefix/include" && LDFLAGS="$LDFLAGS -Llib/prefix/lib -Llib/prefix/lib64"
 fi
 if [[ "$@" != *"-lssl"* && "$@" != *"-lcrypto"* ]]; then
-  [ ! -e "lib/openssl/build" ] && cd lib/openssl && mkdir build && cd build && ../Configure --prefix=`pwd`/../../prefix $SSL_CONFIGURE && $MAKE -j $JOBS && $MAKE install && cd ../../../ && ln -sf lib/prefix/lib64/libcrypto.a lib/prefix/lib/libcyrpto.a
+  [ ! -e "lib/openssl/build" ] && cd lib/openssl && mkdir build && cd build && ../Configure --prefix=`pwd`/../../prefix $SSL_CONFIGURE && $MAKE -j $JOBS && $MAKE install_sw install_ssldirs && cd ../../../ && ln -sf lib/prefix/lib64/libcrypto.a lib/prefix/lib/libcyrpto.a
   LDFLAGS="$LDFLAGS -Llib/libz/build" && CFLAGS="$CFLAGS -Ilib/prefix/include" && LDFLAGS="$LDFLAGS -Llib/prefix/lib -Llib/prefix/lib64 -l:libssl.a -l:libcrypto.a"
 fi
 if [[ "$@" != *"-lgit2"* ]]; then
