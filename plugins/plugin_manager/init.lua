@@ -29,13 +29,13 @@ config.plugins.plugin_manager = common.merge({
   debug = false
 }, config.plugins.plugin_manager)
 
-package.path = package.path .. ";" .. USERDIR .. "libraries/?.lua" .. ";" .. USERDIR .. "libraries/?/init.lua"
+package.path = package.path .. ";" .. USERDIR .. "/libraries/?.lua" .. ";" .. USERDIR .. "/libraries/?/init.lua" .. ";" .. DATADIR .. "/libraries/?.lua" .. ";" .. DATADIR .. "/libraries/?/init.lua"
 
 if not config.plugins.plugin_manager.lpm_binary_path then
   local paths = { 
     DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
-    DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
-    USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm" .. binary_extension,
+    USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
+    DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm" .. binary_extension,
     USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm" .. binary_extension,
   }
   local path, s = os.getenv("PATH"), 1
@@ -90,9 +90,9 @@ local function run(cmd)
           local still_running = true
           while true do
             local chunk = v[1]:read_stdout(2048)
-            if config.plugins.plugin_manager.debug then print(chunk) end
-            if chunk and #chunk == 0 then break end
-            if chunk ~= nil then 
+            if config.plugins.plugin_manager.debug then io.stdout:write(chunk) end
+            if chunk and v[1]:running() and #chunk == 0 then break end
+            if chunk ~= nil and #chunk > 0 then 
               v[3] = v[3] .. chunk 
               has_chunk = true
             else
@@ -101,7 +101,7 @@ local function run(cmd)
                 v[2]:resolve(v[3])
               else
                 local err = v[1]:read_stderr(2048)
-                core.error("error running lpm: " .. err)
+                core.error("error running lpm: " .. (err or "?"))
                 v[2]:reject(v[3])
               end
               break

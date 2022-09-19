@@ -7,11 +7,11 @@
     "mod_version": 3,
     "provides": ["plugin-manager"],
     "files": [{
-      "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm-x86_64-linux",
+      "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-linux",
       "arch": "x86_64-linux",
-      "checksum": "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
+      "checksum": "88f0b399b9b97725cc907ee3382148bc921cbc52b3c1ba10640d68c369c6304b"
     }, {
-      "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm-x86_64-windows.exe",
+      "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-windows.exe",
       "arch": "x86_64-windows",
       "checksum": "16a5910e06de1df4d3252ee41db46426ee723fc6417de5c87b26b7bada2aa68f"
     }],
