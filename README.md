@@ -20,7 +20,7 @@ git clone git@github.com:adamharrison/lite-xl-plugin-manager.git --shallow-submo
 If you want to build it quickly, and have the right modules installed, you can do:
 
 ```
-./build.sh -lz -lssl -llibgit2 -lcurl
+./build.sh -lz -lssl -lgit2 -lcurl -lcrypto -llua
 ```
 
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
