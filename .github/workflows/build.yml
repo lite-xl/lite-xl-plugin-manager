@@ -32,14 +32,14 @@ jobs:
         run: |
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz *.deb
           if [[ `git tag --points-at HEAD | head -c 4` == "v"* ]]; then
-            export RELEASE=`git tag --points-at HEAD | head -c 4`
-            gh release delete -y $RELEASE || true; 
-            gh release create -t $RELEASE $RELEASE lpm.x86_64-linux lpm.x86_64-windows.exe
+            export RELEASE=`git tag --points-at HEAD | head -c 4 | sed 's/^v//'`
+            gh release delete -y v$RELEASE || true; 
+            gh release create -t v$RELEASE v$RELEASE lpm.x86_64-linux lpm.x86_64-windows.exe
             git checkout master && git config user.email "adamdharrison@gmail.com" && git config user.name "Adam Harrison"
             cat manifest.json | 
                 jq ".plugins[0].files[0].checksum = "'"'"`sha256sum lpm.x86_64-linux | sed 's/ .*//'`"'"' |
                 jq ".plugins[0].files[1].checksum = "'"'"`sha256sum lpm.x86_64-windows.exe | sed 's/ .*//'`"'"' |
-                jq ".plugins[0].version = $RELEASE" 
+                jq ".plugins[0].version = "'"'"$RELEASE"'"'
                 > new-manifest.json
             mv new-manifest.json manifest.json && git add manifest.json && git commit -m 'Updated manifest.json with updated release checksums.' && git push
           fi
