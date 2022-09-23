@@ -39,8 +39,7 @@ jobs:
             cat manifest.json | 
                 jq ".plugins[0].files[0].checksum = "'"'"`sha256sum lpm.x86_64-linux | sed 's/ .*//'`"'"' |
                 jq ".plugins[0].files[1].checksum = "'"'"`sha256sum lpm.x86_64-windows.exe | sed 's/ .*//'`"'"' |
-                jq ".plugins[0].version = "'"'"$RELEASE"'"'
-                > new-manifest.json
+                jq ".plugins[0].version = "'"'"$RELEASE"'"' > new-manifest.json
             mv new-manifest.json manifest.json && git add manifest.json && git commit -m 'Updated manifest.json with updated release checksums.' && git push
           fi
           
