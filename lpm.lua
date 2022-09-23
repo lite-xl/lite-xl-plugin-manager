@@ -459,7 +459,7 @@ local function is_commit_hash(hash)
 end
 
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, INSTALL_OPTIONAL, repositories
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -480,14 +480,30 @@ local function prompt(message)
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
 end
 
+local function compare_version(a, b) -- compares semver
+  if not a or not b then return false end
+  local _, _, majora, minora, revisiona = a:find("(%d+)%.?(%d*)%.?(%d*)")
+  local _, _, majorb, minorb, revisionb = b:find("(%d+)%.?(%d*)%.?(%d*)")
+  if majora == nil then error("can't parse version " .. a) end
+  if majorb == nil then error("can't parse version " .. b) end
+  majora, minora, revisiona = majora or 0, minora or 0, revisiona or 0
+  majorb, minorb, revisionb = majorb or 0, minorb or 0, revisionb or 0
+  if majora ~= majorb then return tonumber(majora) < tonumber(majorb) and -1 or 1 end
+  if minora ~= minorb then return tonumber(minora) < tonumber(minorb) and -1 or 1 end
+  if revisiona ~= revisionb then return tonumber(revisiona) < tonumber(revisionb) and -1 or 1 end
+  return 0
+end
 
 local function match_version(version, pattern)
-  return not pattern or version == pattern
+  if not pattern then return true end
+  if pattern:find("^>=") then return compare_version(version, pattern:sub(3)) >= 0 end
+  if pattern:find("^<=") then return compare_version(version, pattern:sub(3)) <= 0 end
+  if pattern:find("^<") then return compare_version(version, pattern:sub(2)) == -1 end
+  if pattern:find("^>") then return compare_version(version, pattern:sub(2)) == 1 end
+  if pattern:find("^=") then return compare_version(version, pattern:sub(2)) == 0 end
+  return version == pattern
 end
 
-local function compare_version(a, b)
-  return a and b and tonumber(a) < tonumber(b)
-end
 
 local function get_all_plugins()
   local t = {}
@@ -610,6 +626,7 @@ local core_plugins = {
 
 function Plugin:install(installing)
   if self.status == "installed" then error("plugin " .. self.name .. " is already installed") end
+  local temporary_install_path = TMPDIR .. self.install_path:sub(#CACHEDIR)
   local status, err = pcall(function()
     installing = installing or {}
     installing[self.name] = true
@@ -618,19 +635,19 @@ function Plugin:install(installing)
       if incompatible[plugin] then error("can't install " .. self.name .. ": incompatible with " .. incompatible[plugin][1].name .. ":" .. incompatible[plugin][1].version) end
     end
     for plugin, v in pairs(self.dependencies) do
-      if not core_plugins[plugin] and not compatible[plugin] then error("can't find dependency " .. plugin .. (v.version and (":" .. version) or "")) end
+      if not core_plugins[plugin] and not compatible[plugin] then error("can't find dependency " .. plugin .. (v.version and (":" .. v.version) or "")) end
     end
     for plugin, v in pairs(self.dependencies) do
       if not core_plugins[plugin] and not compatible[plugin]:is_installed() then
         if installing[plugin] then
           error("circular dependency detected in " .. self.name .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.name)
         end
-        if not v.optional or prompt(plugin .. " is an optional dependency of " .. self.name .. ". Should we install it?") then
+        if not NO_INSTALL_OPTIONAL and (not v.optional or prompt(plugin .. " is an optional dependency of " .. self.name .. ". Should we install it?")) then
           compatible[plugin]:install(installing)
         end
       end
     end
-    common.mkdirp(common.dirname(self.install_path))
+    common.mkdirp(common.dirname(temporary_install_path))
     if self.status == "upgradable" then 
       log_action("Upgrading " .. self.organization .. "plugin located at " .. self.local_path .. " to " .. self.install_path)
       common.rmrf(self.install_path) 
@@ -641,41 +658,48 @@ function Plugin:install(installing)
     if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(self.install_path) end  
     if self.url then
       log_action("Downloading file " .. self.url .. "...")
-      local path = self.install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       system.get(self.url, path)
       log_action("Downloaded file " .. self.url .. " to " .. path)
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     elseif self.remote then
       log_action("Cloning repository " .. self.remote .. " into " .. self.install_path)
-      common.mkdirp(self.install_path)
+      common.mkdirp(temporary_install_path)
       local _, _, url, branch = self.remote:find("^(.*):(.*)$")
-      system.init(self.install_path, url)
-      system.reset(self.install_path, branch)
+      system.init(temporary_install_path, url)
+      system.reset(temporary_install_path, branch)
     else
       local path = self.install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       log_action("Copying " .. self.local_path .. " to " .. path)
-      common.copy(self.local_path, path)
+      common.copy(self.local_path, temporary_path)
     end
     for i,file in ipairs(self.files or {}) do
       if not file.arch or file.arch == ARCH then
-        if not file.checksum then error("requires a checksum") end
-        local path = self.install_path .. PATHSEP .. (file.path or common.basename(file.url))
-        log_action("Downloading file " .. file.url .. "...")
-        system.get(file.url, path)
-        log_action("Downloaded file " .. file.url .. " to " .. path)
-        if system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
+        if not NO_INSTALL_OPTIONAL and (not file.optional or prompt(common.basename(file.url) .. " is an optional dependency of " .. self.name .. ". Should we install it?")) then
+          if not file.checksum then error("requires a checksum") end
+          local path = self.install_path .. PATHSEP .. (file.path or common.basename(file.url))
+          local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
+          log_action("Downloading file " .. file.url .. "...")
+          system.get(file.url, temporary_path)
+          log_action("Downloaded file " .. file.url .. " to " .. path)
+          if system.hash(temporary_path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
+        end
       end
     end
   end)
   if not status then
-    common.rmrf(self.install_path)
+    common.rmrf(temporary_install_path)
     error(err)
+  else
+    common.rmrf(self.install_path)
+    os.rename(temporary_install_path, self.install_path)
   end
 end
 
 function Plugin:depends_on(plugin)
-  if self.dependencies[plugin] and self.dependencies[plugin].optional ~= false then return true end
-  for i,v in ipairs(plugin.provides or {}) do if self.dependencies[v] and self.dependencies[v].optional ~= false then return true end end
+  if self.dependencies[plugin.name] and self.dependencies[plugin.name].optional ~= true then return true end
+  for i,v in ipairs(plugin.provides or {}) do if self.dependencies[v] and self.dependencies[v].optional ~= true then return true end end
   return false
 end
 
@@ -1118,10 +1142,10 @@ xpcall(function()
   end
   if ARGS["help"] or #ARGS == 1 or ARGS[2] == "help" then
     io.stderr:write([[
-Usage: lpm COMMAND [--json] [--userdir=directory] [--cachedir=directory]
-  [--verbose] [--mod-version=3] [--quiet] [--version] [--help] [--remotes]
+Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory] 
+  [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl_certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
-  [--assume-yes] [--install-optional]
+  [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1135,46 +1159,51 @@ but others can be added, and this base one can be removed.
 
 It has the following commands:
 
-  lpm repo list                                      List all extant repos.
-  lpm [repo] add <repository remote>                 Add a source repository.
+  lpm repo list                            List all extant repos.
+  lpm [repo] add <repository remote>       Add a source repository.
     [...<repository remote>] 
-  lpm [repo] rm <repository remote>                  Remove a source repository.
+  lpm [repo] rm <repository remote>        Remove a source repository.
     [...<repository remote>]
-  lpm [repo] update [<repository remote>]            Update all/the specified repositories.
+  lpm [repo] update [<repository remote>]  Update all/the specified repos.
     [...<repository remote>]        
-  lpm [plugin] install <plugin name>[:<version>]     Install the specific plugins in question.
-    [...<plugin name>:<version>]                     If the plugin is installed, upgrades it.
-  lpm [plugin] uninstall <plugin name>               Uninstall the specific plugin.
+  lpm [plugin] install                     Install specific plugins.
+    <plugin name>[:<version>]              If installed, upgrades.
+    [...<plugin name>:<version>]                     
+  lpm [plugin] uninstall <plugin name>     Uninstall the specific plugin.
     [...<plugin name>]
-  lpm [plugin] list <repository remote>              List all/associated plugins.
+  lpm [plugin] list <repository remote>    List all/associated plugins.
     [...<repository remote>]    
-  lpm [plugin] upgrade                               Upgrades all installed plugins to new version
-                                                     if applicable.
-  lpm purge                                          Completely purge all state for LPM.
-  lpm -                                              Read these commands from stdin in an 
-                                                     interactive print-eval loop.
-  lpm help                                           Displays this help text.
+  lpm [plugin] upgrade                     Upgrades all installed plugins 
+                                           to new version if applicable.
+  lpm purge                                Completely purge all state for LPM.
+  lpm -                                    Read these commands from stdin in
+                                           an interactive print-eval loop.
+  lpm help                                 Displays this help text.
 
 Flags have the following effects:
 
-  --json                         Performs all communication in JSON, rather than human-readable.
-  --userdir=directory            Treats the specified directory as the lite-xl userdir.
-                                 By default, this is set based on the normal lite-xl logic.
-  --cachedir=directory           Sets the directory to store all repositories.
-  --verbose                      Spits out more information, including intermediate steps to
-                                 install and whatnot.
-  --quiet                        Outputs nothing but explicit returning information from actions.
-  --modversion=3                 Sets the mod version of lite-xl to install plugins against.
-  --version                      Returns version information.
-  --remotes                      Automatically adds any specified remotes in the repository to
-                                 the end of the resolution list.
-  --help                         Displays this help text.
-  --ssl_certs                    Sets the SSL certificate store to specified location.
-  --arch                         Overrides the inferred architecture (default: ]] .. _G.ARCH .. [[).
-  --force                        Ignores checksum inconsitencies. Not recommended.
-  --assume-yes                   Ignores any prompts, and automatically answers yes to all.
-  --install-optional             On install, any dependencies marked as optional that can be installed
-                                 will be installled.
+  --json                   Performs all communication in JSON.
+  --userdir=directory      Sets the lite-xl userdir manually.
+                           If omitted, uses the normal lite-xl logic.
+  --cachedir=directory     Sets the directory to store all repositories.
+  --tmpdir=directory       During install, sets the staging area.
+  --verbose                Spits out more information, including intermediate
+                           steps to install and whatnot.
+  --quiet                  Outputs nothing but explicit responses.
+  --modversion=3           Sets the mod version of lite-xl to install plugins.
+  --version                Returns version information.
+  --remotes                Automatically adds any specified remotes in the 
+                           repository to the end of the resolution list.
+                           This is a potential security risk, so be careful.
+  --help                   Displays this help text.
+  --ssl_certs              Sets the SSL certificate store.
+  --arch                   Sets the architecture (default: ]] .. _G.ARCH .. [[).
+  --force                  Ignores checksum inconsitencies. 
+                           Not recommended; security risk.
+  --assume-yes             Ignores any prompts, and automatically answers yes
+                           to all.
+  --no-install-optional    On install, anything marked as optional
+                           won't prompt.
 ]]
     )
     return 0
@@ -1184,7 +1213,7 @@ Flags have the following effects:
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
-  INSTALL_OPTIONAL = ARGS["install-optional"]
+  NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]
   ARCH = ARGS["arch"] or _G.ARCH
   ASSUME_YES = ARGS["assume-yes"] or FORCE
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION") or 3
@@ -1195,6 +1224,7 @@ Flags have the following effects:
   AUTO_PULL_REMOTES = ARGS["remotes"]
   if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
   CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
+  TMPDIR = ARGS["tmpdir"] or CACHEDIR .. "/tmp"
 
   if ARGS[2] == "purge" then return lpm_purge() end
   if ARGS["ssl_certs"] then 

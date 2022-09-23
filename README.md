@@ -26,6 +26,18 @@ If you want to build it quickly, and have the right modules installed, you can d
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
 `continuous` [release page](https://github.com/adamharrison/lite-xl-plugin-manager/releases/tag/continuous).
 
+## Use in CI
+
+To make pre-fab lite builds, you can easily use `lpm` in CI. If you had a linux build container, you could do something like:
+
+```sh
+
+curl https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-linux > lpm
+export LITE_USERDIR=lite-xl/data && export LPM_CACHE=/tmp/cache
+./lpm add https://github.com/adamharrison/lite-xl-plugin-manager && ./lpm install plugin_manager lsp
+
+```
+
 ## Usage
 
 ```sh
@@ -33,8 +45,9 @@ CI is enabled on this repository, so you can grab Windows and Linux builds from 
 lpm update && lpm install aligncarets
 lpm uninstall aligncarets
 
-lpm add https://github.com/lite-xl/lite-xl-plugins.git
-lpm rm https://github.com/lite-xl/lite-xl-plugins.git
+lpm add https://github.com/adamharrison/lite-xl-plugin-manager.git
+lpm install plugin_manager
+lpm rm https://github.com/adamharrison/lite-xl-plugin-manager.git
 
 ```
 

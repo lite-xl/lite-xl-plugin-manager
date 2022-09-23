@@ -66,14 +66,13 @@ function Promise:forward(promise) self:done(function(data) promise:resolve(data)
 local running_processes = {}
 
 local function run(cmd)
-  local t = { config.plugins.plugin_manager.lpm, table.unpack(cmd), "--json", "--mod-version", MOD_VERSION }
-  if config.plugins.plugin_manager.ssl_certs then table.insert(t, "--ssl_certs") table.insert(t, config.plugins.plugin_manager.ssl_certs) end 
   table.insert(cmd, 1, config.plugins.plugin_manager.lpm_binary_path)
   table.insert(cmd, "--json")
   table.insert(cmd, "--mod-version=" .. MOD_VERSION)
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--userdir=" .. USERDIR)
   table.insert(cmd, "--assume-yes")
+  if config.plugins.plugin_manager.ssl_certs then table.insert(cmd, "--ssl_certs") table.insert(cmd, config.plugins.plugin_manager.ssl_certs) end 
   if config.plugins.plugin_manager.force then table.insert(cmd, "--force") end
   local proc = process.start(cmd)
   if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") io.stdout:flush() end
