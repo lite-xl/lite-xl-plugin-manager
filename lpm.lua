@@ -360,7 +360,7 @@ function common.rmrf(root)
   if not root or root == "" then return end
   local info = system.stat(root)
   if not info then return end
-  if info.type == "file" then return os.remove(root) end
+  if info.type == "file" or info.symlink then return os.remove(root) end
   for i,v in ipairs(system.ls(root)) do common.rmrf(root .. PATHSEP .. v) end
   system.rmdir(root)
 end
@@ -423,6 +423,18 @@ function common.join(joiner, list)
   return s
 end
 
+function common.split(splitter, str)
+  local o = 1
+  local res = {}
+  while true do
+      local s, e = str:find(splitter, o)
+      table.insert(res, str:sub(o, s and (s - 1) or #str))
+      if not s then break end
+      o = e + 1
+  end
+  return table.unpack(res)
+end
+
 
 function common.slice(t, i, l)
   local n = {}
@@ -453,13 +465,25 @@ function common.copy(src, dst)
   end
 end
 
+local function get_executable(name)
+  local PATH = os.getenv("PATH")
+  local s = 1
+  while true do
+    local _, e = PATH:find(";", s)
+    local target = PATH:sub(s, e and (e - 1) or #PATH) .. PATHSEP .. name
+    if system.stat(target) then return target end
+    if not e then break end
+    s = e + 1
+  end
+end
+
 
 local function is_commit_hash(hash)
   return #hash == 40 and not hash:find("[^a-z0-9]")
 end
 
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, system_xl
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -515,6 +539,17 @@ local function get_all_plugins()
   return t
 end
 
+function common.get(source, target, checksum)
+  if not checksum return system.get(source, target) end
+  if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
+  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
+  if not system.stat(cache_path) then
+    system.get(source, cache_path)
+    if system.hash(cache_path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. source) end
+  end
+  common.copy(cache_path, target)
+end
+
 local Plugin = {}
 function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
@@ -525,30 +560,30 @@ function Plugin.new(repository, metadata)
     repository = repository,
     tags = {},
     type = type,
-    remote = nil,
     path = nil,
-    status = "available",
+    remote = nil,
     version = "1.0",
     dependencies = {},
     local_path = repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or ""),
-    install_path = USERDIR .. PATHSEP .. folder .. PATHSEP .. (metadata.path and common.basename(metadata.path):gsub("%.lua$", "") or metadata.name),
   }, metadata), Plugin)
   -- Directory.
   self.organization = ((self.files and #self.files > 0) or self.remote or (not self.path and not self.url)) and "complex" or "singleton"
-  if self.organization == "singleton" then self.install_path = self.install_path .. ".lua" end
-  local stat = system.stat(self.install_path)
-  local compatible = (not metadata.mod_version or tonumber(metadata.mod_version) == tonumber(MOD_VERSION))
-  if stat and compatible then
-    self.status = "installed"
-    self.organization = stat.type == "dir" and "complex" or "singleton"
-  else
-    if not compatible then self.status = "incompatible" end
-  end
   return self
 end
 
-function Plugin:is_installed()
-  return self.status == "installed" or self.status == "upgradable"
+function Plugin:get_install_path(bottle)
+  local folder = metadata.type == "library" and "libraries" or "plugins"
+  local path = (bottle and bottle.local_path or USERDIR) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
+  if self.organization == "singleton" then path = path .. ".lua" end
+  return path
+end
+
+function Plugin:is_compatible(lite_xl)
+  return compare_version(lite_xl.mod_version, self.mod_version) == 0
+end
+
+function Plugin:is_installed(bottle)
+  return system.stat(self:get_install_path(bottle))
 end
 
 function Plugin:is_incompatible(plugin)
@@ -583,19 +618,19 @@ local function get_plugin(name, version, filter)
 end
 
 
-function Plugin:get_compatibilities()
+function Plugin:get_compatibilities(bottle)
   local compatible_plugins = {}
   local incompatible_plugins = {}
   local installed_plugins = {}
   for i, repo in ipairs(repositories) do
     for j, plugin in ipairs(repo.plugins) do
-      if plugin:is_installed() then
+      if plugin:is_installed(bottle) then
         table.insert(installed_plugins, plugin)
       end
     end
   end
   for plugin, v in pairs(self.dependencies) do
-    local potential_plugins = { get_plugin(plugin, v.version, { mod_version = MOD_VERSION }) }
+    local potential_plugins = { get_plugin(plugin, v.version, { mod_version = bottle and bottle.lite_xl.mod_version or system_xl.mod_version }) }
     local has_at_least_one = false
     local incomaptibilities = {}
     for i, potential_plugin in ipairs(potential_plugins) do
@@ -606,8 +641,8 @@ function Plugin:get_compatibilities()
       end
       if #incomaptibilities == 0 then
         if not compatible_plugins[plugin] or
-          potential_plugin:is_installed() or
-          (compare_version(compatible_plugins[plugin].version, potential_plugin.version) and not compatible_plugins[plugin]:is_installed())
+          potential_plugin:is_installed(bottle) or
+          (compare_version(compatible_plugins[plugin].version, potential_plugin.version) and not compatible_plugins[plugin]:is_installed(bottle))
         then
           compatible_plugins[plugin] = potential_plugin
         end
@@ -624,13 +659,14 @@ local core_plugins = {
   autocomplete = true, autoreload = true, contextmenu = true, detectindent = true, drawwhitespace = true, language_c = true, language_cpp = true, language_css = true, language_html = true, language_js = true, language_lua = true, language_md = true, language_python = true, language_xml = true, lineguide = true, linewrapping = true, macro = true, projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true
 }
 
-function Plugin:install(installing)
-  if self.status == "installed" then error("plugin " .. self.name .. " is already installed") end
-  local temporary_install_path = TMPDIR .. self.install_path:sub(#CACHEDIR)
+function Plugin:install(bottle, installing)
+  if self:is_installed(bottle) then error("plugin " .. self.name .. " is already installed") end
+  local install_path = self:get_install_path(bottle)
+  local temporary_install_path = TMPDIR .. install_path:sub(#CACHEDIR)
   local status, err = pcall(function()
     installing = installing or {}
     installing[self.name] = true
-    local compatible, incompatible = self:get_compatibilities()
+    local compatible, incompatible = self:get_compatibilities(bottle)
     for plugin, version in pairs(self.dependencies) do
       if incompatible[plugin] then error("can't install " .. self.name .. ": incompatible with " .. incompatible[plugin][1].name .. ":" .. incompatible[plugin][1].version) end
     end
@@ -638,38 +674,38 @@ function Plugin:install(installing)
       if not core_plugins[plugin] and not compatible[plugin] then error("can't find dependency " .. plugin .. (v.version and (":" .. v.version) or "")) end
     end
     for plugin, v in pairs(self.dependencies) do
-      if not core_plugins[plugin] and not compatible[plugin]:is_installed() then
+      if not core_plugins[plugin] and not compatible[plugin]:is_installed(bottle) then
         if installing[plugin] then
           error("circular dependency detected in " .. self.name .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.name)
         end
         if not NO_INSTALL_OPTIONAL and (not v.optional or prompt(plugin .. " is an optional dependency of " .. self.name .. ". Should we install it?")) then
-          compatible[plugin]:install(installing)
+          compatible[plugin]:install(bottle, installing)
         end
       end
     end
     common.mkdirp(common.dirname(temporary_install_path))
     if self.status == "upgradable" then 
-      log_action("Upgrading " .. self.organization .. "plugin located at " .. self.local_path .. " to " .. self.install_path)
-      common.rmrf(self.install_path) 
+      log_action("Upgrading " .. self.organization .. "plugin located at " .. self.local_path .. " to " .. install_path)
+      common.rmrf(install_path) 
     else
-      log_action("Installing " .. self.organization .. " plugin located at " .. self.local_path .. " to " .. self.install_path)
+      log_action("Installing " .. self.organization .. " plugin located at " .. self.local_path .. " to " .. install_path)
     end
 
-    if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(self.install_path) end  
+    if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end  
     if self.url then
       log_action("Downloading file " .. self.url .. "...")
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
-      system.get(self.url, path)
+      common.get(self.url, path)
       log_action("Downloaded file " .. self.url .. " to " .. path)
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     elseif self.remote then
-      log_action("Cloning repository " .. self.remote .. " into " .. self.install_path)
+      log_action("Cloning repository " .. self.remote .. " into " .. install_path)
       common.mkdirp(temporary_install_path)
       local _, _, url, branch = self.remote:find("^(.*):(.*)$")
       system.init(temporary_install_path, url)
       system.reset(temporary_install_path, branch)
     else
-      local path = self.install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       log_action("Copying " .. self.local_path .. " to " .. path)
       common.copy(self.local_path, temporary_path)
@@ -678,10 +714,10 @@ function Plugin:install(installing)
       if not file.arch or file.arch == ARCH then
         if not NO_INSTALL_OPTIONAL and (not file.optional or prompt(common.basename(file.url) .. " is an optional dependency of " .. self.name .. ". Should we install it?")) then
           if not file.checksum then error("requires a checksum") end
-          local path = self.install_path .. PATHSEP .. (file.path or common.basename(file.url))
+          local path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
           local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
           log_action("Downloading file " .. file.url .. "...")
-          system.get(file.url, temporary_path)
+          common.get(file.url, temporary_path)
           log_action("Downloaded file " .. file.url .. " to " .. path)
           if system.hash(temporary_path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
         end
@@ -692,8 +728,8 @@ function Plugin:install(installing)
     common.rmrf(temporary_install_path)
     error(err)
   else
-    common.rmrf(self.install_path)
-    os.rename(temporary_install_path, self.install_path)
+    common.rmrf(install_path)
+    os.rename(temporary_install_path, install_path)
   end
 end
 
@@ -703,14 +739,15 @@ function Plugin:depends_on(plugin)
   return false
 end
 
-function Plugin:uninstall()
-  log_action("Uninstalling plugin located at " .. self.install_path)
-  local incompatible_plugins = common.grep(get_all_plugins(), function(p) return p:is_installed() and p:depends_on(self) end)
+function Plugin:uninstall(bottle)
+  local install_path = self:get_install_path(bottle)
+  log_action("Uninstalling plugin located at " .. install_path)
+  local incompatible_plugins = common.grep(get_all_plugins(), function(p) return p:is_installed(bottle) and p:depends_on(self) end)
   if #incompatible_plugins == 0 or prompt(self.name .. " is depended upon by " .. common.join(", ", common.map(incompatible_plugins, function(p) return p.name end)) .. ". Remove as well?") then
     for i,plugin in ipairs(incompatible_plugins) do 
-      if not plugin:uninstall() then return false end
+      if not plugin:uninstall(bottle) then return false end
     end
-    common.rmrf(self.install_path)
+    common.rmrf(install_path)
     return true
   end
   return false
@@ -727,6 +764,7 @@ function Repository.new(hash)
     remote = hash.remote,
     branch = hash.branch,
     plugins = nil,
+    lite_xls = nil,
     local_path = CACHEDIR .. PATHSEP .. system.hash(hash.remote),
     last_retrieval = nil 
   }, Repository)
@@ -776,6 +814,20 @@ function Repository:parse_manifest(already_pulling)
         table.insert(self.plugins, Plugin.new(self, metadata))
       end
     end
+    for i, metadata in ipairs(self.manifest["lite-xl"] or {}) do
+      if metadata.remote then
+        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(.*)?$")
+        if branch_or_commit and is_commit_hash(branch_or_commit) then
+          repo = Repository.new({ remote = url, commit = branch_or_commit })
+          table.insert(remotes, repo)
+          table.insert(self.lite_xls, LiteXL.new(self, metadata))
+        else
+          -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
+        end
+      else
+        table.insert(self.lite_xls, LiteXL.new(self, metadata))
+      end
+    end
     for i, remote in ipairs(self.manifest["remotes"] or {}) do
       table.insert(self.remotes, Repository.url(remote))
     end
@@ -799,7 +851,7 @@ function Repository:generate_manifest()
         if path:find("^http") then
           if path:find("%.lua") then
             plugin_map[name].url = path
-            local file = system.get(path)
+            local file = common.get(path)
             plugin_map[name].checksum = system.hash(file)
           else
             plugin_map[name].remote = path
@@ -905,6 +957,82 @@ function Repository:remove()
 end
 
 
+local LiteXL = {}
+function LiteXL.__index(t, k) return LiteXL[k] end
+function LiteXL.new(repository, metadata)
+  if not metadata.version then error("lite-xl entry requires a version") end
+  local self = setmetatable({
+    repository = repository,
+    version = metadata.version,
+    remote = metadata.remote,
+    tags = metadata.tags or {},
+    hash = system.hash(repository.url .. ":" .. (repository.commit or repository.branch) .. "-" .. metadata.version)
+    files = metadata.files or {}
+  }, LiteXL)
+  self.local_path = CACHEDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.hash
+  return self
+end
+
+function LiteXL:is_installed() 
+  return system.stat(self.local_path)
+end
+
+function LiteXL:install()
+  if self:is_installed() then error("lite-xl " .. self.version .. " already installed") end
+  common.mkdirp(self.local_path)
+  system.init(self.local_path, self.remote)
+  system.reset(self.local_path, self.commit or self.branch)
+  for i,file in ipairs(self.files or {}) do
+    if file.arch and file.arch == ARCH then
+      if not file.checksum then error("requires a checksum") end
+      local path = self.local_path .. PATHSEP .. "lite-xl"
+      log_action("Downloading file " .. file.url .. "...")
+      common.get(file.url, path)
+      log_action("Downloaded file " .. file.url .. " to " .. path)
+      if system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
+    end
+  end
+  if not system.stat(self.local_path .. PATHSEP .. "lite-xl") then error("can't find executable for lite-xl " .. self.version) end
+end
+
+function LiteXL:uninstall()
+  if not system.stat(self.local_path) then error("lite-xl " .. self.version .. " not installed") end
+  common.rmrf(self.local_path)
+end
+
+
+local Bottle = {}
+function Bottle.__index(t, k) return Bottle[k] end
+function Bottle.new(lite_xl, plugins)
+  local self = setmetatable({
+    lite_xl = lite_xl,
+    plugins = plugins
+  }, Bottle)
+  table.sort(self.plugins, function(a, b) return (a.name .. ":" .. a.version) < (b.name .. ":" .. b.version) end)
+  self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", self.plugins))
+  self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
+end
+
+function Bottle:is_constructed() return system.stat(self.local_path) end
+
+function Bottle:construct()
+  if self:is_constructed() then error("bottle " .. self.hash .. " already constructed") end
+  common.mkdirp(self.local_path)
+  system.symlink(self.lite_xl.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "lite-xl")
+  system.symlink(self.lite_xl.local_path .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
+  common.mkdirp(self.local_path .. PATHSEP .. "user")
+  for i,plugin in ipairs(self.plugins) do plugin:install(self) end
+end
+
+function Bottle:destruct()
+  if not self:is_constructed() then error("lite-xl " .. self.version .. " not constructed") end
+  common.rmrf(self.local_path)
+end
+
+function Bottle:run(ARGS)
+  os.system(self.local_path, table.unpack(ARGS)) or error("can't execute " .. self.local_path)
+end
+
 
 local function get_repository(url)
   if not url then error("requires a repository url") end
@@ -966,15 +1094,84 @@ local function lpm_repo_update(...)
   end
 end
 
+local function get_lite_xl(version)
+  for i,repo in ipairs(repositories) do
+    for j,lite_xl in ipairs(repo.lite_xls) do
+      if lite_xl.version == version then return lite_xl end
+    end
+  end
+  return nil
+end
 
-local function lpm_plugin_install(...)
+
+local function lpm_lite_xl_install(version)
+  (get_lite_xl(version) or error("can't find lite-xl version " .. version)):install()
+end
+
+
+local function lpm_lite_xl_switch(version, target)
+  target = target or get_executable("lite-xl")
+  if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly") end
+  local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  system.symlink(lite_xl.local_path .. PATHSEP .. "lite-xl", target)
+end
+
+
+local function lpm_lite_xl_uninstall(version)
+  (get_lite_xl(version) or error("can't find lite-xl version " .. version)):uninstall()
+end
+
+
+local function lpm_lite_xl_list()
+  local result = { ["lite-xl"] = { } }
+  for i,repo in ipairs(repositories) do
+    if not repo.lite-xls then error("can't find lite-xl for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
+    for j, lite_xl in ipairs(repo.lite_xls) do
+      table.insert(result["lite-xl"], {
+        version = lite_xl.version,
+        mod_version = lite_xl.mod_version,
+        repository = repo.remote .. ":" .. (repo.commit or repo.branch)
+      })
+    end
+  end
+  if JSON then
+    io.stdout:write(json.encode(result) .. "\n")
+  else
+    for i, plugin in ipairs(result.plugins) do
+      if i ~= 0 then print("---------------------------") end
+      print("Version:       " .. plugin.version)
+      print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
+      print("Tags:          " .. common.join(", ", plugin.tags))
+    end
+  end
+end
+
+local function lpm_lite_xl_run(version, ...)
+  local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  local plugins = {}
+  for i, str in ipairs({ ... }) do
+    local name, version = common.split(":", str)
+    local plugin = get_plugin(name, version, { mod_version = lite_xl.mod_version })
+    table.insert(plugins, plugin)
+  end
+  local bottle = Bottle.new(lite_xl, plugins)
+  if not bottle:is_constructed() then bottle:construct() end
+  bottle:run()
+end
+
+
+local function lpm_install(...)
   for i, identifier in ipairs({ ... }) do
     local s = identifier:find(":")
     local name, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
-    if not name then error('unrecognized plugin identifier ' .. identifier) end
-    local plugin = get_plugin(name, version, { mod_version = MOD_VERSION })
-    if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any')) end
-    plugin:install()
+    if not name then error('unrecognized identifier ' .. identifier) end
+    if name == "lite-xl" then
+      lpm_install_lite_xl(version)
+    else
+      local plugin = get_plugin(name, version, { mod_version = MOD_VERSION })
+      if not plugin then error("can't find plugin " .. name .. " mod-version: " .. (MOD_VERSION or 'any')) end
+      plugin:install()
+    end
   end
 end
 
@@ -1011,7 +1208,6 @@ local function lpm_plugin_list()
     for j,plugin in ipairs(repo.plugins) do
       table.insert(result.plugins, {
         name = plugin.name,
-        status = plugin.status,
         version = "" .. plugin.version,
         dependencies = plugin.dependencies,
         description = plugin.description,
@@ -1030,7 +1226,6 @@ local function lpm_plugin_list()
       if i ~= 0 then print("---------------------------") end
       print("Name:          " .. plugin.name)
       print("Version:       " .. plugin.version)
-      print("Status:        " .. plugin.status)
       print("Type:          " .. plugin.type)
       print("Orgnization:   " .. plugin.organization)
       print("Repository:    " .. plugin.repository)
@@ -1113,14 +1308,21 @@ local function run_command(ARGS)
   elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list()
-  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_plugin_install(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_install(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "install" then lpm_plugin_install(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "install" then lpm_install(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "list" then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm_install(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "purge" then lpm_purge()
   else error("unknown command: " .. ARGS[2]) end
   if JSON then
@@ -1175,6 +1377,21 @@ It has the following commands:
     [...<repository remote>]    
   lpm [plugin] upgrade                     Upgrades all installed plugins 
                                            to new version if applicable.
+  lpm [lite-xl] install <version>          Installs lite-xl. Infers the
+    [binary] [datadir]                     paths on your system if not
+                                           supplied. Automatically
+                                           switches to be your system default
+                                           if path auto inferred.
+  lpm [lite-xl] switch <version> [<path>]  Sets the active version of lite-xl
+                                           to be the specified version. Auto-detects
+                                           current install of lite-xl; if none found
+                                           path can be specifeid.
+  lpm [lite-xl] list                       Lists all installed versions of
+                                           lite-xl.
+  lpm run <version> [...plugins]           Sets up a "bottle" to run the specified
+                                           lite version, with the specified plugins
+                                           and then opens it.
+          
   lpm purge                                Completely purge all state for LPM.
   lpm -                                    Read these commands from stdin in
                                            an interactive print-eval loop.
@@ -1190,7 +1407,7 @@ Flags have the following effects:
   --verbose                Spits out more information, including intermediate
                            steps to install and whatnot.
   --quiet                  Outputs nothing but explicit responses.
-  --modversion=3           Sets the mod version of lite-xl to install plugins.
+  --modversion             Sets the mod version of lite-xl to install plugins.
   --version                Returns version information.
   --remotes                Automatically adds any specified remotes in the 
                            repository to the end of the resolution list.
@@ -1254,6 +1471,7 @@ Flags have the following effects:
       end
     end
   end
+
   
   repositories = {}
   lpm_repo_init()
@@ -1272,6 +1490,19 @@ Flags have the following effects:
         end
       end
     end
+  end
+  
+  local lite_xl_binary = get_executable("lite-xl")
+  if lite_xl_binary then
+    local hash = system.hash(lite_xl_binary, "file")
+    for i,repo in ipairs(repoistories) do
+      for j,lite_xl in ipairs(repo.lite_xls) do
+        local f = table.unpack(common.grep(lite_xl.files, function(f) return f.checksum == hash end))
+        if f then system_xl = lite_xl end
+      end
+    end
+  else
+    system_xl = LiteXL.new(nil, { mod_version = MOD_VERSION })
   end
   
   if ARGS[2] ~= '-' then

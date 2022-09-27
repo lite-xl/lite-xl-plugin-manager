@@ -59,6 +59,18 @@ static int lpm_hash(lua_State* L) {
   return 1;
 }
 
+int lpm_symlink(lua_State* L) {
+  if (symlink(luaL_checkstring(L, 1), luaL_checkstring(L, 2)))
+    return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
+  return 0;
+}
+
+int lpm_chmod(lua_State* L) {
+  if (chmod(luaL_checkstring(L, 1)), luaL_checkinteger(L, 2))
+    return luaL_error(L, "can't chmod %s: %s", luaL_checkstring(L, 1), strerror(errno))
+  return 0;
+}
+
 /** BEGIN STOLEN LITE CODE **/
 
 #if _WIN32
@@ -475,6 +487,8 @@ static const luaL_Reg system_lib[] = {
   { "mkdir",     lpm_mkdir }, // Makes a directory.
   { "rmdir",     lpm_rmdir }, // Removes a directory.
   { "hash",      lpm_hash  }, // Returns a hex sha256 hash.
+  { "symlink",   lpm_symlink }, // Creates a symlink.
+  { "chmod",     lpm_chmod }, // Chmod's a file.
   { "init",      lpm_init }, // Initializes a git repository with the specified remote.
   { "fetch",     lpm_fetch }, // Updates a git repository with the specified remote.
   { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
