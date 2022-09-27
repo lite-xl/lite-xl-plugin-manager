@@ -66,8 +66,8 @@ int lpm_symlink(lua_State* L) {
 }
 
 int lpm_chmod(lua_State* L) {
-  if (chmod(luaL_checkstring(L, 1)), luaL_checkinteger(L, 2))
-    return luaL_error(L, "can't chmod %s: %s", luaL_checkstring(L, 1), strerror(errno))
+  if (chmod(luaL_checkstring(L, 1), luaL_checkinteger(L, 2)))
+    return luaL_error(L, "can't chmod %s: %s", luaL_checkstring(L, 1), strerror(errno));
   return 0;
 }
 
