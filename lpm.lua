@@ -565,7 +565,7 @@ end
 
 function Plugin:get_install_path(bottle)
   local folder = self.type == "library" and "libraries" or "plugins"
-  local path = (bottle.local_path or USERDIR) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
+  local path = (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
   if self.organization == "singleton" then path = path .. ".lua" end
   return path
 end
@@ -719,7 +719,9 @@ function Plugin:install(bottle, installing)
     error(err)
   else
     common.rmrf(install_path)
-    os.rename(temporary_install_path, install_path)
+    common.mkdirp(common.dirname(install_path))
+    local _, err = os.rename(temporary_install_path, install_path)
+    if err then error("can't rename file " .. install_path .. ": " .. err) end
   end
 end
 
@@ -980,9 +982,18 @@ end
 function LiteXL:install()
   if self:is_installed() then error("lite-xl " .. self.version .. " already installed") end
   common.mkdirp(self.local_path)
-  if self.path and not self.repository then -- local repository
+  if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
+    local executable, datadir = get_executable("lite-xl")
+    if not executable then error("can't find system lite-xl executable") end
+    local stat = system.stat(executable)
+    executable = stat.symlink and stat.symlink or executable
+    datadir = common.dirname(executable) .. PATHSEP .. "data"
+    if not system.stat(datadir) then error("can't find system lite-xl data dir") end
+    common.copy(executable, self.local_path .. PATHSEP .. "lite-xl")
+    system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
+    common.copy(datadir, self.local_path .. PATHSEP .. "data")
+  elseif self.path and not self.repository then -- local repository
     system.symlink(self.local_path .. PATHSEP .. "lite_xl", self.path .. PATHSEP .. "lite_xl")
-    system.symlink(self.local_path .. PATHSEP .. "data", self.path .. PATHSEP .. "data")
   else
     system.init(self.local_path, self.remote)
     system.reset(self.local_path, self.commit or self.branch)
@@ -1015,21 +1026,23 @@ function Bottle.new(lite_xl, plugins, is_system)
     is_system = is_system
   }, Bottle)
   if not is_system then 
-    table.sort(self.plugins, function(a, b) return (a.name .. ":" .. a.version) < (b.name .. ":" .. b.version) end) end
-    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", self.plugins))
-    self.local_path = is_system and (CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash)
+    table.sort(self.plugins, function(a, b) return (a.name .. ":" .. a.version) < (b.name .. ":" .. b.version) end)
+    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.plugins, function(p) return p.name .. ":" .. p.version end)))
+    self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
   end
+  return self
 end
 
-function Bottle:is_constructed() return system.stat(self.local_path) or self.is_system end
+function Bottle:is_constructed() return self.is_system or system.stat(self.local_path) end
 
 function Bottle:construct()
   if self.is_system then error("system bottle cannot be constructed") end
   if self:is_constructed() then error("bottle " .. self.hash .. " already constructed") end
-  common.mkdirp(self.local_path)
-  system.symlink(self.lite_xl.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "lite-xl")
-  system.symlink(self.lite_xl.local_path .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
+  if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
+  common.copy(self.lite_xl.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "lite-xl")
+  system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
+  common.copy(self.lite_xl.local_path .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
   for i,plugin in ipairs(self.plugins) do plugin:install(self) end
 end
 
@@ -1039,9 +1052,10 @@ function Bottle:destruct()
   common.rmrf(self.local_path)
 end
 
-function Bottle:run(ARGS)
+function Bottle:run(args)
+  args = args or {}
   if self.is_system then error("system bottle cannot be run") end
-  if os.system(self.local_path, table.unpack(ARGS)) then error("can't execute " .. self.local_path) end
+  os.execute(self.local_path .. PATHSEP .. "lite-xl", table.unpack(args))
 end
 
 
@@ -1057,7 +1071,7 @@ end
 
 
 local function lpm_repo_init()
-  if not system.stat(CACHEDIR) then
+  if not system.stat(CACHEDIR .. PATHSEP .. "repos") then
     for i, repository in ipairs({ Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:master"), Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:2.1") }) do
       if not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
         common.mkdirp(repository.local_path)
@@ -1119,7 +1133,7 @@ end
 
 local function lpm_lite_xl_save()
   io.open(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json", "wb"):write(
-    json.encode(common.map(common.grep(lite_xls, function(l) l:is_local() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
+    json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and l ~= system_bottle.lite_xl end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
   )
 end
 
@@ -1128,7 +1142,7 @@ local function lpm_lite_xl_add(version, path)
   if not path then error("requires a path") end
   if not system.stat(path .. PATHSEP .. "lite-xl") then error("can't find " .. path .. PATHSEP .. "lite-xl") end
   if not system.stat(path .. PATHSEP .. "data") then error("can't find " .. path .. PATHSEP .. "data") end
-  table.insert(lite_xls, LiteXL.new({ version = version, path = path, modversion = MOD_VERSION or 3 }))
+  table.insert(lite_xls, LiteXL.new({ version = version, path = path, mod_version = MOD_VERSION or 3 }))
   lpm_lite_xl_save()
 end
 
@@ -1161,24 +1175,32 @@ end
 
 local function lpm_lite_xl_list()
   local result = { ["lite-xl"] = { } }
+  for i,lite_xl in ipairs(lite_xls) do
+    table.insert(result["lite-xl"], {
+      version = lite_xl.version,
+      mod_version = lite_xl.mod_version,
+      tags = lite_xl.tags
+    })
+  end
   for i,repo in ipairs(repositories) do
-    if not repo.lite-xls then error("can't find lite-xl for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
+    if not repo.lite_xls then error("can't find lite-xl for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
     for j, lite_xl in ipairs(repo.lite_xls) do
       table.insert(result["lite-xl"], {
         version = lite_xl.version,
         mod_version = lite_xl.mod_version,
-        repository = repo.remote .. ":" .. (repo.commit or repo.branch)
+        repository = repo.remote .. ":" .. (repo.commit or repo.branch),
+        tags = lite_xl.tags
       })
     end
   end
   if JSON then
     io.stdout:write(json.encode(result) .. "\n")
   else
-    for i, plugin in ipairs(result.plugins) do
+    for i, lite_xl in ipairs(result["lite-xl"]) do
       if i ~= 0 then print("---------------------------") end
-      print("Version:       " .. plugin.version)
-      print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
-      print("Tags:          " .. common.join(", ", plugin.tags))
+      print("Version:       " .. lite_xl.version)
+      print("Mod-Version:   " .. (lite_xl.mod_version or "unknown"))
+      print("Tags:          " .. common.join(", ", lite_xl.tags))
     end
   end
 end
@@ -1552,11 +1574,11 @@ Flags have the following effects:
       end
     end
   end
-  if not system_bottle then system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system" }), nil, true) end
-  if system.stat(CACHDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
-    lite_xls = { system_bottle.lite_xl }
+  if not system_bottle then system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "local", "system" } }), nil, true) end
+  lite_xls = { system_bottle.lite_xl }
+  if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
     for i, lite_xl in ipairs(json.decode(io.open(CACHDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json", "rb"):read("*all"))) do
-      table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path }))
+      table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
     end
   end
   

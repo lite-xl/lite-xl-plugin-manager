@@ -269,7 +269,7 @@ static int lpm_stat(lua_State *L) {
   free(wpath);
 #else
   struct stat s;
-  int err = stat(path, &s);
+  int err = lstat(path, &s);
 #endif
   if (err < 0) {
     lua_pushnil(L);
@@ -278,6 +278,21 @@ static int lpm_stat(lua_State *L) {
   }
 
   lua_newtable(L);
+#if __linux__
+  if (S_ISLNK(s.st_mode)) {
+    char buffer[PATH_MAX];
+    ssize_t len = readlink(path, buffer, sizeof(buffer));
+    if (len < 0)
+      return 0;
+    lua_pushlstring(L, buffer, len);
+  } else
+    lua_pushnil(L);
+  lua_setfield(L, -2, "symlink");
+  if (S_ISLNK(s.st_mode))
+    err = stat(path, &s);
+  if (err)
+    return 1;
+#endif
   lua_pushinteger(L, s.st_mtime);
   lua_setfield(L, -2, "modified");
 
@@ -292,15 +307,6 @@ static int lpm_stat(lua_State *L) {
     lua_pushnil(L);
   }
   lua_setfield(L, -2, "type");
-
-#if __linux__
-  if (S_ISDIR(s.st_mode)) {
-    if (lstat(path, &s) == 0) {
-      lua_pushboolean(L, S_ISLNK(s.st_mode));
-      lua_setfield(L, -2, "symlink");
-    }
-  }
-#endif
   return 1;
 }
 /** END STOLEN LITE CODE **/
