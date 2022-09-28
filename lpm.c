@@ -60,9 +60,13 @@ static int lpm_hash(lua_State* L) {
 }
 
 int lpm_symlink(lua_State* L) {
-  if (symlink(luaL_checkstring(L, 1), luaL_checkstring(L, 2)))
-    return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
-  return 0;
+  #ifndef _WIN32
+    if (symlink(luaL_checkstring(L, 1), luaL_checkstring(L, 2)))
+      return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
+    return 0;
+  #else
+    return luaL_error(L, "can't create symbolic link %s: your operating system sucks", luaL_checkstring(L, 2));
+  #endif
 }
 
 int lpm_chmod(lua_State* L) {

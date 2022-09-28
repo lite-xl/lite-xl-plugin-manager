@@ -1212,6 +1212,7 @@ local function lpm_lite_xl_run(version, ...)
   for i, str in ipairs({ ... }) do
     local name, version = common.split(":", str)
     local plugin = get_plugin(name, version, { mod_version = lite_xl.mod_version })
+    if not plugin then error("can't find plugin " .. str) end
     table.insert(plugins, plugin)
   end
   local bottle = Bottle.new(lite_xl, plugins)
@@ -1268,7 +1269,7 @@ local function lpm_plugin_list()
     for j,plugin in ipairs(repo.plugins) do
       table.insert(result.plugins, {
         name = plugin.name,
-        status = plugin:is_installed() and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible"),
+        status = plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible"),
         version = "" .. plugin.version,
         dependencies = plugin.dependencies,
         description = plugin.description,
