@@ -356,6 +356,25 @@ end
 
 local common = {}
 
+
+function common.split(splitter, str)
+  local o = 1
+  local res = {}
+  while true do
+      local s, e = str:find(splitter, o)
+      table.insert(res, str:sub(o, s and (s - 1) or #str))
+      if not s then break end
+      o = e + 1
+  end
+  return table.unpack(res)
+end
+
+function common.dirname(path)
+  local s = path:reverse():find(PATHSEP)
+  if not s then return path end
+  return path:sub(1, #path - s)
+end
+
 function common.rmrf(root)
   if not root or root == "" then return end
   local info = system.stat(root)
@@ -369,9 +388,9 @@ function common.mkdirp(path)
   local stat = system.stat(path)
   if stat and stat.type == "dir" then return true end
   if stat and stat.type == "file" then error("path " .. path .. " exists") end
+  system.mkdir(path)
   local subdirs = {}
   while path and path ~= "" do
-    system.mkdir(path)
     local updir, basedir = path:match("(.*)[/\\](.+)$")
     table.insert(subdirs, 1, basedir or path)
     path = updir
@@ -389,12 +408,6 @@ function common.basename(path)
   return path:sub(#path - s + 2)
 end
 
-
-function common.dirname(path)
-  local s = path:reverse():find(PATHSEP)
-  if not s then return path end
-  return path:sub(1, #path - s)
-end
 
 
 function common.merge(src, merge)
@@ -1241,9 +1254,9 @@ local function lpm_plugin_uninstall(...)
   for i, name in ipairs({ ... }) do
     local plugins = { get_plugin(name) }
     if #plugins == 0 then error("can't find plugin " .. name) end
-    local installed_plugins = common.grep(plugins, function(plugin) return plugin:is_installed() end)
+    local installed_plugins = common.grep(plugins, function(plugin) return plugin:is_installed(system_bottle) end)
     if #installed_plugins == 0 then error("plugin " .. name .. " not installed") end
-    for i, plugin in ipairs(installed_plugins) do plugin:uninstall() end
+    for i, plugin in ipairs(installed_plugins) do plugin:uninstall(system_bottle) end
   end
 end
 

@@ -26,6 +26,8 @@ If you want to build it quickly, and have the right modules installed, you can d
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
 `continuous` [release page](https://github.com/adamharrison/lite-xl-plugin-manager/releases/tag/continuous).
 
+You can get a feel for how to use `lpm` by typing `./lpm --help`.
+
 ## Use in CI
 
 To make pre-fab lite builds, you can easily use `lpm` in CI. If you had a linux build container, you could do something like:
