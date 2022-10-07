@@ -353,7 +353,6 @@ function json.decode(str)
 end
 
 -- End JSON library.
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, lite_xls, system_bottle
 
 local common = {}
 function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
@@ -418,16 +417,8 @@ function common.rename(src, dst)
   local _, err = os.rename(src, dst)
   if err then error("can't rename file " .. src ..  " to " .. dst .. ": " .. err) end
 end
-function common.get(source, target, checksum)
-  if not checksum then return system.get(source, target) end
-  if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
-  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
-  if not system.stat(cache_path) then
-    system.get(source, cache_path)
-    if system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
-  end
-  common.copy(cache_path, target)
-end
+
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, lite_xls, system_bottle
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -447,6 +438,18 @@ local function prompt(message)
   local response = io.stdin:read("*line")
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
 end
+
+function common.get(source, target, checksum)
+  if not checksum then return system.get(source, target) end
+  if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
+  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
+  if not system.stat(cache_path) then
+    system.get(source, cache_path)
+    if system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
+  end
+  common.copy(cache_path, target)
+end
+
 
 local function compare_version(a, b) -- compares semver
   if not a or not b then return false end
