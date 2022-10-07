@@ -353,10 +353,15 @@ function json.decode(str)
 end
 
 -- End JSON library.
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, lite_xls, system_bottle
 
 local common = {}
-
-
+function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
+function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v)) end return t end
+function common.flat_map(l, p) local t = {} for i, v in ipairs(l) do local r = p(v) for k, w in ipairs(r) do table.insert(t, w) end end return t end
+function common.grep(l, p) local t = {} for i, v in ipairs(l) do if p(v) then table.insert(t, v) end end return t end
+function common.slice(t, i, l) local n = {} for j = i, l ~= nil and (i - l) or #t do table.insert(n, t[j]) end return n end
+function common.join(j, l) local s = "" for i, v in ipairs(l) do if i > 1 then s = s .. j .. v else s = v end end return s end
 function common.split(splitter, str)
   local o = 1
   local res = {}
@@ -369,94 +374,26 @@ function common.split(splitter, str)
   return table.unpack(res)
 end
 
-function common.dirname(path)
-  local s = path:reverse():find(PATHSEP)
-  if not s then return path end
-  return path:sub(1, #path - s)
-end
-
+function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
+function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
+function common.path(exec) return common.grep(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) return system.stat(e) end)[1] end
 function common.rmrf(root)
-  if not root or root == "" then return end
-  local info = system.stat(root)
+  local info = root and root ~= "" and system.stat(root)
   if not info then return end
   if info.type == "file" or info.symlink then return os.remove(root) end
   for i,v in ipairs(system.ls(root)) do common.rmrf(root .. PATHSEP .. v) end
   system.rmdir(root)
 end
-
 function common.mkdirp(path)
   local stat = system.stat(path)
   if stat and stat.type == "dir" then return true end
   if stat and stat.type == "file" then error("path " .. path .. " exists") end
-  system.mkdir(path)
-  local subdirs = {}
-  while path and path ~= "" do
-    local updir, basedir = path:match("(.*)[/\\](.+)$")
-    table.insert(subdirs, 1, basedir or path)
-    path = updir
-  end
-  for _, dirname in ipairs(subdirs) do
-    path = path and path .. PATHSEP .. dirname or dirname
-    system.mkdir(path)
+  local target
+  for _, dirname in ipairs({ common.split("[/\\]", path) }) do
+    target = target and target .. PATHSEP .. dirname or dirname
+    if target ~= "" and not system.stat(target) then system.mkdir(target) end
   end
 end
-
-
-function common.basename(path)
-  local s = path:reverse():find("[/\\]")
-  if not s then return path end
-  return path:sub(#path - s + 2)
-end
-
-
-
-function common.merge(src, merge)
-  for k, v in pairs(merge) do src[k] = v end
-  return src
-end
-
-
-function common.map(list, predicate)
-  local t = {}
-  for i, v in ipairs(list) do table.insert(t, predicate(v)) end
-  return t
-end
-
-
-function common.grep(list, predicate)
-  local t = {}
-  for i, v in ipairs(list) do if predicate(v) then table.insert(t, v) end end
-  return t
-end
-
-
-function common.join(joiner, list)
-  local s = ""
-  for i, v in ipairs(list) do if i > 1 then s = s .. joiner .. v else s = v end end
-  return s
-end
-
-function common.split(splitter, str)
-  local o = 1
-  local res = {}
-  while true do
-      local s, e = str:find(splitter, o)
-      table.insert(res, str:sub(o, s and (s - 1) or #str))
-      if not s then break end
-      o = e + 1
-  end
-  return table.unpack(res)
-end
-
-
-function common.slice(t, i, l)
-  local n = {}
-  for j = i, l ~= nil and (i - l) or #t do
-    table.insert(n, t[j])
-  end
-  return n
-end
-
 function common.copy(src, dst)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
@@ -468,27 +405,29 @@ function common.copy(src, dst)
     local src_io, err1 = io.open(src, "rb")
     if err1 then error("can't open for reading " .. src .. ": " .. err1) end
     local dst_io, err2 = io.open(dst, "wb")
-    if err2 then error("can't open for writing " .. src .. ": " .. err2) end
+    if err2 then error("can't open for writing " .. dst .. ": " .. err2) end
     while true do
       local chunk = src_io:read(16*1024)
       if not chunk then break end
       dst_io:write(chunk)
     end
-    dst_io:flush()
+    dst_io:close()
   end
 end
-
-local function get_executable(name)
-  return common.grep(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. name end), function(e) return system.stat(e) end)[1]
+function common.rename(src, dst)
+  local _, err = os.rename(src, dst)
+  if err then error("can't rename file " .. src ..  " to " .. dst .. ": " .. err) end
 end
-
-
-local function is_commit_hash(hash)
-  return #hash == 40 and not hash:find("[^a-z0-9]")
+function common.get(source, target, checksum)
+  if not checksum then return system.get(source, target) end
+  if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
+  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
+  if not system.stat(cache_path) then
+    system.get(source, cache_path)
+    if system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
+  end
+  common.copy(cache_path, target)
 end
-
-
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, lite_xls, system_bottle
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -534,25 +473,13 @@ local function match_version(version, pattern)
 end
 
 
-local function get_all_plugins()
-  local t = {}
-  for i,r in ipairs(repositories) do
-    for j,p in ipairs(r.plugins) do
-      table.insert(t, p)
-    end
-  end
-  return t
+local function is_commit_hash(hash)
+  return #hash == 40 and not hash:find("[^a-z0-9]")
 end
 
-function common.get(source, target, checksum)
-  if not checksum then return system.get(source, target) end
-  if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
-  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
-  if not system.stat(cache_path) then
-    system.get(source, cache_path)
-    if system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
-  end
-  common.copy(cache_path, target)
+
+local function get_all_plugins()
+  return common.flat_map(repositories, function(r) return r.plugins end)
 end
 
 local Plugin = {}
@@ -665,7 +592,7 @@ local core_plugins = {
 function Plugin:install(bottle, installing)
   if self:is_installed(bottle) then error("plugin " .. self.name .. " is already installed") end
   local install_path = self:get_install_path(bottle)
-  local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#CACHEDIR)
+  local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#USERDIR + 2)
   local status, err = pcall(function()
     installing = installing or {}
     installing[self.name] = true
@@ -733,8 +660,7 @@ function Plugin:install(bottle, installing)
   else
     common.rmrf(install_path)
     common.mkdirp(common.dirname(install_path))
-    local _, err = os.rename(temporary_install_path, install_path)
-    if err then error("can't rename file " .. install_path .. ": " .. err) end
+    common.rename(temporary_install_path, install_path)
   end
 end
 
@@ -901,7 +827,7 @@ function Repository:add()
     system.fetch(path)
     if not pcall(system.reset, path, "refs/remotes/origin/master", "hard") then
       if pcall(system.reset, path, "refs/remotes/origin/main", "hard") then
-        os.rename(path, self.local_path .. PATHSEP .. "main")
+        common.rename(path, self.local_path .. PATHSEP .. "main")
         self.branch = "main"
       else
         error("can't find master or main.")
@@ -996,7 +922,7 @@ function LiteXL:install()
   if self:is_installed() then error("lite-xl " .. self.version .. " already installed") end
   common.mkdirp(self.local_path)
   if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
-    local executable, datadir = get_executable("lite-xl")
+    local executable, datadir = common.path("lite-xl")
     if not executable then error("can't find system lite-xl executable") end
     local stat = system.stat(executable)
     executable = stat.symlink and stat.symlink or executable
@@ -1174,7 +1100,7 @@ end
 
 local function lpm_lite_xl_switch(version, target)
   if not version then error("requires a version") end
-  target = target or get_executable("lite-xl")
+  target = target or common.path("lite-xl")
   if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly") end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
   system.symlink(lite_xl.local_path .. PATHSEP .. "lite-xl", target)
@@ -1577,7 +1503,7 @@ Flags have the following effects:
   end
 
   if not MOD_VERSION then
-    local lite_xl_binary = get_executable("lite-xl")
+    local lite_xl_binary = common.path("lite-xl")
     if lite_xl_binary then
       local hash = system.hash(lite_xl_binary, "file")
       for i,repo in ipairs(repositories) do

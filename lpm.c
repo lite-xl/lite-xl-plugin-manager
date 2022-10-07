@@ -76,9 +76,7 @@ int lpm_chmod(lua_State* L) {
 }
 
 /** BEGIN STOLEN LITE CODE **/
-
 #if _WIN32
-#define UTFCONV_ERROR_INVALID_CONVERSION "Input contains invalid byte sequences."
 static LPWSTR utfconv_utf8towc(const char *str) {
   LPWSTR output;
   int len;
@@ -131,30 +129,19 @@ static int lpm_ls(lua_State *L) {
 
 #ifdef _WIN32
   lua_settop(L, 1);
-  if (path[0] == 0 || strchr("\\/", path[strlen(path) - 1]) != NULL)
-    lua_pushstring(L, "*");
-  else
-    lua_pushstring(L, "/*");
-
+  lua_pushstring(L, path[0] == 0 || strchr("\\/", path[strlen(path) - 1]) != NULL ? "*" : "/*");
   lua_concat(L, 2);
   path = lua_tostring(L, -1);
 
   LPWSTR wpath = utfconv_utf8towc(path);
-  if (wpath == NULL) {
-    lua_pushnil(L);
-    lua_pushstring(L, UTFCONV_ERROR_INVALID_CONVERSION);
-    return 2;
-  }
-
+  if (wpath == NULL)
+    return luaL_error(L, "can't ls %s: invalid utf8 character conversion", path);
+    
   WIN32_FIND_DATAW fd;
   HANDLE find_handle = FindFirstFileExW(wpath, FindExInfoBasic, &fd, FindExSearchNameMatch, NULL, 0);
   free(wpath);
-  if (find_handle == INVALID_HANDLE_VALUE) {
-    lua_pushnil(L);
-    lua_pushinteger(L, GetLastError());
-    return 2;
-  }
-
+  if (find_handle == INVALID_HANDLE_VALUE)
+    return luaL_error(L, "can't ls %s: %d", path, GetLastError());
   char mbpath[MAX_PATH * 4]; // utf-8 spans 4 bytes at most
   int len, i = 1;
   lua_newtable(L);
@@ -170,23 +157,15 @@ static int lpm_ls(lua_State *L) {
     lua_rawseti(L, -2, i++);
   } while (FindNextFileW(find_handle, &fd));
 
-  if (GetLastError() != ERROR_NO_MORE_FILES) {
-    lua_pushnil(L);
-    lua_pushinteger(L, GetLastError());
-    FindClose(find_handle);
-    return 2;
-  }
-
+  int err = GetLastError();
   FindClose(find_handle);
+  if (err != ERROR_NO_MORE_FILES)
+    return luaL_error(L, "can't ls %s: %d", path, GetLastError());
   return 1;
 #else
   DIR *dir = opendir(path);
-  if (!dir) {
-    lua_pushnil(L);
-    lua_pushstring(L, strerror(errno));
-    return 2;
-  }
-
+  if (!dir)
+    return luaL_error(L, "can't ls %s: %d", path, strerror(errno));
   lua_newtable(L);
   int i = 1;
   struct dirent *entry;
@@ -197,7 +176,6 @@ static int lpm_ls(lua_State *L) {
     lua_rawseti(L, -2, i);
     i++;
   }
-
   closedir(dir);
   return 1;
 #endif
@@ -210,52 +188,29 @@ static int lpm_rmdir(lua_State *L) {
   LPWSTR wpath = utfconv_utf8towc(path);
   int deleted = RemoveDirectoryW(wpath);
   free(wpath);
-  if (deleted > 0) {
-    lua_pushboolean(L, 1);
-  } else {
-    lua_pushboolean(L, 0);
-    lua_pushinteger(L, GetLastError());
-    return 2;
-  }
+  if (!deleted) {
+    return luaL_error(L, "can't rmdir %s: %d", path, GetLastError());
 #else
-  int deleted = remove(path);
-  if(deleted < 0) {
-    lua_pushboolean(L, 0);
-    lua_pushstring(L, strerror(errno));
-
-    return 2;
-  } else {
-    lua_pushboolean(L, 1);
-  }
+  if (remove(path))
+    return luaL_error(L, "can't rmdir %s: %s", path, strerror(errno));
 #endif
-
-  return 1;
+  return 0;
 }
 
 static int lpm_mkdir(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
-
 #ifdef _WIN32
   LPWSTR wpath = utfconv_utf8towc(path);
-  if (wpath == NULL) {
-    lua_pushboolean(L, 0);
-    lua_pushstring(L, UTFCONV_ERROR_INVALID_CONVERSION);
-    return 2;
-  }
-
+  if (wpath == NULL)
+    return luaL_error(L, "can't mkdir %s: invalid utf8 character conversion", path);
   int err = _wmkdir(wpath);
   free(wpath);
 #else
   int err = mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
 #endif
-  if (err < 0) {
-    lua_pushboolean(L, 0);
-    lua_pushstring(L, strerror(errno));
-    return 2;
-  }
-
-  lua_pushboolean(L, 1);
-  return 1;
+  if (err < 0) 
+    return luaL_error(L, "can't mkdir %s: %s", path, strerror(errno));
+  return 0;
 }
 
 static int lpm_stat(lua_State *L) {
@@ -264,18 +219,15 @@ static int lpm_stat(lua_State *L) {
 #ifdef _WIN32
   struct _stat s;
   LPWSTR wpath = utfconv_utf8towc(path);
-  if (wpath == NULL) {
-    lua_pushnil(L);
-    lua_pushstring(L, UTFCONV_ERROR_INVALID_CONVERSION);
-    return 2;
-  }
+  if (wpath == NULL)
+    return luaL_error(L, "can't stat %s: invalid utf8 character conversion", path);
   int err = _wstat(wpath, &s);
   free(wpath);
 #else
   struct stat s;
   int err = lstat(path, &s);
 #endif
-  if (err < 0) {
+  if (err) {
     lua_pushnil(L);
     lua_pushstring(L, strerror(errno));
     return 2;
