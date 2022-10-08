@@ -819,7 +819,7 @@ function Repository:add()
     system.init(path, self.remote)
     system.fetch(path)
     system.reset(path, self.commit or ("refs/remotes/origin/" .. self.branch), "hard")
-    log_action("Retrieved " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
+    log_action("Retrieved " .. self:url() .. "...")
     self.manifest = nil
   end
   local manifest, remotes = self:parse_manifest()
@@ -842,7 +842,7 @@ function Repository:update()
     local path = self.local_path .. PATHSEP .. self.branch
     system.fetch(path)
     system.reset(path, "refs/remotes/origin/" .. self.branch, "hard")
-    log_action("Updated " .. self.remote .. ":" .. (self.commit or self.branch))
+    log_action("Updated " .. self:url())
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
   end
@@ -875,7 +875,7 @@ function LiteXL.new(repository, metadata)
     tags = metadata.tags or {},
     mod_version = metadata.mod_version,
     path = metadata.path,
-    hash = system.hash((repository and (repository.url .. ":" .. (repository.commit or repository.branch)) or "") .. "-" .. metadata.version),
+    hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version),
     files = metadata.files or {}
   }, LiteXL)
   self.local_path = CACHEDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.hash
@@ -1142,12 +1142,12 @@ local function lpm_lite_xl_list()
     })
   end
   for i,repo in ipairs(repositories) do
-    if not repo.lite_xls then error("can't find lite-xl for repo " .. repo.remote .. ":" .. (repo.commit or repo.branch or "master")) end
+    if not repo.lite_xls then error("can't find lite-xl for repo " .. repo:url()) end
     for j, lite_xl in ipairs(repo.lite_xls) do
       table.insert(result["lite-xl"], {
         version = lite_xl.version,
         mod_version = lite_xl.mod_version,
-        repository = repo.remote .. ":" .. (repo.commit or repo.branch),
+        repository = repo:url(),
         tags = lite_xl.tags
       })
     end
@@ -1216,14 +1216,14 @@ local function lpm_plugin_reinstall(...) for i, name in ipairs({ ... }) do pcall
 
 local function lpm_repo_list() 
   if JSON then
-    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch), remotes = common.map(repo.remotes or {}, function(r) return remote.remote .. ":" .. (remote.commit or remote.branch) end)  } end) }) .. "\n")
+    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch), remotes = common.map(repo.remotes or {}, function(r) return r:url() end)  } end) }) .. "\n")
   else
     for i, repository in ipairs(repositories) do
       local _, remotes = repository:parse_manifest()
       if i ~= 0 then print("---------------------------") end
-      print("Remote :  " .. repository.remote .. ":" .. (repository.commit or repository.branch))
+      print("Remote :  " .. repository:url())
       print("Path   :  " .. repository.local_path .. PATHSEP .. (repository.commit or repository.branch))
-      print("Remotes:  " .. json.encode(common.map(repository.remotes or {}, function(r) return remote.remote .. ":" .. (remote.commit or remote.branch) end)))
+      print("Remotes:  " .. json.encode(common.map(repository.remotes or {}, function(r) return r:url() end)))
     end
   end
 end
@@ -1244,7 +1244,7 @@ local function lpm_plugin_list()
       tags = plugin.tags,
       type = plugin.type,
       organization = plugin.organization,
-      repository = repo and (repo.remote .. ":" .. (repo.commit or repo.branch))
+      repository = repo and repo:url()
     })
   end
   if JSON then

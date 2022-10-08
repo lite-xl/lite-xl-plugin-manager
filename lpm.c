@@ -8,6 +8,8 @@
 #include <lualib.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <archive.h>
+#include <archive_entry.h>
 
 #include <sys/stat.h>
 #include <git2.h>
@@ -18,6 +20,8 @@
   #include <direct.h>
   #include <windows.h>
   #include <fileapi.h>
+#else
+  #define MAX_PATH PATH_MAX
 #endif
 
 static char hex_digits[] = "0123456789abcdef";
@@ -375,12 +379,59 @@ static int lpm_certs(lua_State* L) {
   return 0;
 }
 
+static int lpm_extract(lua_State* L) {
+  const char* src = luaL_checkstring(L, 1);
+  const char* dst = luaL_optstring(L, 2, "./");
+  
+	struct archive_entry *entry;
+	const void *buff;
+	int flags = 0;
+	int r;
+	size_t size;
+#if ARCHIVE_VERSION_NUMBER >= 3000000
+	int64_t offset;
+#else
+	off_t offset;
+#endif
+	struct archive *ar = archive_read_new();
+	struct archive *aw = archive_write_disk_new();
+	archive_write_disk_set_options(aw, flags);
+	archive_read_support_format_tar(ar);
+	archive_read_support_format_zip(ar);
+	if ((r = archive_read_open_filename(ar, src, 10240)))
+		luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
+	for (;;) {
+		int r = archive_read_next_header(ar, &entry);
+		if (r == ARCHIVE_EOF)
+			break;
+		if (r != ARCHIVE_OK)
+			luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
+		char path[MAX_PATH];	
+		strcpy(path, dst);
+		strncat(path, archive_entry_pathname(entry), sizeof(path) - 3); path[MAX_PATH-1] = 0;
+		archive_entry_set_pathname(entry, path);
+    if (archive_write_header(aw, entry) != ARCHIVE_OK)
+			return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(aw));
+		for (;;) {
+      int r = archive_read_data_block(ar, &buff, &size, &offset);
+      if (r == ARCHIVE_EOF) 
+        break;
+      if (r != ARCHIVE_OK)
+        return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
+      if (archive_write_data_block(aw, buff, size, offset) != ARCHIVE_OK)
+        return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(aw));
+    }
+    if (archive_write_finish_entry(aw) != ARCHIVE_OK)
+      return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(aw));
+	}
+  return 0;
+}
+
 static size_t lpm_curl_write_callback(char *ptr, size_t size, size_t nmemb, void *BL) {
   luaL_Buffer* B = BL;
   luaL_addlstring(B, ptr, size*nmemb);
   return size*nmemb;
 }
-
 
 static int lpm_get(lua_State* L) {
   long response_code;
@@ -440,6 +491,7 @@ static const luaL_Reg system_lib[] = {
   { "fetch",     lpm_fetch }, // Updates a git repository with the specified remote.
   { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
   { "get",       lpm_get }, // HTTP(s) GET request.
+  { "extract",   lpm_extract }, // Opens .tar.gz files.
   { "certs",     lpm_certs }, // Sets the SSL certificate chain folder/file.
   { NULL,        NULL }
 };

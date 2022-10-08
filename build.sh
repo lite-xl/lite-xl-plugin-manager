@@ -8,11 +8,11 @@
 SRCS="*.c"
 LDFLAGS="$LDFLAGS -lm -pthread -static-libgcc"
 
-[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/openssl/build lib/curl/build lib/prefix $BIN *.exe && exit 0
+[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/openssl/build lib/curl/build lib/libarchive/build-tmp lib/libzma/build lib/prefix $BIN *.exe && exit 0
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && SSL_CONFIGURE="mingw64"
 
 # Build supporting libraries, libgit2, libz, libssl (with libcrypto), libpcre
-[[ "$@" != *"-lz"* ]] && CFLAGS="$CFLAGS -Ilib/zlib" && SRCS="$SRCS lib/zlib/*.c"
+# [[ "$@" != *"-lz"* ]] && CFLAGS="$CFLAGS -Ilib/zlib" && SRCS="$SRCS lib/zlib/*.c"
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
   [ ! -e "lib/zlib/build" ] && cd lib/zlib && mkdir build && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
@@ -29,6 +29,14 @@ fi
 if [[ "$@" != *"-lcurl"* ]]; then
   [ ! -e "lib/curl/build" ] && cd lib/curl && mkdir build && cd build && cmake .. -G="Unix Makefiles" $CURL_CONFIGURE -DCURL_USE_LIBPSL=OFF -DCURL_DISABLE_LDAPS=ON -DUSE_OPENSSL=ON -DCURL_DISABLE_LDAP=ON -DCMAKE_INSTALL_PREFIX=`pwd`/../../prefix -DUSE_LIBIDN2=OFF -DENABLE_UNICODE=OFF -DBUILD_CURL_EXE=OFF -DCURL_USE_LIBSSH2=OFF -DOPENSSL_ROOT_DIR=`pwd`/../../prefix -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=lib && $MAKE -j $JOBS && $MAKE install && cd ../../../
   LDFLAGS="-Llib/curl/build -Llib/prefix/lib -l:libcurl.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include -DCURL_STATICLIB"
+fi
+if [[ "$@" != *"-lzma"* ]]; then
+  [ ! -e "lib/liblzma/build" ] && cd lib/liblzma && mkdir build && cd build && ../configure $LZMA_CONFIGURE --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  LDFLAGS="-Llib/liblzma/build -Llib/prefix/lib -l:liblzma.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include"
+fi
+if [[ "$@" != *"-larchive"* ]]; then
+  [ ! -e "lib/libarchive/build-tmp" ] && cd lib/libarchive && mkdir build-tmp && cd build-tmp && cmake .. -G="Unix Makefiles" $ARCHIVE_CONFIGURE -DCMAKE_INSTALL_PREFIX=`pwd`/../../prefix -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=lib -DENABLE_CAT=OFF -DENABLE_CPIO=OFF -DENABLE_BZip2=OFF -DENABLE_OPENSSL=OFF -DENABLE_LIBXML2=OFF -DENABLE_PCREPOSIX=OFF  && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  LDFLAGS="-Llib/libarchive/build-tmp -Llib/prefix/lib -l:libarchive.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include"
 fi
 [[ "$@" != *"-llua"* ]] && CFLAGS="$CFLAGS -Ilib/lua -DMAKE_LIB=1" && SRCS="$SRCS lib/lua/onelua.c"
 
