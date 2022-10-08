@@ -18,6 +18,7 @@
 
 #ifdef _WIN32
   #include <direct.h>
+  #include <winsock2.h>
   #include <windows.h>
   #include <fileapi.h>
 #else
@@ -381,8 +382,9 @@ static int lpm_certs(lua_State* L) {
 
 static int lpm_extract(lua_State* L) {
   const char* src = luaL_checkstring(L, 1);
-  const char* dst = luaL_optstring(L, 2, "./");
-  
+  const char* dst = luaL_optstring(L, 2, ".");
+
+  char error_buffer[1024] = {0};
 	struct archive_entry *entry;
 	const void *buff;
 	int flags = 0;
@@ -398,32 +400,52 @@ static int lpm_extract(lua_State* L) {
 	archive_write_disk_set_options(aw, flags);
 	archive_read_support_format_tar(ar);
 	archive_read_support_format_zip(ar);
-	if ((r = archive_read_open_filename(ar, src, 10240)))
-		luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
+	archive_read_support_filter_gzip(ar);
+	if ((r = archive_read_open_filename(ar, src, 10240))) {
+    snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(ar));
+    goto cleanup;
+	}
 	for (;;) {
 		int r = archive_read_next_header(ar, &entry);
 		if (r == ARCHIVE_EOF)
 			break;
-		if (r != ARCHIVE_OK)
-			luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
+		if (r != ARCHIVE_OK) {
+			snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(ar));
+      goto cleanup;
+		}
 		char path[MAX_PATH];	
-		strcpy(path, dst);
+		strcpy(path, dst); strcat(path, "/");
 		strncat(path, archive_entry_pathname(entry), sizeof(path) - 3); path[MAX_PATH-1] = 0;
 		archive_entry_set_pathname(entry, path);
-    if (archive_write_header(aw, entry) != ARCHIVE_OK)
-			return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(aw));
+    if (archive_write_header(aw, entry) != ARCHIVE_OK) {
+      snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(aw));
+      goto cleanup;
+		}
 		for (;;) {
       int r = archive_read_data_block(ar, &buff, &size, &offset);
       if (r == ARCHIVE_EOF) 
         break;
-      if (r != ARCHIVE_OK)
-        return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
-      if (archive_write_data_block(aw, buff, size, offset) != ARCHIVE_OK)
-        return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(aw));
+      if (r != ARCHIVE_OK) {
+        snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(ar));
+        goto cleanup;
+      }
+      if (archive_write_data_block(aw, buff, size, offset) != ARCHIVE_OK) {
+        snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(aw));
+        goto cleanup;
+      }
     }
-    if (archive_write_finish_entry(aw) != ARCHIVE_OK)
-      return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(aw));
+    if (archive_write_finish_entry(aw) != ARCHIVE_OK) {
+      snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(aw));
+      goto cleanup;
+    }
 	}
+	cleanup:
+	archive_read_close(ar);
+	archive_read_free(ar);
+	archive_write_close(aw);
+  archive_write_free(aw);
+  if (error_buffer[0])
+    return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
   return 0;
 }
 
@@ -491,7 +513,7 @@ static const luaL_Reg system_lib[] = {
   { "fetch",     lpm_fetch }, // Updates a git repository with the specified remote.
   { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
   { "get",       lpm_get }, // HTTP(s) GET request.
-  { "extract",   lpm_extract }, // Opens .tar.gz files.
+  { "extract",   lpm_extract }, // Extracts .tar.gz, and .zip files.
   { "certs",     lpm_certs }, // Sets the SSL certificate chain folder/file.
   { NULL,        NULL }
 };
