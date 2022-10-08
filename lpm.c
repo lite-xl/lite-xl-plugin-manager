@@ -375,21 +375,6 @@ static int lpm_certs(lua_State* L) {
   return 0;
 }
 
-static int lpm_status(lua_State* L) {
-  const char* path = luaL_checkstring(L, 1);
-  git_repository* repository;
-  if (git_repository_open(&repository, path))
-    return luaL_error(L, "git open error: %s", git_error_last_string());
-  git_repository_free(repository);
-  lua_newtable(L);
-  lua_pushnil(L);
-  lua_setfield(L, -2, "commit");
-  lua_pushnil(L);
-  lua_setfield(L, -2, "branch");
-  return 1;
-}
-
-
 static size_t lpm_curl_write_callback(char *ptr, size_t size, size_t nmemb, void *BL) {
   luaL_Buffer* B = BL;
   luaL_addlstring(B, ptr, size*nmemb);
@@ -454,7 +439,6 @@ static const luaL_Reg system_lib[] = {
   { "init",      lpm_init }, // Initializes a git repository with the specified remote.
   { "fetch",     lpm_fetch }, // Updates a git repository with the specified remote.
   { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
-  { "status",    lpm_status }, // Returns the git repository in question's current branch, if any, and commit hash.
   { "get",       lpm_get }, // HTTP(s) GET request.
   { "certs",     lpm_certs }, // Sets the SSL certificate chain folder/file.
   { NULL,        NULL }
@@ -501,9 +485,9 @@ int main(int argc, char* argv[]) {
     lua_pushstring(L, argv[i]);
     lua_rawseti(L, -2, i+1);
   }
+  lua_setglobal(L, "ARGV");
   lua_pushliteral(L, LPM_VERSION);
   lua_setglobal(L, "VERSION");
-  lua_setglobal(L, "ARGV");
   #if _WIN32 
     lua_pushliteral(L, "windows");
     lua_pushliteral(L, "\\");
