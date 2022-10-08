@@ -8,11 +8,10 @@
 SRCS="*.c"
 LDFLAGS="$LDFLAGS -lm -pthread -static-libgcc"
 
-[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/openssl/build lib/curl/build lib/libarchive/build-tmp lib/libzma/build lib/prefix $BIN *.exe && exit 0
+[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/openssl/build lib/curl/build lib/libarchive/build-tmp lib/liblzma/build lib/prefix $BIN *.exe && exit 0
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && SSL_CONFIGURE="mingw64"
 
-# Build supporting libraries, libgit2, libz, libssl (with libcrypto), libpcre
-# [[ "$@" != *"-lz"* ]] && CFLAGS="$CFLAGS -Ilib/zlib" && SRCS="$SRCS lib/zlib/*.c"
+# Build supporting libraries, libgit2, libz, libssl (with libcrypto)
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
   [ ! -e "lib/zlib/build" ] && cd lib/zlib && mkdir build && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
