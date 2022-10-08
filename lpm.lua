@@ -690,6 +690,7 @@ function Repository.new(hash)
 end
 
 function Repository.url(url)
+  if type(url) == "table" then return url.remote .. ":" .. (url.branch or url.commit) end 
   local e = url:reverse():find(":")
   local s = e and (#url - e + 1)
   local remote, branch_or_commit = url:sub(1, s and (s-1) or #url), s and url:sub(s+1)
@@ -1027,10 +1028,11 @@ local function get_repository(url)
 end
 
 
-
+local DEFAULT_REPOS
 local function lpm_repo_init()
+  DEFAULT_REPOS = { Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:master"), Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:2.1") }
   if not system.stat(CACHEDIR .. PATHSEP .. "repos") then
-    for i, repository in ipairs({ Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:master"), Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:2.1") }) do
+    for i, repository in ipairs(DEFAULT_REPOS) do
       if not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
         common.mkdirp(repository.local_path)
         table.insert(repositories, repository:add())
@@ -1078,6 +1080,7 @@ local function lpm_repo_update(...)
 end
 
 local function get_lite_xl(version)
+  if version == "system" then return system_bottle.lite_xl end
   for i,lite_xl in ipairs(lite_xls) do
     if lite_xl.version == version then return lite_xl end
   end
@@ -1271,6 +1274,15 @@ local function lpm_plugin_list()
   end
 end
 
+local function lpm_describe()
+  for i,v in ipairs(repositories) do
+    if #common.grep(DEFAULT_REPOS, function(r) return r:url() == v:url() end) == 0 then
+      io.stdout:write("lpm add " .. v:url() .. " && ")
+    end
+  end
+  print("lpm run " .. system_bottle.lite_xl.version .. " " .. common.join(" ", common.map(system_bottle:installed_plugins(), function(p) return p.name .. ":" .. p.version end)))
+end
+
 local function lpm_plugin_upgrade()
   for i,plugin in ipairs(system_bottle:installed_plugins()) do
     local upgrade = common.sort(system_bottle:get_plugin(plugin.name, ">" .. plugin.version), function(a, b) return compare_version(b.version, a.version) end)[1]
@@ -1345,6 +1357,7 @@ local function run_command(ARGS)
   elseif ARGS[2] == "install" then lpm_install(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "reinstall" then lpm_plugin_reinstall(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "describe" then lpm_describe(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "list" then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
@@ -1430,6 +1443,9 @@ It has the following commands:
   lpm run <version> [...plugins]           Sets up a "bottle" to run the specified
                                            lite version, with the specified plugins
                                            and then opens it.
+  lpm describe [bottle]                    Describes the bottle specified in the form
+                                           of a list of commands, that allow someone
+                                           else to run your configuration.
           
   lpm purge                                Completely purge all state for LPM.
   lpm -                                    Read these commands from stdin in

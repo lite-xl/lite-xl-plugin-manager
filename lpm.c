@@ -188,7 +188,7 @@ static int lpm_rmdir(lua_State *L) {
   LPWSTR wpath = utfconv_utf8towc(path);
   int deleted = RemoveDirectoryW(wpath);
   free(wpath);
-  if (!deleted) {
+  if (!deleted)
     return luaL_error(L, "can't rmdir %s: %d", path, GetLastError());
 #else
   if (remove(path))
@@ -500,14 +500,13 @@ int main(int argc, char* argv[]) {
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
   #if LPM_LIVE
-  if (luaL_loadfile(L, "lpm.lua")) {
+  if (luaL_loadfile(L, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #else
-  if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua")) {
+  if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #endif
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
   }
-  lua_pcall(L, 0, 1, 0);
   int status = lua_tointeger(L, -1);
   lua_close(L);
   git_libgit2_shutdown();
