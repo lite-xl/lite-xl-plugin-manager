@@ -28,6 +28,20 @@ CI is enabled on this repository, so you can grab Windows and Linux builds from 
 
 You can get a feel for how to use `lpm` by typing `./lpm --help`.
 
+## Supporting Libraries
+
+Unlike lite, due to the precense of the beast of a library that is OpenSSL, I've made no attempt to limit the amount
+of libraries being linked in here, I'm only ensuring that everything can be linked statically as much as possible. As
+seen with the `lib` folder, the following external libraries are used to build `lpm`:
+
+* lua (core program written in)
+* OpenSSL (https/SSL support)
+* libgit2 (accessing git repositories directly)
+* liblzma (supporting library for archives)
+* libz (supporting library for everything)
+* libcurl (for fetching .tar.gz and .zip files)
+* libarchive (for unpacking .tar.gz and .zip files)
+
 ## Use in CI
 
 To make pre-fab lite builds, you can easily use `lpm` in CI. If you had a linux build container, you could do something like:

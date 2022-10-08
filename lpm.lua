@@ -872,6 +872,7 @@ function LiteXL.new(repository, metadata)
     repository = repository,
     version = metadata.version,
     remote = metadata.remote,
+    url = metadata.url,
     tags = metadata.tags or {},
     mod_version = metadata.mod_version,
     path = metadata.path,
@@ -895,7 +896,7 @@ function LiteXL:is_installed()
 end
 
 function LiteXL:install()
-  if self:is_installed() then log_warning("lite-xl " .. self.version .. " already installed") end
+  if self:is_installed() then log_warning("lite-xl " .. self.version .. " already installed") return end
   common.mkdirp(self.local_path)
   if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
     local executable, datadir = common.path("lite-xl")
@@ -910,16 +911,24 @@ function LiteXL:install()
   elseif self.path and not self.repository then -- local repository
     system.symlink(self.local_path .. PATHSEP .. "lite_xl", self.path .. PATHSEP .. "lite_xl")
   else
-    system.init(self.local_path, self.remote)
-    system.reset(self.local_path, self.commit or self.branch)
+    if self.remote then
+      system.init(self.local_path, self.remote)
+      system.reset(self.local_path, self.commit or self.branch)
+    end
     for i,file in ipairs(self.files or {}) do
       if file.arch and file.arch == ARCH then
         if not file.checksum then error("requires a checksum") end
-        local path = self.local_path .. PATHSEP .. "lite-xl"
+        local archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
+        local basename = common.basename(file.url)
+        local path = self.local_path .. PATHSEP .. (archive and basename or "lite-xl")
         log_action("Downloading file " .. file.url .. "...")
         common.get(file.url, path, file.checksum)
         log_action("Downloaded file " .. file.url .. " to " .. path)
         if system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
+        if archive then 
+          log_action("Extracting file " .. basename .. " in " .. self.local_path)
+          system.extract(path, self.local_path) 
+        end
       end
     end
   end

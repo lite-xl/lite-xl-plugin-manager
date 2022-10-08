@@ -14,7 +14,7 @@ jobs:
         run: git submodule update --init --depth=1
       - name: Build Linux
         run: |
-          ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
+          SSL_CONFIGURE="no-tests" ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
       - name: Package Debian/Ubuntu
         env: { REV: "1", ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
@@ -25,7 +25,7 @@ jobs:
           dpkg-deb --build --root-owner-group $NAME
       - name: Build Windows
         run: |
-          sudo apt-get install mingw-w64 && ./build.sh clean && CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres LZMA_CONFIGURE="--host=x86_64-w64-mingw32" ARCHIVE_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" CURL_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" GIT2_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DBUILD_CLAR=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DDLLTOOL=x86_64-w64-mingw32-dlltool" SSL_CONFIGURE=mingw ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"' && zip -r lpm-$VERSION-x86_64-windows.zip lpm.exe
+          sudo apt-get install mingw-w64 && ./build.sh clean && CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres LZMA_CONFIGURE="--host=x86_64-w64-mingw32" ARCHIVE_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" CURL_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" GIT2_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DBUILD_CLAR=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DDLLTOOL=x86_64-w64-mingw32-dlltool" SSL_CONFIGURE="no-tests mingw" ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"' && zip -r lpm-$VERSION-x86_64-windows.zip lpm.exe
           cp lpm.exe lpm.x86_64-windows.exe
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
@@ -37,9 +37,9 @@ jobs:
             gh release create -t v$RELEASE v$RELEASE lpm.x86_64-linux lpm.x86_64-windows.exe
             git checkout master && git config user.email "adamdharrison@gmail.com" && git config user.name "Adam Harrison"
             cat manifest.json | 
-                jq ".plugins[0].files[0].checksum = "'"'"`sha256sum lpm.x86_64-linux | sed 's/ .*//'`"'"' |
-                jq ".plugins[0].files[1].checksum = "'"'"`sha256sum lpm.x86_64-windows.exe | sed 's/ .*//'`"'"' |
-                jq ".plugins[0].version = "'"'"$RELEASE"'"' > new-manifest.json
+              jq ".plugins[0].files[0].checksum = "'"'"`sha256sum lpm.x86_64-linux | sed 's/ .*//'`"'"' |
+              jq ".plugins[0].files[1].checksum = "'"'"`sha256sum lpm.x86_64-windows.exe | sed 's/ .*//'`"'"' |
+              jq ".plugins[0].version = "'"'"$RELEASE"'"' > new-manifest.json
             mv new-manifest.json manifest.json && git add manifest.json && git commit -m 'Updated manifest.json with updated release checksums.' && git push
           fi
           
