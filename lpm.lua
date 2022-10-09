@@ -1221,7 +1221,7 @@ local function lpm_plugin_uninstall(...)
   end
 end
 
-local function lpm_plugin_reinstall(...) for i, name in ipairs({ ... }) do pcall(lpm_plugin_uninstall(name)) end lpm_install(...) end
+local function lpm_plugin_reinstall(...) for i, name in ipairs({ ... }) do pcall(lpm_plugin_uninstall, name) end lpm_install(...) end
 
 local function lpm_repo_list() 
   if JSON then
