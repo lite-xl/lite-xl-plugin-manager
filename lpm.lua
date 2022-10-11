@@ -358,10 +358,12 @@ local common = {}
 function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
 function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v)) end return t end
 function common.flat_map(l, p) local t = {} for i, v in ipairs(l) do local r = p(v) for k, w in ipairs(r) do table.insert(t, w) end end return t end
+function common.concat(t1, t2) local t = {} for i, v in ipairs(t1) do table.insert(t, v) end for i, v in ipairs(t2) do table.insert(t, v) end return t end
 function common.grep(l, p) local t = {} for i, v in ipairs(l) do if p(v) then table.insert(t, v) end end return t end
 function common.slice(t, i, l) local n = {} for j = i, l ~= nil and (i - l) or #t do table.insert(n, t[j]) end return n end
 function common.join(j, l) local s = "" for i, v in ipairs(l) do if i > 1 then s = s .. j .. v else s = v end end return s end
 function common.sort(t, f) table.sort(t, f) return t end
+function common.write(path, contents) local f, err = io.open(path, "wb") if not f then error("can't write to " .. path .. ": " .. err) end f:write(contents) f:flush() end
 function common.split(splitter, str)
   local o = 1
   local res = {}
@@ -407,7 +409,7 @@ function common.copy(src, dst)
     local dst_io, err2 = io.open(dst, "wb")
     if err2 then error("can't open for writing " .. dst .. ": " .. err2) end
     while true do
-      local chunk = src_io:read(16*1024)
+      local chunk = src_io:read(64*1024)
       if not chunk then break end
       dst_io:write(chunk)
     end
@@ -420,6 +422,8 @@ function common.rename(src, dst)
 end
 
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, lite_xls, system_bottle
+
+local Plugin, Repository, LiteXL, Bottle = {}, {}, {}, {}
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -482,7 +486,6 @@ local function is_commit_hash(hash)
 end
 
 
-local Plugin = {}
 function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
   local type = metadata.type or "plugin"
@@ -510,20 +513,9 @@ function Plugin:get_install_path(bottle)
   return path
 end
 
-
-function Plugin:is_installed(bottle)
-  return bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle))
-end
-
-
-function Plugin:is_incompatible(plugin)
-  if self.dependencies[plugin.name] then
-    if not match_version(plugin.version, dependencies[plugin.name]) then return true end
-  end
-  return false
-end
-
-
+function Plugin:is_core(bottle) return self.type == "core" end
+function Plugin:is_installed(bottle) return bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle)) end
+function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, dependencies[plugin.name]) end
 
 function Plugin:get_compatibilities(bottle)
   local compatible_plugins = {}
@@ -562,9 +554,6 @@ function Plugin:get_compatibilities(bottle)
 end
 
 
-local core_plugins = {
-  autocomplete = true, autoreload = true, contextmenu = true, detectindent = true, drawwhitespace = true, language_c = true, language_cpp = true, language_css = true, language_html = true, language_js = true, language_lua = true, language_md = true, language_python = true, language_xml = true, lineguide = true, linewrapping = true, macro = true, projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true
-}
 
 function Plugin:install(bottle, installing)
   if self:is_installed(bottle) then log_warning("plugin " .. self.name .. " is already installed") return end
@@ -578,10 +567,10 @@ function Plugin:install(bottle, installing)
       if incompatible[plugin] then error("can't install " .. self.name .. ": incompatible with " .. incompatible[plugin][1].name .. ":" .. incompatible[plugin][1].version) end
     end
     for plugin, v in pairs(self.dependencies) do
-      if not core_plugins[plugin] and not compatible[plugin] then error("can't find dependency " .. plugin .. (v.version and (":" .. v.version) or "")) end
+      if not compatible[plugin] then error("can't find dependency " .. plugin .. (v.version and (":" .. v.version) or "")) end
     end
     for plugin, v in pairs(self.dependencies) do
-      if not core_plugins[plugin] and not compatible[plugin]:is_installed(bottle) then
+      if not compatible[plugin]:is_core(bottle) and not compatible[plugin]:is_installed(bottle) then
         if installing[plugin] then
           error("circular dependency detected in " .. self.name .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.name)
         end
@@ -649,6 +638,7 @@ end
 
 function Plugin:uninstall(bottle)
   local install_path = self:get_install_path(bottle)
+  if self:is_core(bottle) then error("can't uninstall " .. self.name .. " is a core plugin") end
   log_action("Uninstalling plugin located at " .. install_path)
   local incompatible_plugins = common.grep(bottle:installed_plugins(), function(p) return p:depends_on(self) end)
   if #incompatible_plugins == 0 or prompt(self.name .. " is depended upon by " .. common.join(", ", common.map(incompatible_plugins, function(p) return p.name end)) .. ". Remove as well?") then
@@ -662,7 +652,6 @@ function Plugin:uninstall(bottle)
 end
 
 
-local Repository = {}
 function Repository.__index(self, idx) return rawget(self, idx) or Repository[idx] end
 function Repository.new(hash)
   if not hash.remote then error("requires a remote") end
@@ -723,7 +712,7 @@ function Repository:parse_manifest(already_pulling)
         table.insert(self.plugins, Plugin.new(self, metadata))
       end
     end
-    for i, metadata in ipairs(self.manifest["lite-xl"] or {}) do
+    for i, metadata in ipairs(self.manifest["lite-xls"] or {}) do
       if metadata.remote then
         local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(.*)?$")
         if branch_or_commit and is_commit_hash(branch_or_commit) then
@@ -790,7 +779,7 @@ function Repository:generate_manifest()
       table.insert(plugins, common.merge({ dependencies = {}, mod_version = self.branch == "master" and 2 or 3, version = "1.0", tags = {} }, v))
     end
   end
-  io.open(path .. PATHSEP .. "manifest.json", "wb"):write(json.encode({ plugins = plugins })):flush()
+  common.write(path .. PATHSEP .. "manifest.json", json.encode({ plugins = plugins }))
 end
 
 function Repository:add()
@@ -864,7 +853,6 @@ function Repository:remove()
 end
 
 
-local LiteXL = {}
 function LiteXL.__index(t, k) return LiteXL[k] end
 function LiteXL.new(repository, metadata)
   if not metadata.version then error("lite-xl entry requires a version") end
@@ -876,24 +864,18 @@ function LiteXL.new(repository, metadata)
     tags = metadata.tags or {},
     mod_version = metadata.mod_version,
     path = metadata.path,
-    hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version),
     files = metadata.files or {}
   }, LiteXL)
-  self.local_path = CACHEDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.hash
+  self.hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version .. common.join("", common.map(self.files, function(f) return f.checksum end)))
+  self.local_path = self:is_local() and self.path or (CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. self.version .. PATHSEP .. self.hash)
   return self
 end
 
-function LiteXL:is_local()
-  return not self.repository and self.path
-end
-
-function LiteXL:is_compatible(plugin)
-  return compare_version(self.mod_version, plugin.mod_version) == 0
-end
-
-function LiteXL:is_installed() 
-  return system.stat(self.local_path)
-end
+function LiteXL:get_data_directory() return self.local_path .. PATHSEP .. "data" end
+function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
+function LiteXL:is_local() return not self.repository and self.path end
+function LiteXL:is_compatible(plugin) return compare_version(self.mod_version, plugin.mod_version) == 0 end
+function LiteXL:is_installed()  return system.stat(self.local_path) end
 
 function LiteXL:install()
   if self:is_installed() then log_warning("lite-xl " .. self.version .. " already installed") return end
@@ -918,8 +900,8 @@ function LiteXL:install()
     for i,file in ipairs(self.files or {}) do
       if file.arch and file.arch == ARCH then
         if not file.checksum then error("requires a checksum") end
-        local archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
         local basename = common.basename(file.url)
+        local archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
         local path = self.local_path .. PATHSEP .. (archive and basename or "lite-xl")
         log_action("Downloading file " .. file.url .. "...")
         common.get(file.url, path, file.checksum)
@@ -941,7 +923,6 @@ function LiteXL:uninstall()
 end
 
 
-local Bottle = {}
 function Bottle.__index(t, k) return Bottle[k] end
 function Bottle.new(lite_xl, plugins, is_system)
   local self = setmetatable({
@@ -986,11 +967,15 @@ function Bottle:all_plugins()
   local t = common.flat_map(repositories, function(r) return r.plugins end)
   local hash = { }
   for i, v in ipairs(t) do hash[v.name] = v end
-  local plugin_path = (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. "plugins"
-  if system.stat(plugin_path) then 
-    for i, v in ipairs(common.grep(system.ls(plugin_path), function(e) return not hash[e:gsub("%.lua$", "")] end)) do
+  local plugin_paths = {
+    (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. "plugins",
+    self.lite_xl:get_data_directory() .. PATHSEP .. "plugins"
+  }
+  for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
+    for k, v in ipairs(common.grep(system.ls(plugin_path), function(e) return not hash[e:gsub("%.lua$", "")] end)) do
       table.insert(t, Plugin.new(nil, {
         name = v:gsub("%.lua$", ""),
+        type = i == 2 and "core",
         organization = (v:find("%.lua$") and "singleton" or "complex"),
         mod_version = self.lite_xl.mod_version,
         path = "plugins/" .. v,
@@ -1089,19 +1074,13 @@ local function lpm_repo_update(...)
 end
 
 local function get_lite_xl(version)
-  if version == "system" then return system_bottle.lite_xl end
-  for i,lite_xl in ipairs(lite_xls) do
-    if lite_xl.version == version then return lite_xl end
-  end
-  for i,repo in ipairs(common.flat_map(repositories, function(e) return e.lite_xls end)) do
-    if lite_xl.version == version then return lite_xl end
-  end
-  return nil
+  return common.grep(common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end)), function(lite_xl) return lite_xl.version == version end)[1]
 end
 
 local function lpm_lite_xl_save()
-  io.open(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json", "wb"):write(
-    json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and l ~= system_bottle.lite_xl end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
+  common.mkdirp(CACHEDIR .. PATHSEP .. "lite_xls")
+  common.write(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
+    json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
   )
 end
 
@@ -1110,7 +1089,7 @@ local function lpm_lite_xl_add(version, path)
   if not path then error("requires a path") end
   if not system.stat(path .. PATHSEP .. "lite-xl") then error("can't find " .. path .. PATHSEP .. "lite-xl") end
   if not system.stat(path .. PATHSEP .. "data") then error("can't find " .. path .. PATHSEP .. "data") end
-  table.insert(lite_xls, LiteXL.new({ version = version, path = path, mod_version = MOD_VERSION or 3 }))
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or 3 }))
   lpm_lite_xl_save()
 end
 
@@ -1132,7 +1111,14 @@ local function lpm_lite_xl_switch(version, target)
   target = target or common.path("lite-xl")
   if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly") end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  if not lite_xl:is_installed() then log_action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
+  local stat = system.stat(target)
+  if stat and stat.symlink then os.remove(target) end
   system.symlink(lite_xl.local_path .. PATHSEP .. "lite-xl", target)
+  if not common.path('lite-xl') then 
+    os.remove(target)
+    error(target .. " is not on your $PATH; please supply a target that can be found on your $PATH, called `lite-xl`.")
+  end
 end
 
 
@@ -1143,12 +1129,17 @@ end
 
 local function lpm_lite_xl_list()
   local result = { ["lite-xl"] = { } }
+  local max_version = 0
   for i,lite_xl in ipairs(lite_xls) do
     table.insert(result["lite-xl"], {
       version = lite_xl.version,
       mod_version = lite_xl.mod_version,
-      tags = lite_xl.tags
+      tags = lite_xl.tags,
+      is_system = lite_xl:is_system(),
+      status = lite_xl:is_installed() and (lite_xl:is_local() and "local" or "installed") or "available",
+      local_path = lite_xl.local_path
     })
+    max_version = math.max(max_version, #lite_xl.version)
   end
   for i,repo in ipairs(repositories) do
     if not repo.lite_xls then error("can't find lite-xl for repo " .. repo:url()) end
@@ -1157,8 +1148,12 @@ local function lpm_lite_xl_list()
         version = lite_xl.version,
         mod_version = lite_xl.mod_version,
         repository = repo:url(),
-        tags = lite_xl.tags
+        tags = lite_xl.tags,
+        is_system = lite_xl:is_system(),
+        status = lite_xl:is_installed() and (lite_xl:is_local() and "local" or "installed") or "available",
+        local_path = lite_xl.local_path
       })
+      max_version = math.max(max_version, #lite_xl.version)
     end
   end
   if JSON then
@@ -1168,12 +1163,16 @@ local function lpm_lite_xl_list()
       for i, lite_xl in ipairs(result["lite-xl"]) do
         if i ~= 0 then print("---------------------------") end
         print("Version:       " .. lite_xl.version)
+        print("Status:        " .. lite_xl.status)
         print("Mod-Version:   " .. (lite_xl.mod_version or "unknown"))
         print("Tags:          " .. common.join(", ", lite_xl.tags))
       end
     else
+      max_version = max_version + 2
+      print(string.format("%" .. max_version .. "s | %10s | %s", "Version", "Status", "Location"))
+      print(string.format("%" .. max_version .."s | %10s | %s", "----------", "---------", "---------------------------"))
       for i, lite_xl in ipairs(result["lite-xl"]) do
-        print(lite_xl.version)
+        print(string.format("%" .. max_version .. "s | %10s | %s", (lite_xl.is_system and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.status ~= "available" and lite_xl.local_path or lite_xl.repository)))
       end
     end
   end
@@ -1201,7 +1200,7 @@ local function lpm_install(...)
     local name, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
     if not name then error('unrecognized identifier ' .. identifier) end
     if name == "lite-xl" then
-      lpm_install_lite_xl(version)
+      lpm_lite_xl_install(version)
     else
       local plugins = { system_bottle:get_plugin(name, version, { mod_version = system_bottle.lite_xl.mod_version }) }
       if #plugins == 0 then error("can't find plugin " .. name .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
@@ -1245,7 +1244,7 @@ local function lpm_plugin_list()
     local repo = plugin.repository
     table.insert(result.plugins, {
       name = plugin.name,
-      status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or "orphan",
+      status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or (plugin:is_core(system_bottle) and "core" or "orphan"),
       version = "" .. plugin.version,
       dependencies = plugin.dependencies,
       description = plugin.description,
@@ -1370,7 +1369,7 @@ local function run_command(ARGS)
   elseif ARGS[2] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "list" then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm_install(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm_lite_xl_install(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm_lite_xl_add(table.unpack(common.slice(ARGS, 4)))
@@ -1557,25 +1556,29 @@ Flags have the following effects:
     end
   end
 
-  if not MOD_VERSION then
-    local lite_xl_binary = common.path("lite-xl")
-    if lite_xl_binary then
-      local hash = system.hash(lite_xl_binary, "file")
-      for i,repo in ipairs(repositories) do
-        for j,lite_xl in ipairs(repo.lite_xls) do
-          local f = table.unpack(common.grep(lite_xl.files, function(f) return f.checksum == hash end))
-          if f then system_bottle = Bottle.new(lite_xl, nil, true) end
-        end
-      end
-    end
-  end
-  if not system_bottle then system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "local", "system" } }), nil, true) end
-  lite_xls = { system_bottle.lite_xl }
+  lite_xls = {}
   if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
-    for i, lite_xl in ipairs(json.decode(io.open(CACHDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json", "rb"):read("*all"))) do
+    for i, lite_xl in ipairs(json.decode(io.open(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json", "rb"):read("*all"))) do
       table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
     end
   end
+  local lite_xl_binary = common.path("lite-xl")
+  if lite_xl_binary then
+    lite_xl_binary = system.stat(lite_xl_binary).symlink or lite_xl_binary
+    local directory = common.dirname(lite_xl_binary)
+    local hash = system.hash(lite_xl_binary, "file")
+    local system_lite_xl = common.grep(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)[1]
+    if not system_lite_xl then 
+      if #common.grep(lite_xls, function(e) return e.version == "system" end) > 0 then error("can't create new system lite, please `lpm rm lite-xl system`, or resolve otherwise") end
+      system_lite_xl = LiteXL.new(nil, { path = directory, mod_version = 3, version = "system", tags = { "system", "local" } })
+      table.insert(lite_xls, system_lite_xl)
+      lpm_lite_xl_save()
+    else
+      table.insert(system_lite_xl.tags, "system")
+    end
+    system_bottle = Bottle.new(system_lite_xl, nil, true) 
+  end
+  if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
   
   if ARGS[2] ~= '-' then
     run_command(ARGS)

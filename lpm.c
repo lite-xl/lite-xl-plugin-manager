@@ -220,25 +220,33 @@ static int lpm_mkdir(lua_State *L) {
 
 static int lpm_stat(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
-
+  
+  lua_newtable(L);
 #ifdef _WIN32
+  #define realpath(x, y) _wfullpath(y, x, MAX_PATH)
   struct _stat s;
   LPWSTR wpath = utfconv_utf8towc(path);
   if (wpath == NULL)
     return luaL_error(L, "can't stat %s: invalid utf8 character conversion", path);
   int err = _wstat(wpath, &s);
+  LPWSTR wfullpath = realpath(wpath, NULL);
   free(wpath);
+  if (!wfullpath) return 0;
+  char *abs_path = utfconv_wctoutf8(wfullpath);
+  free(wfullpath);
 #else
   struct stat s;
   int err = lstat(path, &s);
+  char *abs_path = realpath(path, NULL);
 #endif
-  if (err) {
+  if (err || !res) {
     lua_pushnil(L);
     lua_pushstring(L, strerror(errno));
     return 2;
   }
+  lua_pushstring(L, abs_path) lua_setfield(L, -2, "abs_path");
+  lua_pushvalue(L, 1); lua_setfield(L, -2, "path");
 
-  lua_newtable(L);
 #if __linux__
   if (S_ISLNK(s.st_mode)) {
     char buffer[PATH_MAX];
