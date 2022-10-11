@@ -519,26 +519,12 @@ function Plugin:is_installed(bottle) return self:is_core(bottle) or (bottle.lite
 function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, dependencies[plugin.name]) end
 
 function Plugin:get_compatibilities(bottle)
-  local compatible_plugins = {}
-  local incompatible_plugins = {}
-  local installed_plugins = {}
-  for i, repo in ipairs(repositories) do
-    for j, plugin in ipairs(repo.plugins) do
-      if plugin:is_installed(bottle) then
-        table.insert(installed_plugins, plugin)
-      end
-    end
-  end
+  local compatible_plugins, incompatible_plugins = {}, {}
+  local installed_plugins = bottle:installed_plugins()
   for plugin, v in pairs(self.dependencies) do
     local potential_plugins = { bottle:get_plugin(plugin, v.version, { mod_version = bottle.lite_xl.mod_version }) }
-    local has_at_least_one = false
-    local incomaptibilities = {}
     for i, potential_plugin in ipairs(potential_plugins) do
-      for j, installed_plugin in ipairs(installed_plugins) do
-        if installed_plugin:is_incompatible(potential_plugin) then
-          table.insert(incomaptibilities, installed_plugin)
-        end
-      end
+      local incomaptibilities = common.grep(installed_plugins, function(p) return p:is_incompatible(potential_plugin) end)
       if #incomaptibilities == 0 then
         if not compatible_plugins[plugin] or
           potential_plugin:is_installed(bottle) or
