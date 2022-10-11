@@ -84,50 +84,36 @@ int lpm_chmod(lua_State* L) {
 #if _WIN32
 static LPWSTR utfconv_utf8towc(const char *str) {
   LPWSTR output;
-  int len;
-
-  // len includes \0
-  len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+  int len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
   if (len == 0)
     return NULL;
-
   output = (LPWSTR) malloc(sizeof(WCHAR) * len);
   if (output == NULL)
     return NULL;
-
   len = MultiByteToWideChar(CP_UTF8, 0, str, -1, output, len);
   if (len == 0) {
     free(output);
     return NULL;
   }
-
   return output;
 }
 
 static char *utfconv_wctoutf8(LPCWSTR str) {
   char *output;
-  int len;
-
-  // len includes \0
-  len = WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
+  int len = WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
   if (len == 0)
     return NULL;
-
   output = (char *) malloc(sizeof(char) * len);
   if (output == NULL)
     return NULL;
-
   len = WideCharToMultiByte(CP_UTF8, 0, str, -1, output, len, NULL, NULL);
   if (len == 0) {
     free(output);
     return NULL;
   }
-
   return output;
 }
 #endif
-
-
 
 static int lpm_ls(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
@@ -188,7 +174,6 @@ static int lpm_ls(lua_State *L) {
 
 static int lpm_rmdir(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
-
 #ifdef _WIN32
   LPWSTR wpath = utfconv_utf8towc(path);
   int deleted = RemoveDirectoryW(wpath);
@@ -220,7 +205,6 @@ static int lpm_mkdir(lua_State *L) {
 
 static int lpm_stat(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
-  
   lua_newtable(L);
 #ifdef _WIN32
   #define realpath(x, y) _wfullpath(y, x, MAX_PATH)
@@ -262,12 +246,8 @@ static int lpm_stat(lua_State *L) {
   if (err)
     return 1;
 #endif
-  lua_pushinteger(L, s.st_mtime);
-  lua_setfield(L, -2, "modified");
-
-  lua_pushinteger(L, s.st_size);
-  lua_setfield(L, -2, "size");
-
+  lua_pushinteger(L, s.st_mtime); lua_setfield(L, -2, "modified");
+  lua_pushinteger(L, s.st_size); lua_setfield(L, -2, "size");
   if (S_ISREG(s.st_mode)) {
     lua_pushstring(L, "file");
   } else if (S_ISDIR(s.st_mode)) {
@@ -510,19 +490,19 @@ static int lpm_get(lua_State* L) {
 
 
 static const luaL_Reg system_lib[] = {
-  { "ls",        lpm_ls    }, // Returns an array of files.
-  { "stat",      lpm_stat  }, // Returns info about a single file.
-  { "mkdir",     lpm_mkdir }, // Makes a directory.
-  { "rmdir",     lpm_rmdir }, // Removes a directory.
-  { "hash",      lpm_hash  }, // Returns a hex sha256 hash.
+  { "ls",        lpm_ls    },   // Returns an array of files.
+  { "stat",      lpm_stat  },   // Returns info about a single file.
+  { "mkdir",     lpm_mkdir },   // Makes a directory.
+  { "rmdir",     lpm_rmdir },   // Removes a directory.
+  { "hash",      lpm_hash  },   // Returns a hex sha256 hash.
   { "symlink",   lpm_symlink }, // Creates a symlink.
-  { "chmod",     lpm_chmod }, // Chmod's a file.
-  { "init",      lpm_init }, // Initializes a git repository with the specified remote.
-  { "fetch",     lpm_fetch }, // Updates a git repository with the specified remote.
-  { "reset",     lpm_reset }, // Updates a git repository to the specified commit/hash/branch.
-  { "get",       lpm_get }, // HTTP(s) GET request.
+  { "chmod",     lpm_chmod },   // Chmod's a file.
+  { "init",      lpm_init },    // Initializes a git repository with the specified remote.
+  { "fetch",     lpm_fetch },   // Updates a git repository with the specified remote.
+  { "reset",     lpm_reset },   // Updates a git repository to the specified commit/hash/branch.
+  { "get",       lpm_get },     // HTTP(s) GET request.
   { "extract",   lpm_extract }, // Extracts .tar.gz, and .zip files.
-  { "certs",     lpm_certs }, // Sets the SSL certificate chain folder/file.
+  { "certs",     lpm_certs },   // Sets the SSL certificate chain folder/file.
   { NULL,        NULL }
 };
 

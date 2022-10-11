@@ -360,6 +360,7 @@ function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, 
 function common.flat_map(l, p) local t = {} for i, v in ipairs(l) do local r = p(v) for k, w in ipairs(r) do table.insert(t, w) end end return t end
 function common.concat(t1, t2) local t = {} for i, v in ipairs(t1) do table.insert(t, v) end for i, v in ipairs(t2) do table.insert(t, v) end return t end
 function common.grep(l, p) local t = {} for i, v in ipairs(l) do if p(v) then table.insert(t, v) end end return t end
+function common.first(l, p) for i, v in ipairs(l) do if p(v) then return v end end end
 function common.slice(t, i, l) local n = {} for j = i, l ~= nil and (i - l) or #t do table.insert(n, t[j]) end return n end
 function common.join(j, l) local s = "" for i, v in ipairs(l) do if i > 1 then s = s .. j .. v else s = v end end return s end
 function common.sort(t, f) table.sort(t, f) return t end
@@ -378,7 +379,7 @@ end
 
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
-function common.path(exec) return common.grep(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) return system.stat(e) end)[1] end
+function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) return system.stat(e) end) end
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
   if not info then return end
@@ -514,7 +515,7 @@ function Plugin:get_install_path(bottle)
 end
 
 function Plugin:is_core(bottle) return self.type == "core" end
-function Plugin:is_installed(bottle) return bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle)) end
+function Plugin:is_installed(bottle) return self:is_core(bottle) or (bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle))) end
 function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, dependencies[plugin.name]) end
 
 function Plugin:get_compatibilities(bottle)
@@ -814,8 +815,7 @@ function Repository:add()
   local manifest, remotes = self:parse_manifest()
   if AUTO_PULL_REMOTES then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do 
-      local has = common.grep(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) > 0
-      if #has == 0 then
+      if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
         remote:add() 
         table.insert(repositories, remote)
       end
@@ -837,8 +837,7 @@ function Repository:update()
   end
   if AUTO_PULL_REMOTES then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do 
-      local has = #common.grep(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end)
-      if #has == 0 then
+      if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
         remote:add() 
         table.insert(repositories, remote)
       end
@@ -871,6 +870,7 @@ function LiteXL.new(repository, metadata)
   return self
 end
 
+function LiteXL:get_binary_path() return self.local_path .. PATHSEP .. "lite-xl" end
 function LiteXL:get_data_directory() return self.local_path .. PATHSEP .. "data" end
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
@@ -891,7 +891,7 @@ function LiteXL:install()
     system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
     common.copy(datadir, self.local_path .. PATHSEP .. "data")
   elseif self.path and not self.repository then -- local repository
-    system.symlink(self.local_path .. PATHSEP .. "lite_xl", self.path .. PATHSEP .. "lite_xl")
+    system.symlink(self:get_binary_path(), self.path .. PATHSEP .. "lite_xl")
   else
     if self.remote then
       system.init(self.local_path, self.remote)
@@ -1074,7 +1074,7 @@ local function lpm_repo_update(...)
 end
 
 local function get_lite_xl(version)
-  return common.grep(common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end)), function(lite_xl) return lite_xl.version == version end)[1]
+  return common.first(common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end)), function(lite_xl) return lite_xl.version == version end)
 end
 
 local function lpm_lite_xl_save()
@@ -1114,7 +1114,7 @@ local function lpm_lite_xl_switch(version, target)
   if not lite_xl:is_installed() then log_action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
   local stat = system.stat(target)
   if stat and stat.symlink then os.remove(target) end
-  system.symlink(lite_xl.local_path .. PATHSEP .. "lite-xl", target)
+  system.symlink(lite_xl:get_binary_path(), target)
   if not common.path('lite-xl') then 
     os.remove(target)
     error(target .. " is not on your $PATH; please supply a target that can be found on your $PATH, called `lite-xl`.")
@@ -1170,7 +1170,7 @@ local function lpm_lite_xl_list()
     else
       max_version = max_version + 2
       print(string.format("%" .. max_version .. "s | %10s | %s", "Version", "Status", "Location"))
-      print(string.format("%" .. max_version .."s | %10s | %s", "----------", "---------", "---------------------------"))
+      print(string.format("%" .. max_version .."s | %10s | %s", "-------", "---------", "---------------------------"))
       for i, lite_xl in ipairs(result["lite-xl"]) do
         print(string.format("%" .. max_version .. "s | %10s | %s", (lite_xl.is_system and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.status ~= "available" and lite_xl.local_path or lite_xl.repository)))
       end
@@ -1299,6 +1299,15 @@ local function lpm_plugin_upgrade()
 end
 
 local function lpm_purge()
+  local path = common.path("lite-xl")
+  if path then
+    local lite_xl = get_lite_xl("system")
+    if lite_xl then
+      os.remove(path)
+      system.symlink(lite_xl:get_binary_path(), target)
+      log_action("Reset lite-xl symlink to system.")
+    end
+  end
   log_action("Removed " .. CACHEDIR .. ".")
   common.rmrf(CACHEDIR)
 end
@@ -1355,11 +1364,11 @@ local function run_command(ARGS)
   elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "list" then return lpm_repo_list()
+  elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_repo_list()
   elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_install(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "reinstall" then lpm_plugin_reinstall(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "plugin" and ARGS[3] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "plugin" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_plugin_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "plugin" and ARGS[3] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(table.unpack(common.slice(ARGS, 3)))
@@ -1367,7 +1376,7 @@ local function run_command(ARGS)
   elseif ARGS[2] == "reinstall" then lpm_plugin_reinstall(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "describe" then lpm_describe(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "list" then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm_lite_xl_install(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 4)))
@@ -1567,7 +1576,7 @@ Flags have the following effects:
     lite_xl_binary = system.stat(lite_xl_binary).symlink or lite_xl_binary
     local directory = common.dirname(lite_xl_binary)
     local hash = system.hash(lite_xl_binary, "file")
-    local system_lite_xl = common.grep(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)[1]
+    local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
     if not system_lite_xl then 
       if #common.grep(lite_xls, function(e) return e.version == "system" end) > 0 then error("can't create new system lite, please `lpm rm lite-xl system`, or resolve otherwise") end
       system_lite_xl = LiteXL.new(nil, { path = directory, mod_version = 3, version = "system", tags = { "system", "local" } })
