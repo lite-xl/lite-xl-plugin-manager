@@ -223,12 +223,12 @@ static int lpm_stat(lua_State *L) {
   int err = lstat(path, &s);
   char *abs_path = realpath(path, NULL);
 #endif
-  if (err || !res) {
+  if (err || !abs_path) {
     lua_pushnil(L);
     lua_pushstring(L, strerror(errno));
     return 2;
   }
-  lua_pushstring(L, abs_path) lua_setfield(L, -2, "abs_path");
+  lua_pushstring(L, abs_path); lua_setfield(L, -2, "abs_path");
   lua_pushvalue(L, 1); lua_setfield(L, -2, "path");
 
 #if __linux__
