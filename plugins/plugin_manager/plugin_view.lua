@@ -9,7 +9,6 @@ local View = require "core.view"
 local keymap = require "core.keymap"
 local RootView = require "core.rootview"
 local ContextMenu = require "core.contextmenu"
-local PluginManager = require "plugins.plugin_manager"
 
 local PluginView = View:extend()
 
@@ -40,7 +39,8 @@ function PluginView:new()
   self.selected_plugin = nil
   self.selected_plugin_idx = nil
   self.initialized = false
-  PluginManager.initialized:done(function()
+  self.plugin_manager = require "plugins.plugin_manager"
+  self.plugin_manager:refresh():done(function()
     self.initialized = true
     self:refresh()
   end)
@@ -112,7 +112,7 @@ end
 
 
 function PluginView:get_plugins()
-  return self.show_incompatible_plugins and PluginManager.plugins or PluginManager.valid_plugins
+  return self.show_incompatible_plugins and self.plugin_manager.plugins or self.plugin_manager.valid_plugins
 end
 
 
@@ -131,7 +131,10 @@ end
 
 function PluginView:draw()
   self:draw_background(style.background)
-  if not self.initialized then return end
+  if not self.initialized then 
+    common.draw_text(style.big_font, style.dim, "Loading...", "center", self.position.x, self.position.y, self.size.x, self.size.y)
+    return 
+  end
   
   local th = style.font:get_height()
   local lh = th + style.padding.y
@@ -154,7 +157,7 @@ function PluginView:draw()
       end
       x = x + style.padding.x
       for j, v in ipairs({ get_plugin_text(plugin) }) do
-        local color = plugin.status == "installed" and style.good or style.text
+        local color = (plugin.status == "installed" or plugin.status == "orphan") and style.good or (plugin.status == "core" and style.warn or style.text)
         if self.loading then color = mul(color, style.dim) end
         common.draw_text(style.font, color, v, "left", x, y, self.widths[j], lh)
         x = x + self.widths[j] + style.padding.x
@@ -168,7 +171,7 @@ end
 
 function PluginView:install(plugin)
   self.loading = true
-  PluginManager:install(plugin):done(function()
+  self.plugin_manager:install(plugin):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -176,21 +179,35 @@ end
 
 function PluginView:uninstall(plugin)
   self.loading = true
-  PluginManager:uninstall(plugin):done(function()
+  self.plugin_manager:uninstall(plugin):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
 end
 
 
-command.add(nil, {
-  ["plugin-manager:show"] = function()
-    local node = core.root_view:get_active_node_default()
-    node:add_view(PluginView())
-  end
-})
+function PluginView:reinstall(plugin)
+  self.loading = true
+  self.plugin_manager:reinstall(plugin):done(function()
+    self.loading = false
+    self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
+  end)
+end
 
 command.add(PluginView, {
+  ["plugin-manager:select"] = function(x, y) 
+    plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx 
+  end,
+  ["plugin-manager:select-prev"] = function()
+    local plugins = plugin_view:get_plugins()
+    if plugin_view.selected_plugin_idx > 1 then plugin_view.selected_plugin_idx = plugin_view.selected_plugin_idx - 1 end
+    plugin_view.selected_plugin = plugins[plugin_view.selected_plugin_idx]
+  end,
+  ["plugin-manager:select-next"] = function()
+    local plugins = plugin_view:get_plugins()
+    if plugin_view.selected_plugin_idx < #plugins then plugin_view.selected_plugin_idx = plugin_view.selected_plugin_idx + 1 end
+    plugin_view.selected_plugin = plugins[plugin_view.selected_plugin_idx]
+  end,
   ["plugin-manager:select"] = function(x, y) 
     plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx 
   end,
@@ -206,17 +223,18 @@ end, {
   ["plugin-manager:install-hovered"] = function() plugin_view:install(plugin_view.hovered_plugin) end
 })
 command.add(function()
-  return core.active_view and core.active_view:is(PluginView) and plugin_view.selected_plugin and plugin_view.selected_plugin.status == "installed"
+  return core.active_view and core.active_view:is(PluginView) and plugin_view.selected_plugin and (plugin_view.selected_plugin.status == "installed" or plugin_view.selected_plugin.status == "orphan")
 end, {
   ["plugin-manager:uninstall-selected"] = function() plugin_view:uninstall(plugin_view.selected_plugin) end
 })
 command.add(function()
-  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and plugin_view.hovered_plugin.status == "installed"
+  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and (plugin_view.hovered_plugin.status == "installed" or plugin_view.hovered_plugin.status == "orphan")
 end, {
-  ["plugin-manager:uninstall-hovered"] = function() plugin_view:uninstall(plugin_view.hovered_plugin) end
+  ["plugin-manager:uninstall-hovered"] = function() plugin_view:uninstall(plugin_view.hovered_plugin) end,
+  ["plugin-manager:reinstall-hovered"] = function() plugin_view:reinstall(plugin_view.hovered_plugin) end
 })
 command.add(function()
-  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and plugin_view.hovered_plugin.status == "installed"
+  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and (plugin_view.hovered_plugin.status == "installed" or plugin_view.hovered_plugin.status == "core" or plugin_view.hovered_plugin.status == "orphan")
 end, {
   ["plugin-manager:view-source-hovered"] = function() 
     local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
@@ -237,7 +255,8 @@ keymap.add {
   ["up"]          = "plugin-manager:select-prev",
   ["down"]        = "plugin-manager:select-next",
   ["lclick"]      = "plugin-manager:select",
-  ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
+  ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
+  ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
 }
 
 

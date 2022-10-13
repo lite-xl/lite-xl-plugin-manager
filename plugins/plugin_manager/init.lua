@@ -63,6 +63,8 @@ function Promise:resolve(result) self.result = result self.success = true for i,
 function Promise:reject(result) self.result = result self.success = false for i,v in ipairs(self._fail) do v(result) end return self end
 function Promise:forward(promise) self:done(function(data) promise:resolve(data) end) self:fail(function(data) promise:reject(data) end) return self end
 
+local function join(joiner, t) local s = "" for i,v in ipairs(t) do if i > 1 then s = s .. joiner end s = s .. v end return s end
+
 local running_processes = {}
 
 local function run(cmd)
@@ -100,7 +102,7 @@ local function run(cmd)
                 v[2]:resolve(v[3])
               else
                 local err = v[1]:read_stderr(2048)
-                core.error("error running lpm: " .. (err or "?"))
+                core.error("error running " .. join(" ", cmd) .. ": " .. (err or "?"))
                 v[2]:reject(v[3])
               end
               break
@@ -153,31 +155,22 @@ function PluginManager:get_plugins()
   return prom
 end
 
-
-function PluginManager:install(plugin)
+local function run_stateful_plugin_command(plugin_manager, cmd, arg)
   local promise = Promise.new()
-  run({ "plugin", "install", plugin.name .. (plugin.version and (":" .. plugin.version) or "") }):done(function(result)
+  run({ "plugin", cmd, arg }):done(function(result)
     if config.plugins.plugin_manager.restart_on_change then
       command.perform("core:restart")
     else
-      self:refresh():forward(promise)
+      plugin_manager:refresh():forward(promise)
     end
   end)
   return promise
 end
 
 
-function PluginManager:uninstall(plugin)
-  local promise = Promise.new()
-  run({ "plugin", "uninstall", plugin.name }):done(function(result)
-    if config.plugins.plugin_manager.restart_on_change then
-      command.perform("core:restart")
-    else
-      self:refresh():forward(promise)
-    end
-  end)
-  return promise
-end
+function PluginManager:install(plugin) return run_stateful_plugin_command(self, "install", plugin.name .. (plugin.version and (":" .. plugin.version) or "")) end
+function PluginManager:uninstall(plugin) return run_stateful_plugin_command(self, "uninstall", plugin.name) end
+function PluginManager:reinstall(plugin) return run_stateful_plugin_command(self, "reinstall", plugin.name) end
 
 
 function PluginManager:get_plugin(name_and_version)
@@ -201,6 +194,9 @@ function PluginManager:get_plugin(name_and_version)
   end)
   return promise
 end
+
+PluginManager.promise = Promise
+PluginManager.view = require "plugins.plugin_manager.plugin_view"
 
 command.add(nil, {
   ["plugin-manager:install"] = function() 
@@ -274,14 +270,10 @@ command.add(nil, {
     )
   end,
   ["plugin-manager:refresh"] = function() PluginManager:refresh():done(function() core.log("Successfully refreshed plugin listing.") end) end,
+  ["plugin-manager:show"] = function()
+    local node = core.root_view:get_active_node_default()
+    node:add_view(PluginManager.view(PluginManager))
+  end
 })
-
-PluginManager.promise = Promise
-PluginManager.initialized = Promise.new()
-PluginManager:refresh():done(function()
-  PluginManager.initialized:resolve()
-  PluginManager.view = require "plugins.plugin_manager.plugin_view"
-end)
-
 
 return PluginManager
