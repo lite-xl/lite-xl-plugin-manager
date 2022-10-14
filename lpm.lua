@@ -353,6 +353,10 @@ function json.decode(str)
 end
 
 -- End JSON library.
+local function is_commit_hash(hash)
+  return #hash == 40 and not hash:find("[^a-z0-9]")
+end
+
 
 local common = {}
 function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
@@ -421,6 +425,13 @@ function common.rename(src, dst)
   local _, err = os.rename(src, dst)
   if err then error("can't rename file " .. src ..  " to " .. dst .. ": " .. err) end
 end
+function common.reset(path, ref, type)
+  if is_commit_hash(ref) then
+    system.reset(path, ref, type)
+  else
+    if not pcall(system.reset, path, "refs/tags/" .. ref, type) then system.reset(path, "refs/remotes/origin/" .. ref, type) end
+  end
+end
 
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, lite_xls, system_bottle
 
@@ -481,10 +492,6 @@ local function match_version(version, pattern)
   return version == pattern
 end
 
-
-local function is_commit_hash(hash)
-  return #hash == 40 and not hash:find("[^a-z0-9]")
-end
 
 
 function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
@@ -586,7 +593,7 @@ function Plugin:install(bottle, installing)
       common.mkdirp(temporary_install_path)
       local _, _, url, branch = self.remote:find("^(.*):(.*)$")
       system.init(temporary_install_path, url)
-      system.reset(temporary_install_path, branch)
+      common.reset(temporary_install_path, branch)
     else
       local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
@@ -713,7 +720,7 @@ function Repository:parse_manifest(already_pulling)
         table.insert(self.lite_xls, LiteXL.new(self, metadata))
       end
     end
-    self.remotes = common.map(self.manifest["remotes"] or {}, function(r) return Repository.url(remote) end)
+    self.remotes = common.map(self.manifest["remotes"] or {}, function(r) return Repository.url(r) end)
   end
   return self.manifest, self.remotes
 end
@@ -791,17 +798,17 @@ function Repository:add(pull_remotes)
   else
     local path = self.local_path .. PATHSEP .. (self.commit or self.branch)
     common.mkdirp(path)
-    log_action("Retrieving " .. self.remote .. ":master/main...")
+    log_action("Retrieving " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
     system.init(path, self.remote)
     system.fetch(path)
-    system.reset(path, self.commit or ("refs/remotes/origin/" .. self.branch), "hard")
+    common.reset(path, self.commit or self.branch, "hard")
     log_action("Retrieved " .. self:url() .. "...")
     self.manifest = nil
   end
   local manifest, remotes = self:parse_manifest()
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do 
-      if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
+      if not common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
         remote:add(pull_remotes == "recursive" and "recursive" or false)
         table.insert(repositories, remote)
       end
@@ -816,7 +823,7 @@ function Repository:update(pull_remotes)
   if self.branch then
     local path = self.local_path .. PATHSEP .. self.branch
     system.fetch(path)
-    system.reset(path, "refs/remotes/origin/" .. self.branch, "hard")
+    common.reset(path, self.branch, "hard")
     log_action("Updated " .. self:url())
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
@@ -881,7 +888,7 @@ function LiteXL:install()
   else
     if self.remote then
       system.init(self.local_path, self.remote)
-      system.reset(self.local_path, self.commit or self.branch)
+      common.reset(self.local_path, self.commit or self.branch)
     end
     for i,file in ipairs(self.files or {}) do
       if file.arch and file.arch == ARCH then
@@ -1342,8 +1349,9 @@ local function error_handler(err)
 end
 
 local function run_command(ARGS)
-  if not ARGS[2]:find("%S") then return end
-  if ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
+  if not ARGS[2]:find("%S") then return
+  elseif ARGS[2] == "init" then return
+  elseif ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
@@ -1408,6 +1416,9 @@ but others can be added, and this base one can be removed.
 
 It has the following commands:
 
+  lpm init                                 Implicitly called before all commands
+                                           if necessary, but can be called
+                                           independently to save time later.
   lpm repo list                            List all extant repos.
   lpm [repo] add <repository remote>       Add a source repository.
     [...<repository remote>] 

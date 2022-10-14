@@ -287,9 +287,7 @@ static git_repository* luaL_checkgitrepo(lua_State* L, int index) {
 static git_commit* git_retrieve_commit(git_repository* repository, const char* commit_name) {
   git_oid commit_id;
   git_commit* commit;
-  if (git_get_id(&commit_id, repository, commit_name))
-    return NULL;
-  if (git_commit_lookup(&commit, repository, &commit_id))
+  if (git_get_id(&commit_id, repository, commit_name) || git_commit_lookup(&commit, repository, &commit_id))
     return NULL;
   return commit;
 }
