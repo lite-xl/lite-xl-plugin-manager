@@ -529,8 +529,8 @@ static const luaL_Reg system_lib[] = {
 #endif
 
 
-extern const char lpm_lua[];
-extern unsigned int lpm_lua_len;
+extern const char src_lpm_lua[];
+extern unsigned int src_lpm_lua_len;
 int main(int argc, char* argv[]) {
   curl = curl_easy_init();
   if (!curl)
@@ -560,9 +560,9 @@ int main(int argc, char* argv[]) {
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
   #if LPM_LIVE
-  if (luaL_loadfile(L, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
+  if (luaL_loadfile(L, "src/lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #else
-  if (luaL_loadbuffer(L, lpm_lua, lpm_lua_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
+  if (luaL_loadbuffer(L, src_lpm_lua, src_lpm_lua_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #endif
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
