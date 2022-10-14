@@ -5,7 +5,7 @@
 : ${BIN=lpm}
 : ${JOBS=4}
 
-SRCS="*.c"
+SRCS="src/*.c"
 LDFLAGS="$LDFLAGS -lm -pthread -static-libgcc"
 
 [[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/openssl/build lib/curl/build lib/libarchive/build-tmp lib/liblzma/build lib/prefix $BIN *.exe && exit 0
@@ -29,7 +29,7 @@ if [[ "$@" != *"-lcurl"* ]]; then
   [ ! -e "lib/curl/build" ] && cd lib/curl && mkdir build && cd build && cmake .. -G="Unix Makefiles" $CURL_CONFIGURE -DCURL_USE_LIBPSL=OFF -DCURL_DISABLE_LDAPS=ON -DUSE_OPENSSL=ON -DCURL_DISABLE_LDAP=ON -DCMAKE_INSTALL_PREFIX=`pwd`/../../prefix -DUSE_LIBIDN2=OFF -DENABLE_UNICODE=OFF -DBUILD_CURL_EXE=OFF -DCURL_USE_LIBSSH2=OFF -DOPENSSL_ROOT_DIR=`pwd`/../../prefix -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_LIBDIR=lib && $MAKE -j $JOBS && $MAKE install && cd ../../../
   LDFLAGS="-Llib/curl/build -Llib/prefix/lib -l:libcurl.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include -DCURL_STATICLIB"
 fi
-if [[ "$@" != *"-lzma"* ]]; then
+if [[ "$@" != *"-llzma"* ]]; then
   [ ! -e "lib/liblzma/build" ] && cd lib/liblzma && mkdir build && cd build && ../configure $LZMA_CONFIGURE --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
   LDFLAGS="-Llib/liblzma/build -Llib/prefix/lib -l:liblzma.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include"
 fi
@@ -41,7 +41,7 @@ fi
 [[ "$@" != *"-llua"* ]] && CFLAGS="$CFLAGS -Ilib/lua -DMAKE_LIB=1" && SRCS="$SRCS lib/lua/onelua.c"
 
 # Build the pre-packaged lua file into the executbale.
-xxd -i lpm.lua > lpm.lua.c
+xxd -i src/lpm.lua > src/lpm.lua.c
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && LDFLAGS=" $LDFLAGS -ldl -pthread"
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && LDFLAGS="$LDFLAGS -lbcrypt -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4"

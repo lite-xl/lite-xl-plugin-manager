@@ -320,7 +320,7 @@ static int lpm_init(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   const char* url = luaL_checkstring(L, 2);
   git_repository* repository;
-  if (git_repository_init(&repository, path, 0) != 0)
+  if (git_repository_init(&repository, path, 0))
     return luaL_error(L, "git init error: %s", git_error_last_string());
   git_remote* remote;
   if (git_remote_create(&remote, repository, "origin", url)) {
