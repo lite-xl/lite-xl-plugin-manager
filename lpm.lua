@@ -769,7 +769,7 @@ function Repository:generate_manifest()
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ plugins = plugins }))
 end
 
-function Repository:add()
+function Repository:add(pull_remotes)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
   if not self.branch and not self.commit then 
     local path = self.local_path .. PATHSEP .. "master"
@@ -799,10 +799,10 @@ function Repository:add()
     self.manifest = nil
   end
   local manifest, remotes = self:parse_manifest()
-  if AUTO_PULL_REMOTES then -- any remotes we don't have in our listing, call add, and add into the list
+  if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do 
       if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
-        remote:add() 
+        remote:add(pull_remotes == "recursive" and "recursive" or false)
         table.insert(repositories, remote)
       end
     end
@@ -811,7 +811,7 @@ function Repository:add()
 end
 
 
-function Repository:update()
+function Repository:update(pull_remotes)
   local manifest, remotes = self:parse_manifest()
   if self.branch then
     local path = self.local_path .. PATHSEP .. self.branch
@@ -821,10 +821,10 @@ function Repository:update()
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
   end
-  if AUTO_PULL_REMOTES then -- any remotes we don't have in our listing, call add, and add into the list
+  if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do 
       if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
-        remote:add() 
+        remote:add(pull_remotes == "recursive" and "recursive" or false) 
         table.insert(repositories, remote)
       end
     end
@@ -1010,12 +1010,11 @@ end
 
 local DEFAULT_REPOS
 local function lpm_repo_init()
-  DEFAULT_REPOS = { Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:master"), Repository.url("https://github.com/lite-xl/lite-xl-plugins.git:2.1") }
+  DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
   if not system.stat(CACHEDIR .. PATHSEP .. "repos") then
     for i, repository in ipairs(DEFAULT_REPOS) do
       if not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
-        common.mkdirp(repository.local_path)
-        table.insert(repositories, repository:add())
+        table.insert(repositories, repository:add(true))
       end
     end
   end
@@ -1028,7 +1027,7 @@ local function lpm_repo_add(...)
     if repo then -- if we're alreayd a repo, put this at the head of the resolution list
       table.remove(repositories, idx)
     else
-      repo = Repository.url(url):add()
+      repo = Repository.url(url):add(AUTO_PULL_REMOTES and "recursive" or false)
     end
     table.insert(repositories, 1, repo)
     repo:update()
@@ -1053,7 +1052,7 @@ local function lpm_repo_update(...)
     local repo = url and get_repository(url)
     for i,v in ipairs(repositories) do 
       if not repo or v == repo then 
-        v:update() 
+        v:update(AUTO_PULL_REMOTES and "recursive" or false) 
       end 
     end
   end
@@ -1285,15 +1284,15 @@ local function lpm_plugin_upgrade()
 end
 
 local function lpm_purge()
-  local path = common.path("lite-xl")
-  if path then
-    local lite_xl = get_lite_xl("system")
-    if lite_xl then
-      os.remove(path)
-      system.symlink(lite_xl:get_binary_path(), target)
-      log_action("Reset lite-xl symlink to system.")
-    end
-  end
+  -- local path = common.path("lite-xl")
+  -- if path then
+  --   local lite_xl = get_lite_xl("system")
+  --   if lite_xl then
+  --     os.remove(path)
+  --     system.symlink(lite_xl:get_binary_path(), target)
+  --     log_action("Reset lite-xl symlink to system.")
+  --   end
+  -- end
   log_action("Removed " .. CACHEDIR .. ".")
   common.rmrf(CACHEDIR)
 end
@@ -1501,6 +1500,7 @@ Flags have the following effects:
   CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   TMPDIR = ARGS["tmpdir"] or CACHEDIR .. "/tmp"
 
+  repositories = {}
   if ARGS[2] == "purge" then return lpm_purge() end
   if ARGS["ssl_certs"] then 
     local stat = system.stat(ARGS["ssl_certs"])
@@ -1532,7 +1532,6 @@ Flags have the following effects:
 
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
-  repositories = {}
   lpm_repo_init()
   repositories = {}
   for i, remote_hash in ipairs(system.ls(CACHEDIR .. PATHSEP .. "repos")) do
