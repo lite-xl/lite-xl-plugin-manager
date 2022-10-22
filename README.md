@@ -11,8 +11,8 @@ Releases forthcoming, should be available on Windows, Mac, Linux and FreeBSD.
 Also contains a plugin_manager.lua plugin to integrate the binary with lite in
 the form of an easy-to-use GUI.
 
-By default, `lpm` will automatically consume the specification in the `latest`
-branch of this repository.
+By default in releases, `lpm` will automatically consume the specification 
+in the `latest` branch of this repository.
 
 ## Specification
 
@@ -50,13 +50,13 @@ I'm only ensuring that everything can be linked statically as much as possible.
 As seen with the `lib` folder, the following external libraries are used to 
 build `lpm`:
 
-* lua (core program written in)
-* OpenSSL (https/SSL support)
-* libgit2 (accessing git repositories directly)
-* liblzma (supporting library for archives)
-* libz (supporting library for everything)
-* libcurl (for fetching .tar.gz and .zip files)
-* libarchive (for unpacking .tar.gz and .zip files)
+* `lua` (core program written in)
+* `OpenSSL` (https/SSL support)
+* `libgit2` (accessing git repositories directly)
+* `liblzma` (supporting library for archives)
+* `libz` (supporting library for everything)
+* `libcurl` (for fetching .tar.gz and .zip files)
+* `libarchive` (for unpacking .tar.gz and .zip files)
 
 ## Use in CI
 

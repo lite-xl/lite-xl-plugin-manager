@@ -341,6 +341,7 @@ static int lpm_fetch(lua_State* L) {
     return luaL_error(L, "git remote fetch error: %s", git_error_last_string());
   }
   git_fetch_options fetch_opts = GIT_FETCH_OPTIONS_INIT;
+  fetch_opts.download_tags = GIT_REMOTE_DOWNLOAD_TAGS_ALL;
   if (git_remote_fetch(remote, NULL, &fetch_opts, NULL)) {
     git_remote_free(remote);
     git_repository_free(repository);

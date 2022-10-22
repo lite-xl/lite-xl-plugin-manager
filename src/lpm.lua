@@ -1574,7 +1574,8 @@ Flags have the following effects:
     local hash = system.hash(lite_xl_binary, "file")
     local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
     if not system_lite_xl then 
-      if #common.grep(lite_xls, function(e) return e.version == "system" end) > 0 then error("can't create new system lite, please `lpm rm lite-xl system`, or resolve otherwise") end
+      system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
+      if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.local_path .. " exist? was it moved?); run `lpm purge`, or resolve otherwise") end
       system_lite_xl = LiteXL.new(nil, { path = directory, mod_version = 3, version = "system", tags = { "system", "local" } })
       table.insert(lite_xls, system_lite_xl)
       lpm_lite_xl_save()
