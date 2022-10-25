@@ -509,6 +509,7 @@ function Plugin.new(repository, metadata)
     dependencies = {},
     local_path = repository and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")),
   }, metadata), Plugin)
+  self.type = type
   -- Directory.
   self.organization = metadata.organization or (((self.files and #self.files > 0) or self.remote or (not self.path and not self.url)) and "complex" or "singleton")
   return self
@@ -1576,13 +1577,15 @@ Flags have the following effects:
     if not system_lite_xl then 
       system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
       if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.local_path .. " exist? was it moved?); run `lpm purge`, or resolve otherwise") end
-      system_lite_xl = LiteXL.new(nil, { path = directory, mod_version = 3, version = "system", tags = { "system", "local" } })
+      system_lite_xl = LiteXL.new(nil, { path = directory, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
       table.insert(lite_xls, system_lite_xl)
       lpm_lite_xl_save()
     else
       table.insert(system_lite_xl.tags, "system")
     end
     system_bottle = Bottle.new(system_lite_xl, nil, true) 
+  else
+    system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } }), nil, true)
   end
   if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
   
