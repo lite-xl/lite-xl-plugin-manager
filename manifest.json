@@ -38,6 +38,6 @@
   ],
   "remotes": [
     "https://github.com/lite-xl/lite-xl-plugins.git:2.1",
-    "https://github.com/adamharrison/lite-xl-simplified.git:latest"
+    "https://github.com/adamharrison/lite-xl-simplified.git:master"
   ]
 }
