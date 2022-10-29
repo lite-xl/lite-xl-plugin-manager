@@ -73,6 +73,8 @@ local function run(cmd)
   table.insert(cmd, "--mod-version=" .. MOD_VERSION)
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--userdir=" .. USERDIR)
+  table.insert(cmd, "--datadir=" .. DATADIR)
+  table.insert(cmd, "--binary=" .. EXEFILE)
   table.insert(cmd, "--assume-yes")
   if config.plugins.plugin_manager.ssl_certs then table.insert(cmd, "--ssl_certs") table.insert(cmd, config.plugins.plugin_manager.ssl_certs) end 
   if config.plugins.plugin_manager.force then table.insert(cmd, "--force") end
@@ -131,12 +133,15 @@ function PluginManager:refresh()
     for i, plugin in ipairs(self.plugins) do
       if plugin.status ~= "incompatible" then
         table.insert(self.valid_plugins, plugin)
+        if plugin.name == "plugin_manager" and plugin.status == "installed" then
+          plugin.status = "special"
+        end
       end
     end
     self.last_refresh = os.time()
     prom:resolve(plugins)
     run({ "repo", "list" }):done(function(repositories)
-      self.repositories = repositories
+      self.repositories = json.decode(repositories)["repositories"]
     end)
   end)
   return prom 
@@ -200,6 +205,7 @@ PluginManager.view = require "plugins.plugin_manager.plugin_view"
 
 command.add(nil, {
   ["plugin-manager:install"] = function() 
+    PluginManager:get_plugins()
     core.command_view:enter("Enter plugin name", 
       function(name)  
         PluginManager:get_plugin(name):done(function(plugin)
@@ -215,7 +221,7 @@ command.add(nil, {
         local items = {}
         if not PluginManager.plugins then return end
         for i, plugin in ipairs(PluginManager.plugins) do
-          if not plugin.mod_version or tostring(plugin.mod_version) == tostring(MOD_VERSION) then
+          if not plugin.mod_version or tostring(plugin.mod_version) == tostring(MOD_VERSION) and plugin.status == "available" then
             table.insert(items, plugin.name .. ":" .. plugin.version)
           end
         end
@@ -224,6 +230,7 @@ command.add(nil, {
     )
   end,
   ["plugin-manager:uninstall"] = function() 
+    PluginManager:get_plugins()
     core.command_view:enter("Enter plugin name",
       function(name)  
         PluginManager:get_plugin(name):done(function(plugin)
@@ -253,19 +260,25 @@ command.add(nil, {
         PluginManager:add(url):done(function()
           core.log("Successfully added repository " .. url .. ".")
         end)
-      end, 
-      function(text)  return get_suggestions(text) end
+      end
     )
   end,
   ["plugin-manager:remove-repository"] = function()
+    PluginManager:get_plugins()
     core.command_view:enter("Enter repository url",
       function(url)  
-        PluginManager:add(url):done(function()
+        PluginManager:remove(url):done(function()
           core.log("Successfully removed repository " .. url .. ".")
         end)
       end, 
       function(text)  
-        return get_suggestions(text) 
+        local items = {}
+        if PluginManager.repositories then
+          for i,v in ipairs(PluginManager.repositories) do
+            table.insert(items, v.remote .. ":" .. (v.commit or v.branch))
+          end
+        end
+        return common.fuzzy_match(items, text) 
       end
     )
   end,

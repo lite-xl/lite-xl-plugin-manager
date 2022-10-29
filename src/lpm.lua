@@ -384,6 +384,7 @@ end
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
 function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) return system.stat(e) end) end
+function common.normalize_path(path) if not path or not path:find("^~") then return path end return os.getenv("HOME") .. path:sub(2) end
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
   if not info then return end
@@ -433,7 +434,7 @@ function common.reset(path, ref, type)
   end
 end
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, repositories, lite_xls, system_bottle
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, repositories, lite_xls, system_bottle
 
 local Plugin, Repository, LiteXL, Bottle = {}, {}, {}, {}
 
@@ -516,8 +517,8 @@ function Plugin.new(repository, metadata)
 end
 
 function Plugin:get_install_path(bottle)
-  local folder = self.type == "library" and "libraries" or "plugins"
-  local path = (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
+  local folder = self.type == "library" and "libraries" or "plugins" 
+  local path = ((self:is_core(bottle) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
   if self.organization == "singleton" then path = path .. ".lua" end
   return path
 end
@@ -525,6 +526,10 @@ end
 function Plugin:is_core(bottle) return self.type == "core" end
 function Plugin:is_installed(bottle) return self:is_core(bottle) or (bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle))) end
 function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, dependencies[plugin.name]) end
+
+function Plugin:get_path(bottle)
+  return self:is_installed(bottle) and self:get_install_path(bottle) or self.local_path 
+end
 
 function Plugin:get_compatibilities(bottle)
   local compatible_plugins, incompatible_plugins = {}, {}
@@ -850,23 +855,18 @@ end
 function LiteXL.__index(t, k) return LiteXL[k] end
 function LiteXL.new(repository, metadata)
   if not metadata.version then error("lite-xl entry requires a version") end
-  local self = setmetatable({
+  local self = setmetatable(common.merge({
     repository = repository,
-    version = metadata.version,
-    remote = metadata.remote,
-    url = metadata.url,
-    tags = metadata.tags or {},
-    mod_version = metadata.mod_version,
-    path = metadata.path,
-    files = metadata.files or {}
-  }, LiteXL)
+    tags = {},
+    files = {}
+  }, metadata), LiteXL)
   self.hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version .. common.join("", common.map(self.files, function(f) return f.checksum end)))
   self.local_path = self:is_local() and self.path or (CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. self.version .. PATHSEP .. self.hash)
+  self.binary_path = self.binary_path or (self.local_path .. PATHSEP .. "lite-xl")
+  self.datadir_path = self.datadir_path or (self.local_path .. PATHSEP .. "data")
   return self
 end
 
-function LiteXL:get_binary_path() return self.local_path .. PATHSEP .. "lite-xl" end
-function LiteXL:get_data_directory() return self.local_path .. PATHSEP .. "data" end
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
 function LiteXL:is_compatible(plugin) return compare_version(self.mod_version, plugin.mod_version) == 0 end
@@ -886,7 +886,7 @@ function LiteXL:install()
     system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
     common.copy(datadir, self.local_path .. PATHSEP .. "data")
   elseif self.path and not self.repository then -- local repository
-    system.symlink(self:get_binary_path(), self.path .. PATHSEP .. "lite_xl")
+    system.symlink(self.binary_path, self.path .. PATHSEP .. "lite_xl")
   else
     if self.remote then
       system.init(self.local_path, self.remote)
@@ -971,17 +971,19 @@ function Bottle:all_plugins()
   local t, hash = get_repository_plugins()
   local plugin_paths = {
     (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. "plugins",
-    self.lite_xl:get_data_directory() .. PATHSEP .. "plugins"
+    self.lite_xl.datadir_path .. PATHSEP .. "plugins"
   }
   for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
     for k, v in ipairs(common.grep(system.ls(plugin_path), function(e) return i == 2 or not hash[e:gsub("%.lua$", "")] end)) do
+      local name = v:gsub("%.lua$", "")
       table.insert(t, Plugin.new(nil, {
-        name = v:gsub("%.lua$", ""),
+        name = name,
         type = i == 2 and "core",
         organization = (v:find("%.lua$") and "singleton" or "complex"),
         mod_version = self.lite_xl.mod_version,
         path = "plugins/" .. v,
-        version = "1.0"
+        version = "1.0",
+        description = (hash[name] and hash[name].description or nil)
       }))
     end
   end
@@ -1127,7 +1129,7 @@ local function lpm_lite_xl_switch(version, target)
   if not lite_xl:is_installed() then log_action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
   local stat = system.stat(target)
   if stat and stat.symlink then os.remove(target) end
-  system.symlink(lite_xl:get_binary_path(), target)
+  system.symlink(lite_xl.binary_path, target)
   if not common.path('lite-xl') then 
     os.remove(target)
     error(target .. " is not on your $PATH; please supply a target that can be found on your $PATH, called `lite-xl`.")
@@ -1149,7 +1151,8 @@ local function lpm_lite_xl_list()
       mod_version = lite_xl.mod_version,
       tags = lite_xl.tags,
       is_system = lite_xl:is_system(),
-      status = lite_xl:is_installed() and (lite_xl:is_local() and "local" or "installed") or "available",
+      is_installed = lite_xl:is_installed(),
+      status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
       local_path = lite_xl.local_path
     })
     max_version = math.max(max_version, #lite_xl.version)
@@ -1163,7 +1166,8 @@ local function lpm_lite_xl_list()
         repository = repo:url(),
         tags = lite_xl.tags,
         is_system = lite_xl:is_system(),
-        status = lite_xl:is_installed() and (lite_xl:is_local() and "local" or "installed") or "available",
+        is_installed = lite_xl:is_installed(),
+        status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
         local_path = lite_xl.local_path
       })
       max_version = math.max(max_version, #lite_xl.version)
@@ -1185,7 +1189,7 @@ local function lpm_lite_xl_list()
       print(string.format("%" .. max_version .. "s | %10s | %s", "Version", "Status", "Location"))
       print(string.format("%" .. max_version .."s | %10s | %s", "-------", "---------", "---------------------------"))
       for i, lite_xl in ipairs(result["lite-xl"]) do
-        print(string.format("%" .. max_version .. "s | %10s | %s", (lite_xl.is_system and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.status ~= "available" and lite_xl.local_path or lite_xl.repository)))
+        print(string.format("%" .. max_version .. "s | %10s | %s", (lite_xl.is_system and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.is_installed and lite_xl.local_path or lite_xl.repository)))
       end
     end
   end
@@ -1265,7 +1269,8 @@ local function lpm_plugin_list(name)
       tags = plugin.tags,
       type = plugin.type,
       organization = plugin.organization,
-      repository = repo and repo:url()
+      repository = repo and repo:url(),
+      path = plugin:get_path(system_bottle)
     })
   end
   if JSON then
@@ -1288,6 +1293,7 @@ local function lpm_plugin_list(name)
         print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
         print("Dependencies:  " .. json.encode(plugin.dependencies))
         print("Tags:          " .. common.join(", ", plugin.tags))
+        print("Path:          " .. plugin.path)
       elseif plugin.status ~= "incompatible" then
         print(string.format("%" .. max_name .."s | %10s | %10s | %s", plugin.name, plugin.version, plugin.mod_version, plugin.status))
       end
@@ -1412,7 +1418,7 @@ xpcall(function()
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
     quiet = "flag", version = "string", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ssl_certs = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
-    ["install-optional"] = "flag"
+    ["install-optional"] = "flag", datadir = "string", binary = "string"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -1424,6 +1430,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl_certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
+  [--datadir=directory]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1493,6 +1500,9 @@ Flags have the following effects:
                            If omitted, uses the normal lite-xl logic.
   --cachedir=directory     Sets the directory to store all repositories.
   --tmpdir=directory       During install, sets the staging area.
+  --datadir=directory      Sets the data directory where core plugins are located
+                           for the system lite-xl.
+  --binary=path            Sets the lite-xl binary path for the system lite-xl.
   --verbose                Spits out more information, including intermediate
                            steps to install and whatnot.
   --quiet                  Outputs nothing but explicit responses.
@@ -1519,18 +1529,20 @@ Flags have the following effects:
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
+  DATADIR = common.normalize_path(ARGS["datadir"])
+  BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]
   ARCH = ARGS["arch"] or _G.ARCH
   ASSUME_YES = ARGS["assume-yes"] or FORCE
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION")
   if MOD_VERSION == "any" then MOD_VERSION = nil end
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
-  USERDIR = ARGS["userdir"] or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
+  USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
   AUTO_PULL_REMOTES = ARGS["remotes"]
   if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
-  CACHEDIR = ARGS["cachedir"] or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
-  TMPDIR = ARGS["tmpdir"] or CACHEDIR .. "/tmp"
+  CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
+  TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. "/tmp"
 
   repositories = {}
   if ARGS[2] == "purge" then return lpm_purge() end
@@ -1577,16 +1589,18 @@ Flags have the following effects:
       table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
     end
   end
-  local lite_xl_binary = common.path("lite-xl")
+  local lite_xl_binary = BINARY or common.path("lite-xl")
   if lite_xl_binary then
-    lite_xl_binary = system.stat(lite_xl_binary).symlink or lite_xl_binary
+    local stat = system.stat(lite_xl_binary)
+    if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
+    lite_xl_binary = stat.symlink or lite_xl_binary
     local directory = common.dirname(lite_xl_binary)
     local hash = system.hash(lite_xl_binary, "file")
     local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
     if not system_lite_xl then 
       system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
-      if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.local_path .. " exist? was it moved?); run `lpm purge`, or resolve otherwise") end
-      system_lite_xl = LiteXL.new(nil, { path = directory, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
+      if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.binary_path .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+      system_lite_xl = LiteXL.new(nil, { datadir_path = DATADIR, binary_path = BINARY, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
       table.insert(lite_xls, system_lite_xl)
       lpm_lite_xl_save()
     else

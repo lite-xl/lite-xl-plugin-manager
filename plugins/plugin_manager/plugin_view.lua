@@ -157,7 +157,10 @@ function PluginView:draw()
       end
       x = x + style.padding.x
       for j, v in ipairs({ get_plugin_text(plugin) }) do
-        local color = (plugin.status == "installed" or plugin.status == "orphan") and style.good or (plugin.status == "core" and style.warn or style.text)
+        local color = (plugin.status == "installed" or plugin.status == "orphan") and style.good or
+          (plugin.status == "core" and style.warn or 
+          (plugin.status == "special" and style.modified or style.text)
+        )
         if self.loading then color = mul(color, style.dim) end
         common.draw_text(style.font, color, v, "left", x, y, self.widths[j], lh)
         x = x + self.widths[j] + style.padding.x
@@ -234,12 +237,12 @@ end, {
   ["plugin-manager:reinstall-hovered"] = function() plugin_view:reinstall(plugin_view.hovered_plugin) end
 })
 command.add(function()
-  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and (plugin_view.hovered_plugin.status == "installed" or plugin_view.hovered_plugin.status == "core" or plugin_view.hovered_plugin.status == "orphan")
+  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin
 end, {
   ["plugin-manager:view-source-hovered"] = function() 
     local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
     local opened = false
-    for i, path in ipairs({ USERDIR .. PATHSEP .. directory .. PATHSEP .. plugin_view.hovered_plugin.name .. ".lua", USERDIR .. PATHSEP .. directory .. PATHSEP .. plugin_view.hovered_plugin.name .. PATHSEP .. "init.lua" }) do
+    for i, path in ipairs({ plugin_view.hovered_plugin.path, plugin_view.hovered_plugin.path .. PATHSEP .. "init.lua" }) do
       local stat = system.get_file_info(path)
       if stat and stat.type == "file" then
         core.root_view:open_doc(core.open_doc(path))
