@@ -633,7 +633,7 @@ end
 
 function Plugin:uninstall(bottle)
   local install_path = self:get_install_path(bottle)
-  if self:is_core(bottle) then error("can't uninstall " .. self.name .. " is a core plugin") end
+  if self:is_core(bottle) then error("can't uninstall " .. self.name .. "; is a core plugin") end
   log_action("Uninstalling plugin located at " .. install_path)
   local incompatible_plugins = common.grep(bottle:installed_plugins(), function(p) return p:depends_on(self) end)
   if #incompatible_plugins == 0 or prompt(self.name .. " is depended upon by " .. common.join(", ", common.map(incompatible_plugins, function(p) return p.name end)) .. ". Remove as well?") then
@@ -650,6 +650,7 @@ end
 function Repository.__index(self, idx) return rawget(self, idx) or Repository[idx] end
 function Repository.new(hash)
   if not hash.remote then error("requires a remote") end
+  if not hash.remote:find("^%w+:") and system.stat(hash.remote .. "/.git") then hash.remote = "file://" .. system.stat(hash.remote).abs_path end
   if not hash.remote:find("^https?:") and not hash.remote:find("^file:") then error("only repositories with http and file transports are supported (" .. hash.remote .. ")") end
   local self = setmetatable({ 
     commit = hash.commit,
@@ -957,16 +958,23 @@ function Bottle:run(args)
   os.execute(self.local_path .. PATHSEP .. "lite-xl", table.unpack(args))
 end
 
+local function get_repository_plugins()
+  local t, hash = { }, { }
+  for i,p in ipairs(common.flat_map(repositories, function(r) return r.plugins end)) do
+    local id = p.name .. ":" .. p.version
+    if not hash[id] then table.insert(t, p) hash[id] = p hash[p.name] = p end
+  end
+  return t, hash
+end
+
 function Bottle:all_plugins()
-  local t = common.flat_map(repositories, function(r) return r.plugins end)
-  local hash = { }
-  for i, v in ipairs(t) do hash[v.name] = v end
+  local t, hash = get_repository_plugins()
   local plugin_paths = {
     (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. "plugins",
     self.lite_xl:get_data_directory() .. PATHSEP .. "plugins"
   }
   for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
-    for k, v in ipairs(common.grep(system.ls(plugin_path), function(e) return not hash[e:gsub("%.lua$", "")] end)) do
+    for k, v in ipairs(common.grep(system.ls(plugin_path), function(e) return i == 2 or not hash[e:gsub("%.lua$", "")] end)) do
       table.insert(t, Plugin.new(nil, {
         name = v:gsub("%.lua$", ""),
         type = i == 2 and "core",
@@ -1016,6 +1024,13 @@ local function get_repository(url)
 end
 
 
+local function lpm_repo_save()
+  local directory = CACHEDIR .. PATHSEP .. "repos"
+  common.mkdirp(directory)
+  common.write(directory .. PATHSEP .. "list", common.join("", common.map(repositories, function(r) return r:url() .. "\n" end)))
+end
+
+
 local DEFAULT_REPOS
 local function lpm_repo_init()
   DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
@@ -1025,8 +1040,11 @@ local function lpm_repo_init()
         table.insert(repositories, repository:add(true))
       end
     end
+    lpm_repo_save()
   end
 end
+
+
 
 
 local function lpm_repo_add(...)
@@ -1040,6 +1058,7 @@ local function lpm_repo_add(...)
     table.insert(repositories, 1, repo)
     repo:update()
   end
+  lpm_repo_save()
 end
 
 
@@ -1050,6 +1069,7 @@ local function lpm_repo_rm(...)
     table.remove(repositories, idx)
     repo:remove()
   end
+  lpm_repo_save()
 end
 
 
@@ -1102,7 +1122,7 @@ end
 local function lpm_lite_xl_switch(version, target)
   if not version then error("requires a version") end
   target = target or common.path("lite-xl")
-  if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly") end
+  if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly as a second argument") end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
   if not lite_xl:is_installed() then log_action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
   local stat = system.stat(target)
@@ -1229,10 +1249,10 @@ local function lpm_repo_list()
   end
 end
 
-local function lpm_plugin_list() 
+local function lpm_plugin_list(name) 
   local max_name = 0
   local result = { plugins = { } }
-  for j,plugin in ipairs(system_bottle:all_plugins()) do
+  for j,plugin in ipairs(common.grep(system_bottle:all_plugins(), function(p) return not name or p.name:find(name) end)) do
     max_name = math.max(max_name, #plugin.name)
     local repo = plugin.repository
     table.insert(result.plugins, {
@@ -1545,24 +1565,13 @@ Flags have the following effects:
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   lpm_repo_init()
-  repositories = {}
-  for i, remote_hash in ipairs(system.ls(CACHEDIR .. PATHSEP .. "repos")) do
-    local remote
-    for j, commit_or_branch in ipairs(system.ls(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. remote_hash)) do
-      if system.stat(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") then
-        for line in io.lines(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. remote_hash .. PATHSEP  .. commit_or_branch .. PATHSEP .. ".git" .. PATHSEP .."config") do
-          local s,e = line:find("url = ") 
-          if s then remote = line:sub(e+1) break end
-        end
-        if remote then
-          table.insert(repositories, Repository.url(remote .. ":" .. commit_or_branch))
-          repositories[#repositories]:parse_manifest()
-        end
-      end
+  repositories, lite_xls = {}, {}
+  if system.stat(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") then
+    for url in io.lines(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") do
+      table.insert(repositories, Repository.url(url))
+      repositories[#repositories]:parse_manifest()
     end
   end
-
-  lite_xls = {}
   if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
     for i, lite_xl in ipairs(json.decode(io.open(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json", "rb"):read("*all"))) do
       table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
