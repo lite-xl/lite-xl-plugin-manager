@@ -33,7 +33,7 @@ function PluginView:new()
   PluginView.super.new(self)
   self.scrollable = true
   self.show_incompatible_plugins = false
-  self.plugin_table_columns = { "Name", "Version", "Modversion", "Status", "Tags", "Description" }
+  self.plugin_table_columns = { "Name", "Version", "Modversion", "Status", "Tags", "Author", "Description" }
   self.hovered_plugin = nil
   self.hovered_plugin_idx = nil
   self.selected_plugin = nil
@@ -48,7 +48,7 @@ function PluginView:new()
 end
 
 local function get_plugin_text(plugin)
-  return plugin.name, plugin.version, plugin.mod_version, plugin.status, join(", ", plugin.tags), plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
+  return plugin.name, plugin.version, plugin.mod_version, plugin.status, join(", ", plugin.tags), plugin.author or "unknown", plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
 end
 
 
@@ -157,7 +157,7 @@ function PluginView:draw()
       end
       x = x + style.padding.x
       for j, v in ipairs({ get_plugin_text(plugin) }) do
-        local color = (plugin.status == "installed" or plugin.status == "orphan") and style.good or
+        local color = (plugin.status == "installed" or plugin.status == "bundled" or plugin.status == "orphan") and style.good or
           (plugin.status == "core" and style.warn or 
           (plugin.status == "special" and style.modified or style.text)
         )
@@ -226,12 +226,12 @@ end, {
   ["plugin-manager:install-hovered"] = function() plugin_view:install(plugin_view.hovered_plugin) end
 })
 command.add(function()
-  return core.active_view and core.active_view:is(PluginView) and plugin_view.selected_plugin and (plugin_view.selected_plugin.status == "installed" or plugin_view.selected_plugin.status == "orphan")
+  return core.active_view and core.active_view:is(PluginView) and plugin_view.selected_plugin and (plugin_view.selected_plugin.status == "installed" or plugin_view.selected_plugin.status == "orphan" or plugin_view.selected_plugin.status == "bundled")
 end, {
   ["plugin-manager:uninstall-selected"] = function() plugin_view:uninstall(plugin_view.selected_plugin) end
 })
 command.add(function()
-  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and (plugin_view.hovered_plugin.status == "installed" or plugin_view.hovered_plugin.status == "orphan")
+  return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin and (plugin_view.hovered_plugin.status == "installed" or plugin_view.hovered_plugin.status == "orphan" or plugin_view.hovered_plugin.status == "bundled")
 end, {
   ["plugin-manager:uninstall-hovered"] = function() plugin_view:uninstall(plugin_view.hovered_plugin) end,
   ["plugin-manager:reinstall-hovered"] = function() plugin_view:reinstall(plugin_view.hovered_plugin) end

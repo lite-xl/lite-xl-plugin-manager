@@ -518,12 +518,13 @@ end
 
 function Plugin:get_install_path(bottle)
   local folder = self.type == "library" and "libraries" or "plugins" 
-  local path = ((self:is_core(bottle) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
+  local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
   if self.organization == "singleton" then path = path .. ".lua" end
   return path
 end
 
 function Plugin:is_core(bottle) return self.type == "core" end
+function Plugin:is_bundled(bottle) return self.type == "bundled" end
 function Plugin:is_installed(bottle) return self:is_core(bottle) or (bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle))) end
 function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, dependencies[plugin.name]) end
 
@@ -978,7 +979,7 @@ function Bottle:all_plugins()
       local name = v:gsub("%.lua$", "")
       table.insert(t, Plugin.new(nil, {
         name = name,
-        type = i == 2 and "core",
+        type = i == 2 and (hash[name] and "bundled" or "core"),
         organization = (v:find("%.lua$") and "singleton" or "complex"),
         mod_version = self.lite_xl.mod_version,
         path = "plugins/" .. v,
@@ -1254,17 +1255,18 @@ local function lpm_repo_list()
 end
 
 local function lpm_plugin_list(name) 
-  local max_name = 0
+  local max_name = 4
   local result = { plugins = { } }
   for j,plugin in ipairs(common.grep(system_bottle:all_plugins(), function(p) return not name or p.name:find(name) end)) do
     max_name = math.max(max_name, #plugin.name)
     local repo = plugin.repository
     table.insert(result.plugins, {
       name = plugin.name,
-      status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or (plugin:is_core(system_bottle) and "core" or "orphan"),
+      status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or (plugin:is_bundled(system_bottle) and "bundled" or (plugin:is_core(system_bottle) and "core" or "orphan")),
       version = "" .. plugin.version,
       dependencies = plugin.dependencies,
       description = plugin.description,
+      author = plugin.author or (plugin:is_core(system_bottle) and "lite-xl"),
       mod_version = plugin.mod_version,
       tags = plugin.tags,
       type = plugin.type,
@@ -1275,10 +1277,10 @@ local function lpm_plugin_list(name)
   end
   if JSON then
     io.stdout:write(json.encode(result) .. "\n")
-  else
+  elseif #result.plugins > 0 then
     if not VERBOSE then
       print(string.format("%" .. max_name .."s | %10s | %10s | %s", "Name", "Version", "ModVer", "Status"))
-      print(string.format("%" .. max_name .."s | %10s | %10s | %s", "--------------", "----------", "----------", "-----------"))
+      print(string.format("%" .. max_name .."s | %10s | %10s | %s", string.rep("-", max_name), "-------", "------", "-----------"))
     end
     for i, plugin in ipairs(common.sort(result.plugins, function(a,b) return a.name < b.name end)) do
       if VERBOSE then
@@ -1286,6 +1288,7 @@ local function lpm_plugin_list(name)
         print("Name:          " .. plugin.name)
         print("Version:       " .. plugin.version)
         print("Status:        " .. plugin.status)
+        print("Author:        " .. (plugin.author or ""))
         print("Type:          " .. plugin.type)
         print("Orgnization:   " .. plugin.organization)
         print("Repository:    " .. (plugin.repository or "orphan"))
