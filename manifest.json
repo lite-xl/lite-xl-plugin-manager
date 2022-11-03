@@ -13,12 +13,12 @@
         {
           "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-linux",
           "arch": "x86_64-linux",
-          "checksum": "889b887f36a0c48d3c98d9c7a68a8ffedc8090dfd6ce92722bcddbbd4410c261"
+          "checksum": "SKIP"
         },
         {
           "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-windows.exe",
           "arch": "x86_64-windows",
-          "checksum": "71a064eebbd1eb39c9c01470e58b7fc5816c16e9cdebb296eb4c3df452525276"
+          "checksum": "SKIP"
         }
       ],
       "dependencies": {
