@@ -463,7 +463,7 @@ function common.get(source, target, checksum)
   local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
   if not system.stat(cache_path) then
     system.get(source, cache_path)
-    if system.hash(cache_path, "file") ~= checksum and checksum ~= "SKIP" then fatal_warning("checksum doesn't match for " .. source) end
+    if checksum ~= "SKIP" and system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
   end
   common.copy(cache_path, target)
 end
@@ -616,7 +616,7 @@ function Plugin:install(bottle, installing)
           log_action("Downloading file " .. file.url .. "...")
           common.get(file.url, temporary_path, file.checksum)
           log_action("Downloaded file " .. file.url .. " to " .. path)
-          if system.hash(temporary_path, "file") ~= file.checksum and file.checksum ~= "SKIP" then fatal_warning("checksum doesn't match for " .. path) end
+          if file.checksum ~= "SKIP" and system.hash(temporary_path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
         end
       end
     end
@@ -902,7 +902,7 @@ function LiteXL:install()
         log_action("Downloading file " .. file.url .. "...")
         common.get(file.url, path, file.checksum)
         log_action("Downloaded file " .. file.url .. " to " .. path)
-        if system.hash(path, "file") ~= file.checksum and file.checksum ~= "SKIP" then fatal_warning("checksum doesn't match for " .. path) end
+        if file.checksum ~= "SKIP" and system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
         if archive then 
           log_action("Extracting file " .. basename .. " in " .. self.local_path)
           system.extract(path, self.local_path) 
