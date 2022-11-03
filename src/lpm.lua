@@ -745,7 +745,7 @@ function Repository:generate_manifest()
     for line in io.lines(path .. PATHSEP .. "README.md") do
       local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
       if name then
-        plugin_map[name] = { name = name, description = description, files = {} }
+        plugin_map[name] = { name = name, description = description }
         if path:find("^http") then
           if path:find("%.lua") then
             plugin_map[name].url = path
@@ -762,12 +762,12 @@ function Repository:generate_manifest()
   end
   for i, file in ipairs(system.ls(path .. plugin_dir)) do
     if file:find("%.lua$") then
-      local plugin = { description = nil, files = {}, name = common.basename(file):gsub("%.lua$", ""), dependencies = {}, mod_version = 3, version = "1.0", tags = {}, path = plugin_dir .. file  }
+      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), mod_version = 3, version = "1.0", path = plugin_dir .. file  }
       for line in io.lines(path .. plugin_dir .. file) do
         local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
         if mod_version then plugin.mod_version = mod_version end
         local _, _, required_plugin = line:find("require [\"']plugins.([%w_]+)")
-        if required_plugin then if required_plugin ~= plugin.name then plugin.dependencies[required_plugin] = ">=1.0" end end
+        if required_plugin then if required_plugin ~= plugin.name then if not plugin.dependencies then plugin.dependencies = {} end plugin.dependencies[required_plugin] = ">=1.0" end end
       end
       if plugin_map[plugin.name] then 
         plugin = common.merge(plugin, plugin_map[plugin.name])
@@ -778,7 +778,7 @@ function Repository:generate_manifest()
   end
   for k, v in pairs(plugin_map) do
     if not v.plugin then 
-      table.insert(plugins, common.merge({ dependencies = {}, mod_version = self.branch == "master" and 2 or 3, version = "1.0", tags = {} }, v))
+      table.insert(plugins, common.merge({ mod_version = self.branch == "master" and 2 or 3, version = "1.0" }, v))
     end
   end
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ plugins = plugins }))

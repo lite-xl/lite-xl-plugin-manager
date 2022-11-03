@@ -34,7 +34,7 @@ if [[ "$@" != *"-llzma"* ]]; then
   LDFLAGS="-Llib/liblzma/build -Llib/prefix/lib -l:liblzma.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include"
 fi
 if [[ "$@" != *"-larchive"* ]]; then
-  [ ! -e "lib/libarchive/build-tmp" ] && cd lib/libarchive && mkdir build-tmp && cd build-tmp && cmake .. -G "Unix Makefiles" $ARCHIVE_CONFIGURE -DZLIB_WINAPI_EXITCODE=0 -DENABLE_TEST=OFF -DZLIB_WINAPI_EXITCODE__TRYRUN_OUTPUT="test" -DENABLE_EXPAT=OFF -DENABLE_ACL=OFF -DENABLE_XATTR=OFF -DCMAKE_INSTALL_PREFIX=`pwd`/../../prefix -DBUILD_SHARED_LIBS=OFF -DENABLE_CAT=OFF -DENABLE_CPIO=OFF -DENABLE_BZip2=OFF -DENABLE_OPENSSL=OFF -DENABLE_LIBXML2=OFF -DENABLE_PCREPOSIX=OFF  && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/libarchive/build-tmp" ] && cd lib/libarchive && mkdir build-tmp && cd build-tmp && cmake .. -G "Unix Makefiles" $ARCHIVE_CONFIGURE -DZLIB_WINAPI_EXITCODE=0 -DENABLE_TEST=OFF -DZLIB_WINAPI_EXITCODE__TRYRUN_OUTPUT="test" -DENABLE_EXPAT=OFF -DENABLE_ACL=OFF -DENABLE_XATTR=OFF -DCMAKE_INSTALL_PREFIX=`pwd`/../../prefix -DBUILD_SHARED_LIBS=OFF -DENABLE_CAT=OFF -DENABLE_CPIO=OFF -DENABLE_ZSTD=OFF -DENABLE_BZip2=OFF -DENABLE_OPENSSL=OFF -DENABLE_LIBXML2=OFF -DENABLE_PCREPOSIX=OFF  && $MAKE -j $JOBS && $MAKE install && cd ../../../
   [ ! -e "lib/prefix/lib/libarchive.a" ] && cp -f lib/prefix/lib/libarchive_static.a lib/prefix/lib/libarchive.a
   LDFLAGS="-Llib/libarchive/build-tmp -Llib/prefix/lib -l:libarchive.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include"
 fi

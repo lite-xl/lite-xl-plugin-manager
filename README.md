@@ -34,7 +34,7 @@ If you want to build it quickly, and have the right modules installed, you can
 do:
 
 ```
-./build.sh -larchive -llzma -lz -lssl -lgit2 -lz -lcurl -lcrypto -llua
+./build.sh -lz -lssl -lgit2 -lcurl -llua -lcrypto -larchive -llzma
 ```
 
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
