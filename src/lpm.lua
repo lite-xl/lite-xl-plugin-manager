@@ -526,7 +526,7 @@ end
 function Plugin:is_core(bottle) return self.type == "core" end
 function Plugin:is_bundled(bottle) return self.type == "bundled" end
 function Plugin:is_installed(bottle) return self:is_core(bottle) or (bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle))) end
-function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, dependencies[plugin.name]) end
+function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, self.dependencies[plugin.name]) end
 
 function Plugin:get_path(bottle)
   return self:is_installed(bottle) and self:get_install_path(bottle) or self.local_path 
@@ -601,11 +601,13 @@ function Plugin:install(bottle, installing)
       local _, _, url, branch = self.remote:find("^(.*):(.*)$")
       system.init(temporary_install_path, url)
       common.reset(temporary_install_path, branch)
-    else
+    elseif self.path then
       local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       log_action("Copying " .. self.local_path .. " to " .. path)
       common.copy(self.local_path, temporary_path)
+    elseif self.organization == 'complex' then
+      common.mkdirp(temporary_install_path)
     end
     for i,file in ipairs(self.files or {}) do
       if not file.arch or file.arch == ARCH then
