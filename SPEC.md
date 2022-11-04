@@ -46,7 +46,11 @@ The vast majority of plugins are `singleton` plugins.
  this plugin provides. Can be used as a dependency.
 * `dependencies`: Optionally a hash of dependencies required, or optional 
   for this plugin.
+* `conflicts`: An optional hash of plugins which conflict with this one, in the same
+  format as `dependencies`.
 * `tags`:  Optional freeform tags that may describe attributes of the plugin.
+* `path`: Optional path to the plugin. If omitted, will only pull the files in
+  `files`. To pull the whole repository, use `"."`.
 
 ### Dependencies
 

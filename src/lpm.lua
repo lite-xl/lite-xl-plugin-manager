@@ -508,6 +508,7 @@ function Plugin.new(repository, metadata)
     remote = nil,
     version = "1.0",
     dependencies = {},
+    conflicts = {},
     local_path = repository and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")),
   }, metadata), Plugin)
   self.type = type
@@ -526,7 +527,10 @@ end
 function Plugin:is_core(bottle) return self.type == "core" end
 function Plugin:is_bundled(bottle) return self.type == "bundled" end
 function Plugin:is_installed(bottle) return self:is_core(bottle) or (bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle))) end
-function Plugin:is_incompatible(plugin) return self.dependencies[plugin.name] and not match_version(plugin.version, self.dependencies[plugin.name]) end
+function Plugin:is_incompatible(plugin) 
+  return (self.dependencies[plugin.name] and not match_version(plugin.version, self.dependencies[plugin.name] and self.dependencies[plugin.name].version)) or 
+    (self.conflicts[plugin.name] and match_version(plugin.version, self.conflicts[plugin.name] and self.conflicts[plugin.name].version)) 
+end
 
 function Plugin:get_path(bottle)
   return self:is_installed(bottle) and self:get_install_path(bottle) or self.local_path 
