@@ -16,6 +16,7 @@ jobs:
         run: |
           SSL_CONFIGURE="no-tests" ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
+          cp lpm /tmp/lpm
       - name: Package Debian/Ubuntu
         env: { REV: "1", ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
         run: |
@@ -29,7 +30,7 @@ jobs:
           cp lpm.exe lpm.x86_64-windows.exe
       - name: Run Tests
         run: |
-           cp lpm.x86-linux lpm && gcc -O3 -Ilib/lua lib/lua/onelua.c -DMAKE_LUA -DLUA_USE_LINUX -lm -ldl -o lua && ./lua t/run.lua
+           cp /tmp/lpm lpm && gcc -O3 -Ilib/lua lib/lua/onelua.c -DMAKE_LUA -DLUA_USE_LINUX -lm -ldl -o lua && ./lua t/run.lua
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
