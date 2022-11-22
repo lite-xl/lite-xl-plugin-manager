@@ -29,7 +29,7 @@ jobs:
           cp lpm.exe lpm.x86_64-windows.exe
       - name: Run Tests
         run: |
-          gcc -O3 -Ilib/lua lib/lua/onelua.c -DMAKE_LUA -DLUA_USE_LINUX -lm -o lua && ./lua t/run.lua
+          gcc -O3 -Ilib/lua lib/lua/onelua.c -DMAKE_LUA -DLUA_USE_LINUX -lm -ldl -o lua && ./lua t/run.lua
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
