@@ -1,4 +1,5 @@
 lpm
+lua
 lpm-*
 *.o
 lpm.lua.c

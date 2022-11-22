@@ -369,6 +369,7 @@ function common.slice(t, i, l) local n = {} for j = i, l ~= nil and (i - l) or #
 function common.join(j, l) local s = "" for i, v in ipairs(l) do if i > 1 then s = s .. j .. v else s = v end end return s end
 function common.sort(t, f) table.sort(t, f) return t end
 function common.write(path, contents) local f, err = io.open(path, "wb") if not f then error("can't write to " .. path .. ": " .. err) end f:write(contents) f:flush() end
+function common.read(path) local f, err = io.open(path, "rb") if not f then error("can't read from " .. path .. ": " .. err) end return f:read("*all") end
 function common.split(splitter, str)
   local o = 1
   local res = {}
@@ -494,7 +495,14 @@ local function match_version(version, pattern)
 end
 
 
-
+-- There can exist many different versions of a plugin. All statuses are relative to a particular lite bottle.
+-- available: Plugin is available in a repository, and can be installed. There is no comparable version on the system.
+-- upgradable: Plugin is installed, but does not match the highest version in any repository.
+-- orphan: Plugin is installed, but there is no corresponding plugin in any repository.
+-- installed: Plugin is installed, and matches the highest version in any repository, or highest version is incompatible.
+-- core: Plugin is a part of the lite data directory, and doesn't have corresponding plugins in any repository.
+-- bundled: Plugin is part of the lite data directory, but has corresponding plugins in any repository.
+-- incompatible: Plugin is not installed and conflicts with existing installed plugins.
 function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
   local type = metadata.type or "plugin"
@@ -517,6 +525,21 @@ function Plugin.new(repository, metadata)
   return self
 end
 
+-- Determines whether two plugins located at different paths are actually different based on their contents.
+function Plugin.is_path_different(path1, path2) 
+  if path1:find("%.lua$") then
+    if not path2:find("%.lua$") then return true end
+    local stat1, stat2 = system.stat(path1), system.stat(path2)
+    if not stat1 or not stat2 or stat1.size ~= stat2.size then return true end
+    if system.hash(path1, "file") ~= system.hash(path2, "file") then return true end
+  else
+    if path2:find("%.lua$") then return true end
+    return false
+  end
+  return false
+end
+
+
 function Plugin:get_install_path(bottle)
   local folder = self.type == "library" and "libraries" or "plugins" 
   local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
@@ -526,7 +549,13 @@ end
 
 function Plugin:is_core(bottle) return self.type == "core" end
 function Plugin:is_bundled(bottle) return self.type == "bundled" end
-function Plugin:is_installed(bottle) return self:is_core(bottle) or (bottle.lite_xl:is_compatible(self) and system.stat(self:get_install_path(bottle))) end
+function Plugin:is_installed(bottle) 
+  if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
+  local install_path = self:get_install_path(bottle)
+  if not system.stat(install_path) then return false end
+  if #common.grep({ bottle:get_plugin(self.name, nil, {  }) }, function(plugin) return not plugin.repository end) > 0 then return false end
+  return not Plugin.is_path_different(install_path, self.local_path)
+end
 function Plugin:is_incompatible(plugin) 
   return (self.dependencies[plugin.name] and not match_version(plugin.version, self.dependencies[plugin.name] and self.dependencies[plugin.name].version)) or 
     (self.conflicts[plugin.name] and match_version(plugin.version, self.conflicts[plugin.name] and self.conflicts[plugin.name].version)) 
@@ -703,7 +732,7 @@ function Repository:parse_manifest(already_pulling)
   if system.stat(self.local_path) and system.stat(self.local_path .. PATHSEP .. (self.commit or self.branch)) then
     self.manifest_path = self.local_path .. PATHSEP .. (self.commit or self.branch) .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then self:generate_manifest() end
-    self.manifest = json.decode(io.open(self.manifest_path, "rb"):read("*all")) 
+    self.manifest = json.decode(common.read(self.manifest_path)) 
     self.plugins = {}
     self.remotes = {}
     for i, metadata in ipairs(self.manifest["plugins"] or {}) do
@@ -969,7 +998,12 @@ local function get_repository_plugins()
   local t, hash = { }, { }
   for i,p in ipairs(common.flat_map(repositories, function(r) return r.plugins end)) do
     local id = p.name .. ":" .. p.version
-    if not hash[id] then table.insert(t, p) hash[id] = p hash[p.name] = p end
+    if not hash[id] then 
+      table.insert(t, p) 
+      hash[id] = p 
+      if not hash[p.name] then hash[p.name] = {} end
+      table.insert(hash[p.name], p )
+    end
   end
   return t, hash
 end
@@ -981,17 +1015,21 @@ function Bottle:all_plugins()
     self.lite_xl.datadir_path .. PATHSEP .. "plugins"
   }
   for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
-    for k, v in ipairs(common.grep(system.ls(plugin_path), function(e) return i == 2 or not hash[e:gsub("%.lua$", "")] end)) do
+    for j, v in ipairs(system.ls(plugin_path)) do
       local name = v:gsub("%.lua$", "")
-      table.insert(t, Plugin.new(nil, {
-        name = name,
-        type = i == 2 and (hash[name] and "bundled" or "core"),
-        organization = (v:find("%.lua$") and "singleton" or "complex"),
-        mod_version = self.lite_xl.mod_version,
-        path = "plugins/" .. v,
-        version = "1.0",
-        description = (hash[name] and hash[name].description or nil)
-      }))
+      local path = plugin_path .. PATHSEP .. v
+      local matching = hash[name] and common.grep(hash[name], function(e) return not Plugin.is_path_different(path, e.local_path) end)[1]
+      if i == 2 or not hash[name] or not matching then
+        table.insert(t, Plugin.new(nil, {
+          name = name,
+          type = i == 2 and (hash[name] and "bundled" or "core"),
+          organization = (v:find("%.lua$") and "singleton" or "complex"),
+          mod_version = self.lite_xl.mod_version,
+          path = "plugins" .. PATHSEP .. v,
+          version = "1.0",
+          description = (hash[name] and hash[name][1].description or nil)
+        }))
+      end
     end
   end
   return t
@@ -1439,7 +1477,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl_certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
-  [--datadir=directory]
+  [--datadir=directory] [--binary=path]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1594,7 +1632,7 @@ Flags have the following effects:
     end
   end
   if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
-    for i, lite_xl in ipairs(json.decode(io.open(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json", "rb"):read("*all"))) do
+    for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json"))) do
       table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
     end
   end
