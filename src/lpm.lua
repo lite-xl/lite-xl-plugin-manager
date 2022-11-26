@@ -526,17 +526,16 @@ function Plugin.new(repository, metadata)
 end
 
 -- Determines whether two plugins located at different paths are actually different based on their contents.
+-- If path1 is a directory, will still return true if it's a subset of path2 (accounting for binary downloads).
 function Plugin.is_path_different(path1, path2) 
-  if path1:find("%.lua$") then
-    if not path2:find("%.lua$") then return true end
-    local stat1, stat2 = system.stat(path1), system.stat(path2)
-    if not stat1 or not stat2 or stat1.size ~= stat2.size then return true end
-    if system.hash(path1, "file") ~= system.hash(path2, "file") then return true end
-  else
-    if path2:find("%.lua$") then return true end
+  local stat1, stat2 = system.stat(path1), system.stat(path2)
+  if not stat1 or not stat2 or stat1.type ~= stat2.type or stat1.size ~= stat2.size then return true end
+  if stat1.type == "dir" then
+    for i, file in ipairs(system.ls(path1)) do if Plugin.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end end
     return false
+  else
+    return system.hash(path1, "file") ~= system.hash(path2, "file")
   end
-  return false
 end
 
 
@@ -554,7 +553,7 @@ function Plugin:is_installed(bottle)
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
   if #common.grep({ bottle:get_plugin(self.name, nil, {  }) }, function(plugin) return not plugin.repository end) > 0 then return false end
-  return not Plugin.is_path_different(install_path, self.local_path)
+  return not Plugin.is_path_different(self.local_path, install_path)
 end
 function Plugin:is_incompatible(plugin) 
   return (self.dependencies[plugin.name] and not match_version(plugin.version, self.dependencies[plugin.name] and self.dependencies[plugin.name].version)) or 
@@ -1018,7 +1017,7 @@ function Bottle:all_plugins()
     for j, v in ipairs(system.ls(plugin_path)) do
       local name = v:gsub("%.lua$", "")
       local path = plugin_path .. PATHSEP .. v
-      local matching = hash[name] and common.grep(hash[name], function(e) return not Plugin.is_path_different(path, e.local_path) end)[1]
+      local matching = hash[name] and common.grep(hash[name], function(e) return not Plugin.is_path_different(e.local_path, path) end)[1]
       if i == 2 or not hash[name] or not matching then
         table.insert(t, Plugin.new(nil, {
           name = name,
