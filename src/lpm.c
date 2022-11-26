@@ -530,8 +530,8 @@ static const luaL_Reg system_lib[] = {
 #endif
 
 
-extern const char src_lpm_lua[];
-extern unsigned int src_lpm_lua_len;
+extern const char src_lpm_luac[];
+extern unsigned int src_lpm_luac_len;
 int main(int argc, char* argv[]) {
   curl = curl_easy_init();
   if (!curl)
@@ -563,7 +563,7 @@ int main(int argc, char* argv[]) {
   #if LPM_LIVE
   if (luaL_loadfile(L, "src/lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #else
-  if (luaL_loadbuffer(L, src_lpm_lua, src_lpm_lua_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
+  if (luaL_loadbuffer(L, src_lpm_luac, src_lpm_luac_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #endif
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;

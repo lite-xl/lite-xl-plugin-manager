@@ -4,3 +4,5 @@ lpm-*
 *.o
 lpm.lua.c
 lib/prefix
+src/lpm.luac.c
+src/lpm.luac
