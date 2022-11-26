@@ -459,7 +459,10 @@ local function prompt(message)
 end
 
 function common.get(source, target, checksum)
-  if not checksum then return system.get(source, target) end
+  local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
+  if not protocol then error("malfomed url " .. source) end
+  if not port or port == "" then port = protocol == "https" and 443 or 80 end
+  if not checksum then return system.get(protocol, hostname, port, rest, target) end
   if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
   local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
   if not system.stat(cache_path) then
@@ -1611,13 +1614,23 @@ Flags have the following effects:
       "/etc/openssl/certs",                                -- NetBSD
       "/var/ssl/certs",                                    -- AIX
     }
-    for i, path in ipairs(paths) do
-      local stat = system.stat(path) 
-      if stat then 
-        system.certs(stat.type, path) 
-        break 
+    if PLATFORM == "windows" then
+      system.certs("system", TMPDIR .. "certs.crt")
+    else
+      for i, path in ipairs(paths) do
+        local stat = system.stat(path) 
+        if stat then 
+          system.certs(stat.type, path) 
+          break 
+        end
       end
     end
+  end
+
+  if ARGS[2] == "download" then
+    local file = common.get("https://raw.githubusercontent.com/adamharrison/lite-xl-simplified/master/manifest.json");
+    print(file)
+    os.exit(0)
   end
 
 

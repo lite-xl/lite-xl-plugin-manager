@@ -6,3 +6,5 @@ lpm.lua.c
 lib/prefix
 src/lpm.luac.c
 src/lpm.luac
+lib/mbedtls-2.27.0/build
+lib/mbedtls-2.27.0/tests

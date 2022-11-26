@@ -44,18 +44,14 @@ You can get a feel for how to use `lpm` by typing `./lpm --help`.
 
 ## Supporting Libraries
 
-Unlike lite, due to the precense of the beast of a library that is OpenSSL, 
-I've made no attempt to limit the amount of libraries being linked in here, 
-I'm only ensuring that everything can be linked statically as much as possible.
-As seen with the `lib` folder, the following external libraries are used to 
+As seen in the `lib` folder, the following external libraries are used to 
 build `lpm`:
 
 * `lua` (core program written in)
-* `OpenSSL` (https/SSL support)
+* `mbedtls` (https/SSL support)
 * `libgit2` (accessing git repositories directly)
-* `liblzma` (supporting library for archives)
 * `libz` (supporting library for everything)
-* `libcurl` (for fetching .tar.gz and .zip files)
+* `liblzma` (supporting library for libarchive)
 * `libarchive` (for unpacking .tar.gz and .zip files)
 
 ## Use in CI
@@ -90,7 +86,7 @@ lpm --help
 ### Linux to Windows
 
 ```
-CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres LZMA_CONFIGURE="--host=x86_64-w64-mingw32" ARCHIVE_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" CURL_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows" GIT2_CONFIGURE="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DBUILD_CLAR=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DDLLTOOL=x86_64-w64-mingw32-dlltool" SSL_CONFIGURE=mingw ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"'
+CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_INCLUDE_PATH=/usr/share/mingw-w64/include" LZMA_CONFIGURE="--host=x86_64-w64-mingw32" GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"'
 ```
 
 

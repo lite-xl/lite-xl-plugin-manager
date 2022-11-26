@@ -5,15 +5,9 @@
 	path = lib/libgit2
 	url = https://github.com/libgit2/libgit2.git
 	branch = main
-[submodule "lib/openssl"]
-	path = lib/openssl
-	url = https://github.com/openssl/openssl.git
 [submodule "lib/zlib"]
 	path = lib/zlib
 	url = https://github.com/madler/zlib.git
-[submodule "lib/curl"]
-	path = lib/curl
-	url = https://github.com/curl/curl.git
 [submodule "lib/libarchive"]
 	path = lib/libarchive
 	url = https://github.com/libarchive/libarchive.git

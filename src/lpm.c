@@ -13,8 +13,15 @@
 
 #include <sys/stat.h>
 #include <git2.h>
-#include <openssl/evp.h>
-#include <curl/curl.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/x509.h>
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/ssl.h>
+#include <mbedtls/net.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #ifdef _WIN32
   #include <direct.h>
@@ -22,39 +29,41 @@
   #include <windows.h>
   #include <fileapi.h>
 #else
+  #include <netdb.h>
   #define MAX_PATH PATH_MAX
 #endif
+
 
 static char hex_digits[] = "0123456789abcdef";
 static int lpm_hash(lua_State* L) {
   size_t len;
   const char* data = luaL_checklstring(L, 1, &len);
   const char* type = luaL_optstring(L, 2, "string");
-  unsigned char buffer[EVP_MAX_MD_SIZE];
-  EVP_MD_CTX* c = EVP_MD_CTX_new();
-  EVP_MD_CTX_init(c);
-  EVP_DigestInit_ex(c, EVP_sha256(), NULL);
+  static const int digest_length = 32;
+  unsigned char buffer[digest_length];
+  mbedtls_sha256_context hash_ctx;
+  mbedtls_sha256_init(&hash_ctx);
+  mbedtls_sha256_starts_ret(&hash_ctx, 0);
   if (strcmp(type, "file") == 0) {
     FILE* file = fopen(data, "rb");
     if (!file) {
-      EVP_DigestFinal(c, buffer, NULL);
+      mbedtls_sha256_free(&hash_ctx);
       return luaL_error(L, "can't open %s", data);
     }
     while (1) {
       unsigned char chunk[4096];
       size_t bytes = fread(chunk, 1, sizeof(chunk), file);
-      EVP_DigestUpdate(c, chunk, bytes);
+      mbedtls_sha256_update_ret(&hash_ctx, chunk, bytes);
       if (bytes < 4096)
         break;
     }
     fclose(file);
   } else {
-    EVP_DigestUpdate(c, data, len);
+    mbedtls_sha256_update_ret(&hash_ctx, data, len);
   }
-  int digest_length;
-  EVP_DigestFinal(c, buffer, &digest_length);
-  EVP_MD_CTX_free(c);
-  char hex_buffer[EVP_MAX_MD_SIZE * 2];
+  mbedtls_sha256_finish_ret(&hash_ctx, buffer);
+  mbedtls_sha256_free(&hash_ctx);
+  char hex_buffer[digest_length * 2 + 1];
   for (size_t i = 0; i < digest_length; ++i) {
     hex_buffer[i*2+0] = hex_digits[buffer[i] >> 4];
     hex_buffer[i*2+1] = hex_digits[buffer[i] & 0xF];
@@ -353,19 +362,75 @@ static int lpm_fetch(lua_State* L) {
 }
 
 
-static CURL *curl;
+static int has_setup_ssl = 0;
+static mbedtls_x509_crt x509_certificate;
+static mbedtls_entropy_context entropy_context;
+static mbedtls_ctr_drbg_context drbg_context;
+static mbedtls_ssl_config ssl_config;
+static mbedtls_ssl_context ssl_context;
+
+
 static int lpm_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
   const char* path = luaL_checkstring(L, 2);
+  int status;
+  if (has_setup_ssl) {
+    mbedtls_ssl_config_free(&ssl_config);
+    mbedtls_ctr_drbg_free(&drbg_context);
+    mbedtls_entropy_free(&entropy_context);
+    mbedtls_x509_crt_free(&x509_certificate);
+  }
+  mbedtls_x509_crt_init(&x509_certificate);
+  mbedtls_entropy_init(&entropy_context);
+  mbedtls_ctr_drbg_init(&drbg_context);
+  if ((status = mbedtls_ctr_drbg_seed(&drbg_context, mbedtls_entropy_func, &entropy_context, NULL, 0)) != 0)
+    return luaL_error(L, "failed to setup mbedtls_x509");
+  mbedtls_ssl_config_init(&ssl_config);
+  status = mbedtls_ssl_config_defaults(&ssl_config, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
+  mbedtls_ssl_conf_max_version(&ssl_config, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
+  mbedtls_ssl_conf_min_version(&ssl_config, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
+  mbedtls_ssl_conf_authmode(&ssl_config, MBEDTLS_SSL_VERIFY_REQUIRED);
+  mbedtls_ssl_conf_rng(&ssl_config, mbedtls_ctr_drbg_random, &drbg_context);
+  has_setup_ssl = 1;
   if (strcmp(type, "dir") == 0) {
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
-    curl_easy_setopt(curl, CURLOPT_CAINFO, path);
   } else {
+    if (strcmp(type, "system") == 0) {
+      #if _WIN32
+        FILE* file = fopen(path, "wb");
+        if (!file)
+          return luaL_error(L, "can't open cert store %s for writing: %s", path, strerror(errno));
+        HCERTSTORE hSystemStore = CertOpenSystemStore(0,"CA");
+        if (!hSystemStore)
+          return luaL_error(L, "error getting system certificate store");
+        PCCERT_CONTEXT pCertContext = NULL;
+        while (1) {
+          pCertContext = CertEnumCertificatesInStore(hSystemStore, pCertContext);
+          if (!pCertContext)
+            break;
+          if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING) {
+            DWORD size = 0;
+            CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
+            char buffer = malloc(size);
+            CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
+            free(buffer);
+            fwrite(buffer, sizeof(char), size, file);
+          }
+        }
+        fclose(file);
+        CertCloseStore(hSystemStore);
+      #else
+        return luaL_error(L, "can't use system certificates on non-windows>");
+      #endif
+    }
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
-    curl_easy_setopt(curl, CURLOPT_CAPATH, path);
+    if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
+      return luaL_error(L, "mbedtls_x509_crt_parse_file failed to parse CA certificate (-0x%X)\n", -status);  
+    mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
   }
   return 0;
 }
+
 
 static int lpm_extract(lua_State* L) {
   const char* src = luaL_checkstring(L, 1);
@@ -436,54 +501,160 @@ static int lpm_extract(lua_State* L) {
   return 0;
 }
 
-static size_t lpm_curl_write_callback(char *ptr, size_t size, size_t nmemb, void *BL) {
-  luaL_Buffer* B = BL;
-  luaL_addlstring(B, ptr, size*nmemb);
-  return size*nmemb;
+
+static int lpm_socket_write(int fd, const char* buf, int len, mbedtls_ssl_context* ctx) {
+  if (ctx)
+    return mbedtls_ssl_write(ctx, buf, len);
+  return write(fd, buf, len);
+}
+
+static int lpm_socket_read(int fd, char* buf, int len, mbedtls_ssl_context* ctx) {
+  if (ctx)
+    return mbedtls_ssl_read(ctx, buf, len);
+  return read(fd, buf, len);
+}
+
+static int strnicmp(const char* a, const char* b, int n) {
+  for (int i = 0; i < n; ++i) {
+    if (a[i] == 0 && b[i] != 0) return -1;
+    if (a[i] != 0 && b[i] == 0) return 1;
+    int lowera = tolower(a[i]), lowerb = tolower(b[i]);
+    if (lowera == lowerb) continue;
+    if (lowera < lowerb) return -1;
+    return 1;
+  }
+  return 0;
 }
 
 static int lpm_get(lua_State* L) {
   long response_code;
-  const char* url = luaL_checkstring(L, 1);
-  const char* path = luaL_optstring(L, 2, NULL);
-  // curl_easy_reset(curl);
-  curl_easy_setopt(curl, CURLOPT_URL, url);
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-  #ifdef _WIN32
-    curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
-  #endif
+  char err[1024] = {0};
+  const char* protocol = luaL_checkstring(L, 1);
+  const char* hostname = luaL_checkstring(L, 2);
+
+  int s = -2;
+  mbedtls_ssl_context* ssl_ctx = NULL;
+  mbedtls_net_context* net_ctx = NULL;
+  if (strcmp(protocol, "https") == 0) {
+    int status;
+    const char* port = lua_tostring(L, 3);
+    // https://gist.github.com/Barakat/675c041fd94435b270a25b5881987a30
+    mbedtls_net_context net_context;
+    mbedtls_ssl_context ssl_context;
+    ssl_ctx = &ssl_context;
+    net_ctx = &net_context;
+    mbedtls_ssl_init(&ssl_context);
+    
+    if ((status = mbedtls_ssl_setup(&ssl_context, &ssl_config)) != 0) {
+      return luaL_error(L, "can't set up ssl for %s: %d", hostname, status);
+    }
+    mbedtls_net_init(&net_context);
+    mbedtls_net_set_block(&net_context);
+    mbedtls_ssl_set_bio(&ssl_context, &net_context, mbedtls_net_send, mbedtls_net_recv, NULL);
+    if ((status = mbedtls_net_connect(&net_context, hostname, port, MBEDTLS_NET_PROTO_TCP)) != 0) {
+      snprintf(err, sizeof(err), "can't connect to hostname %s: %d", hostname, status); goto cleanup;
+    } else if ((status = mbedtls_ssl_set_hostname(&ssl_context, hostname)) != 0) {
+      snprintf(err, sizeof(err), "can't set hostname %s: %d", hostname, status); goto cleanup;
+    } else if ((status = mbedtls_ssl_handshake(&ssl_context)) != 0) {
+      snprintf(err, sizeof(err), "can't handshake with %s: %d", hostname, status); goto cleanup;
+    } else if ((status = mbedtls_ssl_get_verify_result(&ssl_context)) != 0) {
+      snprintf(err, sizeof(err), "can't verify result for %s: %d", hostname, status); goto cleanup;
+    }
+  } else {
+    int port = luaL_checkinteger(L, 3);
+    struct hostent *host = gethostbyname(hostname);
+    struct sockaddr_in dest_addr = {0};
+    if (!host)
+      return luaL_error(L, "can't resolve hostname %s", hostname);
+    s = socket(AF_INET, SOCK_STREAM, 0);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(port);
+    dest_addr.sin_addr.s_addr = *(long*)(host->h_addr);
+    const char* ip = inet_ntoa(dest_addr.sin_addr);
+    if (connect(s, (struct sockaddr *) &dest_addr, sizeof(struct sockaddr)) == -1 ) {
+      close(s);
+      return luaL_error(L, "can't connect to host %s [%s] on port %d", hostname, ip, port);
+    }
+  }
+  
+  const char* rest = luaL_checkstring(L, 4);
+  char buffer[4096]; 
+  int buffer_length = snprintf(buffer, sizeof(buffer), "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", rest, hostname);
+  buffer_length = lpm_socket_write(s, buffer, buffer_length, ssl_ctx);
+  if (buffer_length < 0) {
+    snprintf(err, sizeof(err), "can't write to socket %s: %s", hostname, strerror(errno)); goto cleanup;
+  }
+  buffer_length = lpm_socket_read(s, buffer, sizeof(buffer) - 1, ssl_ctx);
+  buffer[4095] = 0;
+  if (buffer_length < 0) {
+    snprintf(err, sizeof(err), "can't read from socket %s: %s", hostname,strerror(errno)); goto cleanup;
+  }
+  const char* header_end = strstr(buffer, "\r\n\r\n");
+  if (!header_end) {
+    snprintf(err, sizeof(err), "can't parse response headers for %s", hostname); goto cleanup;
+  }
+  header_end += 4;
+  const char* protocol_end = strstr(buffer, " ");
+  int code = atoi(protocol_end + 1);
+  if (code != 200) {
+    snprintf(err, sizeof(err), "received non 200-response from %s: %d", hostname, code); goto cleanup;
+  }
+  const char* line_end = strstr(buffer, "\r\n");
+  int content_length = -1;
+  while (line_end && line_end < header_end) {
+    if (strnicmp(line_end + 2, "content-length:", 15) == 0) {
+      const char* offset = line_end + 17;
+      while (*offset == ' ') { ++offset; }
+      content_length = atoi(offset);
+    }
+    line_end = strstr(line_end + 2, "\r\n");
+  }
+  const char* path = luaL_optstring(L, 5, NULL);
+  
+  int body_length = buffer_length - (header_end - buffer);
+  int remaining = content_length - body_length;
   if (path) {
     FILE* file = fopen(path, "wb");
-    if (!file)
-      return luaL_error(L, "error opening file %s: %s", path, strerror(errno));
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
-    CURLcode res = curl_easy_perform(curl);
-    if (res != CURLE_OK) {
-      fclose(file);
-      return luaL_error(L, "curl error accessing %s: %s", url, curl_easy_strerror(res));
+    fwrite(header_end, sizeof(char), body_length, file);
+    while (content_length == -1 || remaining > 0) {
+      int length = lpm_socket_read(s, buffer, sizeof(buffer), ssl_ctx);
+      if (length == 0) break;
+      if (length < 0) {
+        snprintf(err, sizeof(err), "error retrieving full response for %s: %s", hostname, strerror(errno)); goto cleanup;
+      }
+      fwrite(buffer, sizeof(char), length, file);
+      remaining -= length;
     }
     fclose(file);
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-    if (response_code != 200)
-      return luaL_error(L, "curl error accessing %s, non-200 response code: %d", url, response_code);
     lua_pushnil(L);
-    lua_newtable(L);
-    return 2;
   } else {
     luaL_Buffer B;
     luaL_buffinit(L, &B);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, lpm_curl_write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &B);
-    CURLcode res = curl_easy_perform(curl);
-    if (res != CURLE_OK)
-      return luaL_error(L, "curl error accessing %s: %s", url, curl_easy_strerror(res));
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-    if (response_code != 200)
-      return luaL_error(L, "curl error accessing %s, non-200 response code: %d", url, response_code);
+    luaL_addlstring(&B, header_end, body_length);
+    while (content_length == -1 || remaining > 0) {
+      int length = lpm_socket_read(s, buffer, sizeof(buffer), ssl_ctx);
+      if (length == 0) break;
+      if (length < 0) {
+        snprintf(err, sizeof(err), "error retrieving full response for %s: %s", hostname, strerror(errno)); goto cleanup;
+      }
+      luaL_addlstring(&B, buffer, length);
+      remaining -= length;
+    }
     luaL_pushresult(&B);
-    lua_newtable(L);
   }
+  if (content_length != -1 && remaining != 0) {
+    snprintf(err, sizeof(err), "error retrieving full response for %s", hostname); goto cleanup;
+  }
+  lua_newtable(L);
+  cleanup:
+    if (ssl_ctx) {
+      mbedtls_ssl_free(ssl_ctx);
+      mbedtls_net_free(net_ctx);
+    } else if (s != -2) {
+      close(s);
+    }
+    if (err[0])
+      return luaL_error(L, "%s", err);
   return 2;
 }
 
@@ -533,9 +704,6 @@ static const luaL_Reg system_lib[] = {
 extern const char src_lpm_luac[];
 extern unsigned int src_lpm_luac_len;
 int main(int argc, char* argv[]) {
-  curl = curl_easy_init();
-  if (!curl)
-    return -1;
   git_libgit2_init();
   lua_State* L = luaL_newstate();
   luaL_openlibs(L);
@@ -571,6 +739,5 @@ int main(int argc, char* argv[]) {
   int status = lua_tointeger(L, -1);
   lua_close(L);
   git_libgit2_shutdown();
-  curl_easy_cleanup(curl);
   return status;
 }
