@@ -19,7 +19,6 @@
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/net.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -30,6 +29,7 @@
   #include <fileapi.h>
 #else
   #include <netdb.h>
+  #include <sys/socket.h>
   #define MAX_PATH PATH_MAX
 #endif
 
