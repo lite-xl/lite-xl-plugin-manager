@@ -8,9 +8,9 @@
 [submodule "lib/zlib"]
 	path = lib/zlib
 	url = https://github.com/madler/zlib.git
-[submodule "lib/libarchive"]
-	path = lib/libarchive
-	url = https://github.com/libarchive/libarchive.git
-[submodule "lib/liblzma"]
-	path = lib/liblzma
-	url = https://github.com/kobolabs/liblzma.git
+[submodule "lib/libtar"]
+	path = lib/libtar
+	url = https://github.com/tklauser/libtar.git
+[submodule "lib/libzip"]
+	path = lib/libzip
+	url = https://github.com/nih-at/libzip.git

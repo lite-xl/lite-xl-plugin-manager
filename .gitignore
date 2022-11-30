@@ -1,5 +1,5 @@
 lpm
-lua
+lua.exe
 lpm-*
 *.o
 lpm.lua.c

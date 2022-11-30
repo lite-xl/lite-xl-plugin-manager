@@ -1628,8 +1628,12 @@ Flags have the following effects:
   end
 
   if ARGS[2] == "download" then
-    local file = common.get("https://raw.githubusercontent.com/adamharrison/lite-xl-simplified/master/manifest.json");
+    local file = common.get(ARGS[3]);
     print(file)
+    os.exit(0)
+  end
+  if ARGS[2] == "extract" then
+    system.extract(ARGS[3], ARGS[4] or ".")
     os.exit(0)
   end
 

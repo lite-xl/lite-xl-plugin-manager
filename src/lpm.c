@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <archive.h>
 #include <archive_entry.h>
+#include <fcntl.h>
 
 #include <sys/stat.h>
 #include <git2.h>
@@ -33,7 +34,9 @@
 #include <mbedtls/ssl.h>
 #include <mbedtls/net.h>
 
-
+#include <zlib.h>
+#include <libtar.h>
+#include <zip.h>
 
 static char hex_digits[] = "0123456789abcdef";
 static int lpm_hash(lua_State* L) {
@@ -433,72 +436,73 @@ static int lpm_certs(lua_State* L) {
 }
 
 
+static int gzopen_frontend(char *pathname, int oflags, int mode) {
+	gzFile gzf;
+	int fd;
+	fd = open(pathname, oflags, mode);
+	if (fd == -1)
+		return -1;
+	gzf = gzdopen(fd, "rb");
+	if (!gzf) {
+		errno = ENOMEM;
+		return -1;
+	}
+	return (int)(long long)gzf;
+}
+
+tartype_t gztype = { (openfunc_t) gzopen_frontend, (closefunc_t) gzclose,
+	(readfunc_t) gzread, (writefunc_t) gzwrite
+};
+
 static int lpm_extract(lua_State* L) {
   const char* src = luaL_checkstring(L, 1);
-  const char* dst = luaL_optstring(L, 2, ".");
+  const char* dst = luaL_checkstring(L, 2);
 
-  char error_buffer[1024] = {0};
-	struct archive_entry *entry;
-	const void *buff;
-	int flags = 0;
-	int r;
-	size_t size;
-#if ARCHIVE_VERSION_NUMBER >= 3000000
-	int64_t offset;
-#else
-	off_t offset;
-#endif
-	struct archive *ar = archive_read_new();
-	struct archive *aw = archive_write_disk_new();
-	archive_write_disk_set_options(aw, flags);
-	archive_read_support_format_tar(ar);
-	archive_read_support_format_zip(ar);
-	archive_read_support_filter_gzip(ar);
-	if ((r = archive_read_open_filename(ar, src, 10240))) {
-    snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(ar));
-    goto cleanup;
-	}
-	for (;;) {
-		int r = archive_read_next_header(ar, &entry);
-		if (r == ARCHIVE_EOF)
-			break;
-		if (r != ARCHIVE_OK) {
-			snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(ar));
-      goto cleanup;
-		}
-		char path[MAX_PATH];	
-		strcpy(path, dst); strcat(path, "/");
-		strncat(path, archive_entry_pathname(entry), sizeof(path) - 3); path[MAX_PATH-1] = 0;
-		archive_entry_set_pathname(entry, path);
-    if (archive_write_header(aw, entry) != ARCHIVE_OK) {
-      snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(aw));
-      goto cleanup;
-		}
-		for (;;) {
-      int r = archive_read_data_block(ar, &buff, &size, &offset);
-      if (r == ARCHIVE_EOF) 
-        break;
-      if (r != ARCHIVE_OK) {
-        snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(ar));
-        goto cleanup;
+  if (strstr(src, ".zip")) {
+    int zip_error;
+    zip_t* archive = zip_open(src, ZIP_RDONLY, &zip_error);
+    if (!archive)
+      return luaL_error(L, "can't open zip archive %s: %s", src, strerror(zip_error));
+    zip_int64_t entries = zip_get_num_entries(archive, 0);
+    for (zip_int64_t i = 0; i < entries; ++i) {    
+      zip_file_t* zip_file = zip_fopen_index(archive, i, 0);
+      const char* zip_name = zip_get_name(archive, i, ZIP_FL_ENC_GUESS);
+      if (!zip_file)
+        return luaL_error(L, "can't read zip archive file %s: %s", zip_name, zip_strerror(archive));
+      char target[MAX_PATH];
+      int target_length = snprintf(target, sizeof(target), "%s/%s", dst, zip_name);
+      for (int i = 0; i < target_length; ++i) {
+        if (target[i] == '/') {
+          target[i] = 0;
+          int status = mkdir(target, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
+          if (status && status != EEXIST)
+            return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
+          target[i] = '/';
+        }
       }
-      if (archive_write_data_block(aw, buff, size, offset) != ARCHIVE_OK) {
-        snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(aw));
-        goto cleanup;
-      }
+      FILE* file = fopen(target, "wb");
+      if (!file)
+        return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
+      while (1) {
+        char buffer[8192];
+        zip_int64_t length = zip_fread(zip_file, buffer, sizeof(buffer));
+        if (length == -1)
+          return luaL_error(L, "can't read zip archive file  %s: %s", zip_name, zip_file_strerror(zip_file));
+        if (length == 0) break;
+        fwrite(buffer, sizeof(char), length, file);
+      }  
+      fclose(file);
     }
-    if (archive_write_finish_entry(aw) != ARCHIVE_OK) {
-      snprintf(error_buffer, sizeof(error_buffer), "error extracting archive %s: %s", src, archive_error_string(aw));
-      goto cleanup;
-    }
-	}
-	cleanup:
-	archive_read_close(ar);
-	archive_read_free(ar);
-	archive_write_close(aw);
-  archive_write_free(aw);
-  if (error_buffer[0])
-    return luaL_error(L, "error extracting archive %s: %s", src, archive_error_string(ar));
+  } else if (strstr(src, ".tar.gz")) {
+    TAR* archive;
+    if (tar_open(&archive, src, &gztype, O_RDONLY, 0, TAR_GNU))
+      return luaL_error(L, "can't open tar archive %s: %s", src, strerror(errno));
+    if (tar_extract_all(archive, (char*)dst))
+      return luaL_error(L, "can't extract tar archive %s to %s: %s", src, dst, strerror(errno));
+    if (tar_close(archive))
+      return luaL_error(L, "can't close tar archive %s: %s", src, strerror(errno));
+  } else
+    return luaL_error(L, "unrecognized archive format %s", src);
   return 0;
 }
 
