@@ -461,7 +461,7 @@ end
 
 function common.get(source, target, checksum, depth)
   if not source then error("requires url") end
-  if depth > 10 then error("too many redirects") end
+  if (depth or 0) > 10 then error("too many redirects") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
