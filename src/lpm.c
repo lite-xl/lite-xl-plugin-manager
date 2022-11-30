@@ -405,8 +405,10 @@ static int lpm_certs(lua_State* L) {
         if (!file)
           return luaL_error(L, "can't open cert store %s for writing: %s", path, strerror(errno));
         HCERTSTORE hSystemStore = CertOpenSystemStore(0,"CA");
-        if (!hSystemStore)
+        if (!hSystemStore) {
+          fclose(file);
           return luaL_error(L, "error getting system certificate store");
+        }
         PCCERT_CONTEXT pCertContext = NULL;
         while (1) {
           pCertContext = CertEnumCertificatesInStore(hSystemStore, pCertContext);
@@ -463,35 +465,53 @@ static int lpm_extract(lua_State* L) {
   const char* dst = luaL_checkstring(L, 2);
 
   if (strstr(src, ".zip")) {
-    int zip_error;
-    zip_t* archive = zip_open(src, ZIP_RDONLY, &zip_error);
-    if (!archive)
-      return luaL_error(L, "can't open zip archive %s: %s", src, strerror(zip_error));
+    int zip_error_code;
+    zip_t* archive = zip_open(src, ZIP_RDONLY, &zip_error_code);
+    if (!archive) {
+      zip_error_t zip_error;
+      zip_error_init_with_code(&zip_error, zip_error_code);
+      lua_pushfstring(L, "can't open zip archive %s: %s", src, zip_error_strerror(&zip_error));
+      zip_error_fini(&zip_error);
+      return lua_error(L);
+    }
     zip_int64_t entries = zip_get_num_entries(archive, 0);
     for (zip_int64_t i = 0; i < entries; ++i) {    
       zip_file_t* zip_file = zip_fopen_index(archive, i, 0);
       const char* zip_name = zip_get_name(archive, i, ZIP_FL_ENC_GUESS);
-      if (!zip_file)
-        return luaL_error(L, "can't read zip archive file %s: %s", zip_name, zip_strerror(archive));
+      if (!zip_file) {
+        lua_pushfstring(L, "can't read zip archive file %s: %s", zip_name, zip_strerror(archive));
+        zip_close(archive);
+        return lua_error(L);
+      }
       char target[MAX_PATH];
       int target_length = snprintf(target, sizeof(target), "%s/%s", dst, zip_name);
       for (int i = 0; i < target_length; ++i) {
         if (target[i] == '/') {
           target[i] = 0;
-          if (mkdir(target, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
+          if (mkdir(target, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST) {
+            zip_fclose(zip_file);
+            zip_close(archive);
             return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
+          }
           target[i] = '/';
         }
       }
       if (target[target_length-1] != '/') {
         FILE* file = fopen(target, "wb");
-        if (!file)
+        if (!file) {
+          zip_fclose(zip_file);
+          zip_close(archive);
           return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
+        }
         while (1) {
           char buffer[8192];
           zip_int64_t length = zip_fread(zip_file, buffer, sizeof(buffer));
-          if (length == -1)
-            return luaL_error(L, "can't read zip archive file  %s: %s", zip_name, zip_file_strerror(zip_file));
+          if (length == -1) {
+            lua_pushfstring(L, "can't read zip archive file  %s: %s", zip_name, zip_file_strerror(zip_file));
+            zip_fclose(zip_file);
+            zip_close(archive);
+            return lua_error(L);
+          }
           if (length == 0) break;
           fwrite(buffer, sizeof(char), length, file);
         }  
@@ -499,12 +519,15 @@ static int lpm_extract(lua_State* L) {
       }
       zip_fclose(zip_file);
     }
+    zip_close(archive);
   } else if (strstr(src, ".tar")) {
     TAR* archive;
     if (tar_open(&archive, src, strstr(src, ".gz") ? &gztype : NULL, O_RDONLY, 0, TAR_GNU))
       return luaL_error(L, "can't open tar archive %s: %s", src, strerror(errno));
-    if (tar_extract_all(archive, (char*)dst))
+    if (tar_extract_all(archive, (char*)dst)) {
+      tar_close(archive);
       return luaL_error(L, "can't extract tar archive %s to %s: %s", src, dst, strerror(errno));
+    } 
     if (tar_close(archive))
       return luaL_error(L, "can't close tar archive %s: %s", src, strerror(errno));
   } else
