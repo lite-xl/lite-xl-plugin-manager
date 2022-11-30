@@ -11,14 +11,16 @@ LDFLAGS="$LDFLAGS -lm -pthread -static-libgcc"
 [[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/mbedtls-2.27.0/build lib/curl/build lib/libarchive/build-tmp lib/liblzma/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
 
 # Build supporting libraries, libz, libmbedtls, libmbedcrypto, libgit2, liblzma, libarchive, liblua
-CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=`pwd`/lib/prefix -DCMAKE_INSTALL_PREFIX=`pwd`/lib/prefix -DBUILD_SHARED_LIBS=OFF"
+CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=`pwd`/lib/prefix -DCMAKE_INSTALL_PREFIX=`pwd`/lib/prefix -DBUILD_SHARED_LIBS=OFF"
+mkdir -p lib/prefix/include lib/prefix/lib
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
-  [ ! -e "lib/zlib/build" ] && cd lib/zlib && mkdir build && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/zlib/build" && $OSTYPE == 'msys'* ] && cd lib/zlib && mkdir build && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ] && cd lib/zlib && mkdir build && $MAKE -f ../win32/Makefile.gcc -j $JOBS && cp *.a ../prefix/lib && cp *.h ../prefix/include && cd ../../
   LDFLAGS="$LDFLAGS -Llib/libz/build -l:libz.a" && CFLAGS="$CFLAGS -Ilib/prefix/include" && LDFLAGS="$LDFLAGS -Llib/prefix/lib -Llib/prefix/lib64"
 fi
 if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* ]]; then
-  [ ! -e "lib/mbedtls-2.27.0/build" ] && cd lib/mbedtls-2.27.0 && mkdir build && cd build && CFLAGS="-DMBEDTLS_MD4_C=1" cmake .. $CMAKE_DEFAULT_FLAGS -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="-DMBEDTLS_MD4_C=1" $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/mbedtls-2.27.0/build" ] && cd lib/mbedtls-2.27.0 && mkdir build && cd build && CFLAGS="-DMBEDTLS_MD4_C=1" cmake .. $CMAKE_DEFAULT_FLAGS  -G "Unix Makefiles" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="-DMBEDTLS_MD4_C=1" $MAKE -j $JOBS && $MAKE install && cd ../../../
   CFLAGS="$CFLAGS -Ilib/prefix/include" && LDFLAGS="$LDFLAGS -Llib/prefix/lib -Llib/prefix/lib64 -lmbedtls -lmbedx509 -lmbedcrypto"
 fi
 if [[ "$@" != *"-lgit2"* ]]; then
