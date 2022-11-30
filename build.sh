@@ -9,7 +9,7 @@ SRCS="src/*.c"
 CFLAGS="$CFLAGS -Ilib/prefix/include"
 LDFLAGS="$LDFLAGS -lm -pthread -static-libgcc -Llib/prefix/lib"
 
-[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libtar/build lib/mbedtls-2.27.0/build lib/libarchive/build-tmp lib/libzip/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
+[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libzip/build lib/mbedtls-2.27.0/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
 
 # Build supporting libraries, libz, libmbedtls, libmbedcrypto, libgit2, liblzma, libarchive, liblua
 CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=`pwd`/lib/prefix -DCMAKE_INSTALL_PREFIX=`pwd`/lib/prefix -DBUILD_SHARED_LIBS=OFF"

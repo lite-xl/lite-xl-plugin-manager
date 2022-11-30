@@ -440,7 +440,11 @@ static int mkdirp(char* path, int len) {
   for (int i = 0; i < len; ++i) {
     if (path[i] == '/') {
       path[i] = 0;
-      if (mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
+      #ifndef _WIN32
+        if (mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
+      #else
+        if (mkdir(path) && errno != EEXIST)
+      #endif
         return -1;
       path[i] = '/';
     }
