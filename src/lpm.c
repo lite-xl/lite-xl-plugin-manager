@@ -1,11 +1,24 @@
+#ifdef _WIN32
+  #include <direct.h>
+  #include <winsock2.h>
+  #include <windows.h>
+  #include <fileapi.h>
+#else
+  #include <netinet/in.h>
+  #include <netdb.h>
+  #include <sys/socket.h>
+  #include <arpa/inet.h>
+  #define MAX_PATH PATH_MAX
+#endif
+
 #include <git2.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
 #include <lua.h>
+#include <lualib.h>
 #include <lauxlib.h>
 #include <ctype.h>
-#include <lualib.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <archive.h>
@@ -20,18 +33,6 @@
 #include <mbedtls/ssl.h>
 #include <mbedtls/net.h>
 
-#ifdef _WIN32
-  #include <direct.h>
-  #include <winsock2.h>
-  #include <windows.h>
-  #include <fileapi.h>
-#else
-  #include <netinet/in.h>
-  #include <netdb.h>
-  #include <sys/socket.h>
-  #include <arpa/inet.h>
-  #define MAX_PATH PATH_MAX
-#endif
 
 
 static char hex_digits[] = "0123456789abcdef";
@@ -411,14 +412,14 @@ static int lpm_certs(lua_State* L) {
           if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING) {
             DWORD size = 0;
             CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
-            char buffer = malloc(size);
+            char* buffer = malloc(size);
             CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
             free(buffer);
             fwrite(buffer, sizeof(char), size, file);
           }
         }
         fclose(file);
-        CertCloseStore(hSystemStore);
+        CertCloseStore(hSystemStore, 0);
       #else
         return luaL_error(L, "can't use system certificates on non-windows>");
       #endif
@@ -514,7 +515,7 @@ static int lpm_socket_read(int fd, char* buf, int len, mbedtls_ssl_context* ctx)
   return read(fd, buf, len);
 }
 
-static int strnicmp(const char* a, const char* b, int n) {
+static int strncicmp(const char* a, const char* b, int n) {
   for (int i = 0; i < n; ++i) {
     if (a[i] == 0 && b[i] != 0) return -1;
     if (a[i] != 0 && b[i] == 0) return 1;
@@ -602,7 +603,7 @@ static int lpm_get(lua_State* L) {
   const char* line_end = strstr(buffer, "\r\n");
   int content_length = -1;
   while (line_end && line_end < header_end) {
-    if (strnicmp(line_end + 2, "content-length:", 15) == 0) {
+    if (strncicmp(line_end + 2, "content-length:", 15) == 0) {
       const char* offset = line_end + 17;
       while (*offset == ' ') { ++offset; }
       content_length = atoi(offset);
