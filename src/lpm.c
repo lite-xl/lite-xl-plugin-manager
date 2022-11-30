@@ -436,22 +436,26 @@ static int lpm_certs(lua_State* L) {
 }
 
 
+// We can have one because we're single-threaded, and extracting is an atomic operation.
+static gzFile gzf;
 static int gzopen_frontend(char *pathname, int oflags, int mode) {
-	gzFile gzf;
-	int fd;
-	fd = open(pathname, oflags, mode);
+	int fd = open(pathname, oflags, mode);
 	if (fd == -1)
 		return -1;
-	gzf = gzdopen(fd, "rb");
-	if (!gzf) {
+	if (!(gzf = gzdopen(fd, "rb"))) {
 		errno = ENOMEM;
+		gzf = NULL;
 		return -1;
 	}
-	return (int)(long long)gzf;
+	return fd;
 }
+static int gzread_frontend(int fd, void* buf, size_t len) { return gzread(gzf, buf, len); }
+static int gzwrite_frontend(int fd, void* buf, size_t len) { return gzwrite(gzf, buf, len); }
+static int gzclose_frontend(int fd) { gzclose(gzf); }
 
-tartype_t gztype = { (openfunc_t) gzopen_frontend, (closefunc_t) gzclose,
-	(readfunc_t) gzread, (writefunc_t) gzwrite
+tartype_t gztype = { 
+  (openfunc_t) gzopen_frontend, (closefunc_t) gzclose_frontend,
+	(readfunc_t) gzread_frontend, (writefunc_t) gzwrite_frontend
 };
 
 static int lpm_extract(lua_State* L) {
@@ -474,28 +478,30 @@ static int lpm_extract(lua_State* L) {
       for (int i = 0; i < target_length; ++i) {
         if (target[i] == '/') {
           target[i] = 0;
-          int status = mkdir(target, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
-          if (status && status != EEXIST)
+          if (mkdir(target, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
             return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
           target[i] = '/';
         }
       }
-      FILE* file = fopen(target, "wb");
-      if (!file)
-        return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
-      while (1) {
-        char buffer[8192];
-        zip_int64_t length = zip_fread(zip_file, buffer, sizeof(buffer));
-        if (length == -1)
-          return luaL_error(L, "can't read zip archive file  %s: %s", zip_name, zip_file_strerror(zip_file));
-        if (length == 0) break;
-        fwrite(buffer, sizeof(char), length, file);
-      }  
-      fclose(file);
+      if (target[target_length-1] != '/') {
+        FILE* file = fopen(target, "wb");
+        if (!file)
+          return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
+        while (1) {
+          char buffer[8192];
+          zip_int64_t length = zip_fread(zip_file, buffer, sizeof(buffer));
+          if (length == -1)
+            return luaL_error(L, "can't read zip archive file  %s: %s", zip_name, zip_file_strerror(zip_file));
+          if (length == 0) break;
+          fwrite(buffer, sizeof(char), length, file);
+        }  
+        fclose(file);
+      }
+      zip_fclose(zip_file);
     }
-  } else if (strstr(src, ".tar.gz")) {
+  } else if (strstr(src, ".tar")) {
     TAR* archive;
-    if (tar_open(&archive, src, &gztype, O_RDONLY, 0, TAR_GNU))
+    if (tar_open(&archive, src, strstr(src, ".gz") ? &gztype : NULL, O_RDONLY, 0, TAR_GNU))
       return luaL_error(L, "can't open tar archive %s: %s", src, strerror(errno));
     if (tar_extract_all(archive, (char*)dst))
       return luaL_error(L, "can't extract tar archive %s to %s: %s", src, dst, strerror(errno));
