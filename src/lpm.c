@@ -35,7 +35,7 @@
 #include <mbedtls/net.h>
 
 #include <zlib.h>
-#include <libtar.h>
+#include <microtar.h>
 #include <zip.h>
 
 static char hex_digits[] = "0123456789abcdef";
@@ -438,27 +438,21 @@ static int lpm_certs(lua_State* L) {
 }
 
 
-// We can have one because we're single-threaded, and extracting is an atomic operation.
-static gzFile gzf;
-static int gzopen_frontend(char *pathname, int oflags, int mode) {
-	int fd = open(pathname, oflags, mode);
-	if (fd == -1)
-		return -1;
-	if (!(gzf = gzdopen(fd, "rb"))) {
-		errno = ENOMEM;
-		gzf = NULL;
-		return -1;
-	}
-	return fd;
+static int mkdirp(char* path, int len) {
+  for (int i = 0; i < len; ++i) {
+    if (path[i] == '/') {
+      path[i] = 0;
+      if (mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
+        return -1;
+      path[i] = '/';
+    }
+  }
+  return 0;
 }
-static int gzread_frontend(int fd, void* buf, size_t len) { return gzread(gzf, buf, len); }
-static int gzwrite_frontend(int fd, void* buf, size_t len) { return gzwrite(gzf, buf, len); }
-static int gzclose_frontend(int fd) { gzclose(gzf); }
 
-tartype_t gztype = { 
-  (openfunc_t) gzopen_frontend, (closefunc_t) gzclose_frontend,
-	(readfunc_t) gzread_frontend, (writefunc_t) gzwrite_frontend
-};
+static int gzip_read(mtar_t* tar, void* data, unsigned int size) { return gzread(tar->stream, data, size) >= 0 ? MTAR_ESUCCESS : -1; }
+static int gzip_seek(mtar_t* tar, unsigned int pos) { return gzseek(tar->stream, pos, SEEK_SET) >= 0 ? MTAR_ESUCCESS : -1; }
+static int gzip_close(mtar_t* tar) { return gzclose(tar->stream) == Z_OK ? MTAR_ESUCCESS : -1; }
 
 static int lpm_extract(lua_State* L) {
   const char* src = luaL_checkstring(L, 1);
@@ -485,16 +479,10 @@ static int lpm_extract(lua_State* L) {
       }
       char target[MAX_PATH];
       int target_length = snprintf(target, sizeof(target), "%s/%s", dst, zip_name);
-      for (int i = 0; i < target_length; ++i) {
-        if (target[i] == '/') {
-          target[i] = 0;
-          if (mkdir(target, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST) {
-            zip_fclose(zip_file);
-            zip_close(archive);
-            return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
-          }
-          target[i] = '/';
-        }
+      if (!mkdirp(target, target_length)) {
+        zip_fclose(zip_file);
+        zip_close(archive);
+        return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
       }
       if (target[target_length-1] != '/') {
         FILE* file = fopen(target, "wb");
@@ -521,15 +509,48 @@ static int lpm_extract(lua_State* L) {
     }
     zip_close(archive);
   } else if (strstr(src, ".tar")) {
-    TAR* archive;
-    if (tar_open(&archive, src, strstr(src, ".gz") ? &gztype : NULL, O_RDONLY, 0, TAR_GNU))
-      return luaL_error(L, "can't open tar archive %s: %s", src, strerror(errno));
-    if (tar_extract_all(archive, (char*)dst)) {
-      tar_close(archive);
-      return luaL_error(L, "can't extract tar archive %s to %s: %s", src, dst, strerror(errno));
-    } 
-    if (tar_close(archive))
-      return luaL_error(L, "can't close tar archive %s: %s", src, strerror(errno));
+    mtar_t tar = {0};
+    int err;
+    if (strstr(src, ".gz")) {
+      tar.stream = gzopen(src, "rb");
+      if (!tar.stream)
+        return luaL_error(L, "can't open tar.gz archive %s: %s", src, strerror(errno));
+      tar.read = gzip_read;
+      tar.seek = gzip_seek;
+      tar.close = gzip_close;
+    } else if ((err = mtar_open(&tar, src, "r")))
+      return luaL_error(L, "can't open tar archive %s: %s", src, mtar_strerror(err));
+    mtar_header_t h;
+    while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD ) {
+      if (h.type == MTAR_TREG) {
+        char target[MAX_PATH];
+        int target_length = snprintf(target, sizeof(target), "%s/%s", dst, h.name);
+        if (mkdirp(target, target_length)) {
+          mtar_close(&tar);
+          return luaL_error(L, "can't extract tar archive file %s, can't create directory %s: %s", src, target, strerror(errno));
+        }
+        char buffer[8192];
+        FILE* file = fopen(target, "wb");
+        if (!file) {
+          mtar_close(&tar);
+          return luaL_error(L, "can't extract tar archive file %s, can't create file %s: %s", src, target, strerror(errno));
+        }
+        int remaining = h.size;
+        while (remaining > 0) {
+          int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+          if (mtar_read_data(&tar, buffer, read_size) != MTAR_ESUCCESS) {
+            fclose(file);
+            mtar_close(&tar);
+            return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
+          }
+          fwrite(buffer, sizeof(char), read_size, file);
+          remaining -= read_size;
+        }
+        fclose(file);
+      }
+      mtar_next(&tar);
+    }
+    mtar_close(&tar);
   } else
     return luaL_error(L, "unrecognized archive format %s", src);
   return 0;

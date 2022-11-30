@@ -16,7 +16,7 @@ CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PR
 mkdir -p lib/prefix/include lib/prefix/lib
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
-  [[ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ]] && cd lib/zlib && mkdir build && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [[ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ]] && cd lib/zlib && mkdir build && cd build && ../configure --static --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
   [[ ! -e "lib/zlib/build" && $OSTYPE == 'msys'* ]] && cd lib/zlib && mkdir build && $MAKE -f ../win32/Makefile.gcc -j $JOBS && cp *.a ../prefix/lib && cp *.h ../prefix/include && cd ../../
   LDFLAGS="$LDFLAGS -l:libz.a"
 fi
@@ -32,10 +32,7 @@ if [[ "$@" != *"-lzip"* ]]; then
   [ ! -e "lib/libzip/build" ] && cd lib/libzip && mkdir build && cd build && cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=OFF -DENABLE_ZSTD=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../
   LDFLAGS="$LDFLAGS -l:libzip.a"
 fi
-if [[ "$@" != *"-ltar"* ]]; then
-  [ ! -e "lib/libtar/build" ] && cd lib/libtar && mkdir build && autoreconf --force --install && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
-  LDFLAGS="$LDFLAGS -l:libtar.a"
-fi
+[[ "$@" != *"-lmicrotar"* ]] && CFLAGS="$CFLAGS -Ilib/microtar/src" && SRCS="$SRCS lib/microtar/src/microtar.c"
 [[ "$@" != *"-llua"* ]] && CFLAGS="$CFLAGS -Ilib/lua -DMAKE_LIB=1" && SRCS="$SRCS lib/lua/onelua.c"
 
 # Build the pre-packaged lua file into the executbale.
