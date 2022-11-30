@@ -458,16 +458,22 @@ local function prompt(message)
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
 end
 
+
 function common.get(source, target, checksum)
   if not source then error("requires url") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
-  if not checksum then return system.get(protocol, hostname, port, rest, target) end
+  if not checksum then 
+    local res, headers = system.get(protocol, hostname, port, rest, target) 
+    if headers.location then return common.get(headers.location, target, checksum) end
+    return res
+  end
   if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
   local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
   if not system.stat(cache_path) then
-    system.get(source, cache_path)
+    local res, headers = system.get(source, cache_path)
+    if headers.location then return common.get(headers.location, target, checksum) end
     if checksum ~= "SKIP" and system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
   end
   common.copy(cache_path, target)
