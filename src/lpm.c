@@ -421,7 +421,7 @@ static int lpm_certs(lua_State* L) {
         fclose(file);
         CertCloseStore(hSystemStore, 0);
       #else
-        return luaL_error(L, "can't use system certificates on non-windows>");
+        return luaL_error(L, "can't use system certificates on non-windows");
       #endif
     }
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
