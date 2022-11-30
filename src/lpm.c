@@ -414,8 +414,8 @@ static int lpm_certs(lua_State* L) {
             CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
             char* buffer = malloc(size);
             CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
-            free(buffer);
             fwrite(buffer, sizeof(char), size, file);
+            free(buffer);
           }
         }
         fclose(file);
@@ -426,7 +426,7 @@ static int lpm_certs(lua_State* L) {
     }
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
     if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
-      return luaL_error(L, "mbedtls_x509_crt_parse_file failed to parse CA certificate (-0x%X)\n", -status);  
+      return luaL_error(L, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s: %d", path, -status);  
     mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
   }
   return 0;

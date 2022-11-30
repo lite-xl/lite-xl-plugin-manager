@@ -32,7 +32,7 @@ if [[ "$@" != *"-llzma"* ]]; then
   LDFLAGS="-Llib/liblzma/build -Llib/prefix/lib -l:liblzma.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include"
 fi
 if [[ "$@" != *"-larchive"* ]]; then
-  [ ! -e "lib/libarchive/build-tmp" ] && cd lib/libarchive && mkdir build-tmp && cd build-tmp && cmake .. -G "Unix Makefiles" $ARCHIVE_CONFIGURE $CMAKE_DEFAULT_FLAGS -DZLIB_WINAPI_EXITCODE=0 -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DENABLE_TEST=OFF -DZLIB_WINAPI_EXITCODE__TRYRUN_OUTPUT="test" -DENABLE_EXPAT=OFF -DENABLE_ACL=OFF -DENABLE_XATTR=OFF -DENABLE_CAT=OFF -DENABLE_CPIO=OFF -DENABLE_ZSTD=OFF -DENABLE_BZip2=OFF -DENABLE_OPENSSL=OFF -DENABLE_LIBXML2=OFF -DENABLE_PCREPOSIX=OFF  && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/libarchive/build-tmp" ] && cd lib/libarchive && mkdir build-tmp && cd build-tmp && cmake .. -G "Unix Makefiles" $ARCHIVE_CONFIGURE $CMAKE_DEFAULT_FLAGS -DENABLE_ICONV=OFF -DZLIB_WINAPI_EXITCODE=0 -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DENABLE_TEST=OFF -DZLIB_WINAPI_EXITCODE__TRYRUN_OUTPUT="test" -DENABLE_EXPAT=OFF -DENABLE_ACL=OFF -DENABLE_XATTR=OFF -DENABLE_CAT=OFF -DENABLE_CPIO=OFF -DENABLE_ZSTD=OFF -DENABLE_BZip2=OFF -DENABLE_OPENSSL=OFF -DENABLE_LIBXML2=OFF -DENABLE_PCREPOSIX=OFF  && $MAKE -j $JOBS && $MAKE install && cd ../../../
   [ ! -e "lib/prefix/lib/libarchive.a" ] && cp -f lib/prefix/lib/libarchive_static.a lib/prefix/lib/libarchive.a
   LDFLAGS="-Llib/libarchive/build-tmp -Llib/prefix/lib -l:libarchive.a $LDFLAGS" && CFLAGS="$CFLAGS -Ilib/prefix/include"
 fi
@@ -44,7 +44,7 @@ fi
 xxd -i src/lpm.luac > src/lpm.lua.c
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && LDFLAGS=" $LDFLAGS -ldl -pthread"
-[[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && LDFLAGS="$LDFLAGS -lbcrypt -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4 -liconv"
+[[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && LDFLAGS="$LDFLAGS -lbcrypt -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4"
 
 [[ " $@" != *" -g"* && " $@" != *" -O"* ]] && CFLAGS="$CFLAGS -O3" && LDFLAGS="$LDFLAGS -s"
 $CC $CFLAGS $SRCS $@ -o $BIN $LDFLAGS 
