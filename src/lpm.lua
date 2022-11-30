@@ -459,21 +459,22 @@ local function prompt(message)
 end
 
 
-function common.get(source, target, checksum)
+function common.get(source, target, checksum, depth)
   if not source then error("requires url") end
+  if depth > 10 then error("too many redirects") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
   if not checksum then 
     local res, headers = system.get(protocol, hostname, port, rest, target) 
-    if headers.location then return common.get(headers.location, target, checksum) end
+    if headers.location then return common.get(headers.location, target, checksum, (depth or 0) + 1) end
     return res
   end
   if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
   local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
   if not system.stat(cache_path) then
     local res, headers = system.get(source, cache_path)
-    if headers.location then return common.get(headers.location, target, checksum) end
+    if headers.location then return common.get(headers.location, target, checksum, (depth or 0) + 1) end
     if checksum ~= "SKIP" and system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
   end
   common.copy(cache_path, target)
