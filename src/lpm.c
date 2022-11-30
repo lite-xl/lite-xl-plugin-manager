@@ -21,8 +21,6 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <unistd.h>
-#include <archive.h>
-#include <archive_entry.h>
 #include <fcntl.h>
 
 #include <sys/stat.h>
