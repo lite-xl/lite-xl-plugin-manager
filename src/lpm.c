@@ -19,7 +19,6 @@
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/net.h>
-#include <arpa/inet.h>
 
 #ifdef _WIN32
   #include <direct.h>
@@ -30,6 +29,7 @@
   #include <netinet/in.h>
   #include <netdb.h>
   #include <sys/socket.h>
+  #include <arpa/inet.h>
   #define MAX_PATH PATH_MAX
 #endif
 

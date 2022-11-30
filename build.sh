@@ -15,8 +15,8 @@ CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PR
 mkdir -p lib/prefix/include lib/prefix/lib
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
-  [ ! -e "lib/zlib/build" && $OSTYPE == 'msys'* ] && cd lib/zlib && mkdir build && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
-  [ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ] && cd lib/zlib && mkdir build && $MAKE -f ../win32/Makefile.gcc -j $JOBS && cp *.a ../prefix/lib && cp *.h ../prefix/include && cd ../../
+  [[ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ]] && cd lib/zlib && mkdir build && cd build && ../configure --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [[ ! -e "lib/zlib/build" && $OSTYPE == 'msys'* ]] && cd lib/zlib && mkdir build && $MAKE -f ../win32/Makefile.gcc -j $JOBS && cp *.a ../prefix/lib && cp *.h ../prefix/include && cd ../../
   LDFLAGS="$LDFLAGS -Llib/libz/build -l:libz.a" && CFLAGS="$CFLAGS -Ilib/prefix/include" && LDFLAGS="$LDFLAGS -Llib/prefix/lib -Llib/prefix/lib64"
 fi
 if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* ]]; then
