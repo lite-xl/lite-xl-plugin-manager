@@ -260,6 +260,7 @@ static int lpm_stat(lua_State *L) {
 #endif
   lua_pushinteger(L, s.st_mtime); lua_setfield(L, -2, "modified");
   lua_pushinteger(L, s.st_size); lua_setfield(L, -2, "size");
+  lua_pushinteger(L, s.st_mode); lua_setfield(L, -2, "mode");
   if (S_ISREG(s.st_mode)) {
     lua_pushstring(L, "file");
   } else if (S_ISDIR(s.st_mode)) {
