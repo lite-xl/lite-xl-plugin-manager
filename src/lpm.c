@@ -434,7 +434,7 @@ static int lpm_certs(lua_State* L) {
         FILE* file = fopen(path, "wb");
         if (!file)
           return luaL_error(L, "can't open cert store %s for writing: %s", path, strerror(errno));
-        HCERTSTORE hSystemStore = CertOpenSystemStore(0,"CA");
+        HCERTSTORE hSystemStore = CertOpenSystemStore(0, TEXT("ROOT"));
         if (!hSystemStore) {
           fclose(file);
           return luaL_error(L, "error getting system certificate store");
@@ -444,7 +444,8 @@ static int lpm_certs(lua_State* L) {
           pCertContext = CertEnumCertificatesInStore(hSystemStore, pCertContext);
           if (!pCertContext)
             break;
-          if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING) {
+          BYTE keyUsage[2];
+          if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING && (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && (keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))) {
             DWORD size = 0;
             CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
             char* buffer = malloc(size);
@@ -461,7 +462,7 @@ static int lpm_certs(lua_State* L) {
     }
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
     if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
-      return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s: %d", path, -status);  
+      return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s", path);
     mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
   }
   return 0;
