@@ -393,7 +393,7 @@ function common.rmrf(root)
     local status, err = os.remove(root) 
     if not status then 
       if not err:find("denied") then error("can't remove " .. root .. ": " .. err) end
-      system.chmod(root, 844) -- chmod so that we can write, for windows.
+      system.chmod(root, 448) -- chmod so that we can write, for windows.
       status, err = os.remove(root)
       if not status then error("can't remove " .. root .. ": " .. err) end 
     end
