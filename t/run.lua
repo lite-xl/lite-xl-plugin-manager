@@ -394,6 +394,7 @@ local function run_tests(tests, arg)
     local failed = false
     xpcall(v, function(err)
       print("[FAIL]: " .. err)
+      print(debug.traceback())
       print()
       print()
       print("Last Command: " .. last_command)

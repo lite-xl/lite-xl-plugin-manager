@@ -1292,7 +1292,7 @@ local function lpm_install(...)
     if name == "lite-xl" then
       lpm_lite_xl_install(version)
     else
-      local plugins = { system_bottle:get_plugin(name, version, { mod_version = system_bottle.lite_xl.mod_version }) }
+      local plugins = common.grep({ system_bottle:get_plugin(name, version, { mod_version = system_bottle.lite_xl.mod_version }) }, function(e) return not e:is_installed(system_bottle) end)
       if #plugins == 0 then error("can't find plugin " .. name .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       for j,v in ipairs(plugins) do v:install(system_bottle) end
     end
