@@ -30,6 +30,7 @@
 #include <mbedtls/entropy.h>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/ssl.h>
+#include <mbedtls/error.h>
 #include <mbedtls/net.h>
 
 #include <zlib.h>
@@ -131,7 +132,7 @@ static int lpm_ls(lua_State *L) {
 
 #ifdef _WIN32
   lua_settop(L, 1);
-  lua_pushstring(L, path[0] == 0 || strchr("\\/", path[strlen(path) - 1]) != NULL ? "*" : "/*");
+  lua_pushstring(L, path[0] == 0 || strchr("\\/", path[strlen(path) - 1]) != NULL ? "*" : "\\*");
   lua_concat(L, 2);
   path = lua_tostring(L, -1);
 
@@ -371,6 +372,34 @@ static mbedtls_ctr_drbg_context drbg_context;
 static mbedtls_ssl_config ssl_config;
 static mbedtls_ssl_context ssl_context;
 
+static int mbedtls_snprintf(char* buffer, int len, int status, const char* str, ...) {
+  char mbed_buffer[128];
+  mbedtls_strerror(status, mbed_buffer, sizeof(mbed_buffer));
+  int error_len = strlen(mbed_buffer);
+  va_list va;
+  int offset = 0;
+  va_start(va, str);
+    offset = vsnprintf(buffer, len, str, va);
+  va_end(va);
+  if (offset < len - 2) {
+    strcat(buffer, ": ");
+    if (offset < len - error_len - 2)
+      strcat(buffer, mbed_buffer);
+  }
+  return strlen(buffer);
+}
+
+static int luaL_mbedtls_error(lua_State* L, int code, const char* str, ...) {
+  char vsnbuffer[1024];
+  char mbed_buffer[128];
+  mbedtls_strerror(code, mbed_buffer, sizeof(mbed_buffer));
+  va_list va;
+  va_start(va, str);
+      vsnprintf(vsnbuffer, sizeof(vsnbuffer), str, va);
+  va_end(va);
+  return luaL_error(L, "%s: %s", vsnbuffer, mbed_buffer);
+}
+
 
 static int lpm_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
@@ -386,9 +415,11 @@ static int lpm_certs(lua_State* L) {
   mbedtls_entropy_init(&entropy_context);
   mbedtls_ctr_drbg_init(&drbg_context);
   if ((status = mbedtls_ctr_drbg_seed(&drbg_context, mbedtls_entropy_func, &entropy_context, NULL, 0)) != 0)
-    return luaL_error(L, "failed to setup mbedtls_x509");
+    return luaL_mbedtls_error(L, status, "failed to setup mbedtls_x509");
   mbedtls_ssl_config_init(&ssl_config);
   status = mbedtls_ssl_config_defaults(&ssl_config, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
+  if (status)
+    return luaL_mbedtls_error(L, status, "can't set ssl_config defaults");
   mbedtls_ssl_conf_max_version(&ssl_config, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
   mbedtls_ssl_conf_min_version(&ssl_config, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
   mbedtls_ssl_conf_authmode(&ssl_config, MBEDTLS_SSL_VERIFY_REQUIRED);
@@ -430,7 +461,7 @@ static int lpm_certs(lua_State* L) {
     }
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
     if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
-      return luaL_error(L, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s: %d", path, -status);  
+      return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s: %d", path, -status);  
     mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
   }
   return 0;
@@ -628,13 +659,13 @@ static int lpm_get(lua_State* L) {
     mbedtls_net_set_block(&net_context);
     mbedtls_ssl_set_bio(&ssl_context, &net_context, mbedtls_net_send, NULL, mbedtls_net_recv_timeout);
     if ((status = mbedtls_net_connect(&net_context, hostname, port, MBEDTLS_NET_PROTO_TCP)) != 0) {
-      snprintf(err, sizeof(err), "can't connect to hostname %s: %d", hostname, status); goto cleanup;
+      mbedtls_snprintf(err, sizeof(err), status, "can't connect to hostname %s", hostname); goto cleanup;
     } else if ((status = mbedtls_ssl_set_hostname(&ssl_context, hostname)) != 0) {
-      snprintf(err, sizeof(err), "can't set hostname %s: %d", hostname, status); goto cleanup;
+      mbedtls_snprintf(err, sizeof(err), status, "can't set hostname %s", hostname); goto cleanup;
     } else if ((status = mbedtls_ssl_handshake(&ssl_context)) != 0) {
-      snprintf(err, sizeof(err), "can't handshake with %s: %d", hostname, status); goto cleanup;
+      mbedtls_snprintf(err, sizeof(err), status, "can't handshake with %s", hostname); goto cleanup;
     } else if ((status = mbedtls_ssl_get_verify_result(&ssl_context)) != 0) {
-      snprintf(err, sizeof(err), "can't verify result for %s: %d", hostname, status); goto cleanup;
+      mbedtls_snprintf(err, sizeof(err), status, "can't verify result for %s", hostname); goto cleanup;
     }
   } else {
     int port = luaL_checkinteger(L, 3);

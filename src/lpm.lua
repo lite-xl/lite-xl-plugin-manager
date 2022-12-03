@@ -389,9 +389,13 @@ function common.normalize_path(path) if not path or not path:find("^~") then ret
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
   if not info then return end
-  if info.type == "file" or info.symlink then return os.remove(root) end
-  for i,v in ipairs(system.ls(root)) do common.rmrf(root .. PATHSEP .. v) end
-  system.rmdir(root)
+  if info.type == "file" or info.symlink then 
+    local status, err = os.remove(root) 
+    if not status then error("can't remove " .. root .. ": " .. err) end 
+  else
+    for i,v in ipairs(system.ls(root)) do common.rmrf(root .. PATHSEP .. v) end
+    system.rmdir(root)
+  end
 end
 function common.mkdirp(path)
   local stat = system.stat(path)
@@ -400,7 +404,7 @@ function common.mkdirp(path)
   local target
   for _, dirname in ipairs({ common.split("[/\\]", path) }) do
     target = target and target .. PATHSEP .. dirname or dirname
-    if target ~= "" and not system.stat(target) then system.mkdir(target) end
+    if target ~= "" and not target:find("^[A-Z]:$") and not system.stat(target) then system.mkdir(target) end
   end
 end
 function common.copy(src, dst)
@@ -1617,7 +1621,7 @@ Flags have the following effects:
   AUTO_PULL_REMOTES = ARGS["remotes"]
   if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
-  TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. "/tmp"
+  TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
 
   repositories = {}
   if ARGS[2] == "purge" then return lpm_purge() end
@@ -1641,7 +1645,8 @@ Flags have the following effects:
       "/var/ssl/certs",                                    -- AIX
     }
     if PLATFORM == "windows" then
-      system.certs("system", TMPDIR .. "certs.crt")
+      common.mkdirp(TMPDIR)
+      system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
     else
       for i, path in ipairs(paths) do
         local stat = system.stat(path) 

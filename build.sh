@@ -17,7 +17,7 @@ mkdir -p lib/prefix/include lib/prefix/lib
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
   [[ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ]] && cd lib/zlib && mkdir build && cd build && ../configure --static --prefix=`pwd`/../../prefix && $MAKE -j $JOBS && $MAKE install && cd ../../../
-  [[ ! -e "lib/zlib/build" && $OSTYPE == 'msys'* ]] && cd lib/zlib && mkdir build && $MAKE -f ../win32/Makefile.gcc -j $JOBS && cp *.a ../prefix/lib && cp *.h ../prefix/include && cd ../../
+  [[ ! -e "lib/zlib/build" && $OSTYPE == 'msys'* ]] && cd lib/zlib && mkdir build && $MAKE -f win32/Makefile.gcc -j $JOBS && cp *.a ../prefix/lib && cp *.h ../prefix/include && cd ../../
   LDFLAGS="$LDFLAGS -l:libz.a"
 fi
 if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* ]]; then
