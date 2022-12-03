@@ -391,7 +391,12 @@ function common.rmrf(root)
   if not info then return end
   if info.type == "file" or info.symlink then 
     local status, err = os.remove(root) 
-    if not status then error("can't remove " .. root .. ": " .. err) end 
+    if not status then 
+      if not err:find("permission") then error("can't remove " .. root .. ": " .. err) end
+      system.chmod(root, 844) -- chmod so that we can write, for windows.
+      status, err = os.remove(root)
+      if not status then error("can't remove " .. root .. ": " .. err) end 
+    end
   else
     for i,v in ipairs(system.ls(root)) do common.rmrf(root .. PATHSEP .. v) end
     system.rmdir(root)
