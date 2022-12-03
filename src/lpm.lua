@@ -473,7 +473,7 @@ function common.get(source, target, checksum, depth)
   if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
   local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
   if not system.stat(cache_path) then
-    local res, headers = system.get(source, cache_path)
+    local res, headers = system.get(protocol, hostname, port, rest, cache_path)
     if headers.location then return common.get(headers.location, target, checksum, (depth or 0) + 1) end
     if checksum ~= "SKIP" and system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
   end
@@ -566,6 +566,17 @@ function Plugin:is_installed(bottle)
   if #common.grep({ bottle:get_plugin(self.name, nil, {  }) }, function(plugin) return not plugin.repository end) > 0 then return false end
   return not Plugin.is_path_different(self.local_path, install_path)
 end
+function Plugin:is_upgradable(bottle)
+  if self:is_installed(bottle) then
+    local plugins = { bottle:get_plugin(self.name) }
+    for i, v in ipairs(plugins) do
+      if v ~= self and compare_version(self.version, v.version) <= 1 then
+        return true
+      end
+    end
+  end
+  return false
+end
 function Plugin:is_incompatible(plugin) 
   return (self.dependencies[plugin.name] and not match_version(plugin.version, self.dependencies[plugin.name] and self.dependencies[plugin.name].version)) or 
     (self.conflicts[plugin.name] and match_version(plugin.version, self.conflicts[plugin.name] and self.conflicts[plugin.name].version)) 
@@ -600,7 +611,7 @@ end
 
 
 function Plugin:install(bottle, installing)
-  if self:is_installed(bottle) then log_warning("plugin " .. self.name .. " is already installed") return end
+  if self:is_installed(bottle) then error("plugin " .. self.name .. " is already installed") return end
   local install_path = self:get_install_path(bottle)
   local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#USERDIR + 2)
   local status, err = pcall(function()
@@ -624,7 +635,7 @@ function Plugin:install(bottle, installing)
       end
     end
     common.mkdirp(common.dirname(temporary_install_path))
-    if self.status == "upgradable" then 
+    if self:is_upgradable(bottle) then 
       log_action("Upgrading " .. self.organization .. "plugin located at " .. self.local_path .. " to " .. install_path)
       common.rmrf(install_path) 
     else
@@ -661,11 +672,12 @@ function Plugin:install(bottle, installing)
           log_action("Downloading file " .. file.url .. "...")
           common.get(file.url, temporary_path, file.checksum)
           log_action("Downloaded file " .. file.url .. " to " .. path)
-          if file.checksum ~= "SKIP" and system.hash(temporary_path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
+          if file.arch then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
         end
       end
     end
   end)
+  bottle:invalidate_cache()
   if not status then
     common.rmrf(temporary_install_path)
     error(err)
@@ -1018,7 +1030,12 @@ local function get_repository_plugins()
   return t, hash
 end
 
+function Bottle:invalidate_cache()
+  self.all_plugins_cache = nil
+end
+
 function Bottle:all_plugins()
+  if self.all_plugins_cache then return self.all_plugins_cache end
   local t, hash = get_repository_plugins()
   local plugin_paths = {
     (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. "plugins",
@@ -1042,6 +1059,7 @@ function Bottle:all_plugins()
       end
     end
   end
+  self.all_plugins_cache = t
   return t
 end
 
@@ -1316,7 +1334,7 @@ local function lpm_plugin_list(name)
     local repo = plugin.repository
     table.insert(result.plugins, {
       name = plugin.name,
-      status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or (plugin:is_bundled(system_bottle) and "bundled" or (plugin:is_core(system_bottle) and "core" or "orphan")),
+      status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or (plugin:is_bundled(system_bottle) and "bundled" or (plugin:is_core(system_bottle) and "core" or (plugin:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
       version = "" .. plugin.version,
       dependencies = plugin.dependencies,
       description = plugin.description,
