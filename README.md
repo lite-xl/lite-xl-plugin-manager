@@ -34,13 +34,13 @@ If you want to build it quickly, and have the right modules installed, you can
 do:
 
 ```
-./build.sh -DLPM_LIVE=1 -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz
+./build.sh -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz
 ```
 
 OR
 
 ```
-gcc -DLPM_LIVE=1 src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
+gcc src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
   -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -o lpm
 ```
 
@@ -87,7 +87,7 @@ lpm --help
 ### Linux
 
 ```
-./build.sh -DLPM_VERSION='"'0.1-x86_64-linux-`git rev-parse --short HEAD`'"'
+./build.sh -DLPM_STATIC -DLPM_VERSION='"'0.1-x86_64-linux-`git rev-parse --short HEAD`'"'
 ```
 
 ### Linux to Windows
@@ -95,7 +95,7 @@ lpm --help
 ```
 CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER\
   -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_INCLUDE_PATH=/usr/share/mingw-w64/include"\
-  GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"'
+  GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"'
 ```
 
 ## Tests
