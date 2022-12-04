@@ -36,9 +36,11 @@ fi
 [[ "$@" != *"-llua"* ]] && CFLAGS="$CFLAGS -Ilib/lua -DMAKE_LIB=1" && SRCS="$SRCS lib/lua/onelua.c"
 
 # Build the pre-packaged lua file into the executbale.
-[[ ! -e "lua.exe" ]] && gcc -Ilib/lua -o lua.exe lib/lua/onelua.c -lm
-./lua.exe -e 'io.open("src/lpm.luac", "wb"):write(string.dump(assert(loadfile("src/lpm.lua"))))'
-xxd -i src/lpm.luac > src/lpm.lua.c
+if [[ "$@" != *"-DLPM_LIVE" ]]; then
+  [[ ! -e "lua.exe" ]] && gcc -Ilib/lua -o lua.exe lib/lua/onelua.c -lm
+  ./lua.exe -e 'io.open("src/lpm.luac", "wb"):write(string.dump(assert(loadfile("src/lpm.lua"))))'
+  xxd -i src/lpm.luac > src/lpm.lua.c
+fi
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && LDFLAGS=" $LDFLAGS -ldl -pthread"
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && LDFLAGS="$LDFLAGS -lbcrypt -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4"
