@@ -34,7 +34,14 @@ If you want to build it quickly, and have the right modules installed, you can
 do:
 
 ```
-./build.sh -lz -lssl -lgit2 -lcurl -llua -lcrypto -larchive -llzma
+./build.sh -DLPM_LIVE=1 -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz
+```
+
+OR
+
+```
+gcc -DLPM_LIVE=1 src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
+  -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -o lpm
 ```
 
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 

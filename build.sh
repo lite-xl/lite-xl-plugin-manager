@@ -8,11 +8,11 @@
 
 SRCS="src/*.c"
 CFLAGS="$CFLAGS -Ilib/prefix/include"
-LDFLAGS="$LDFLAGS -lm -pthread -static-libgcc -Llib/prefix/lib"
+LDFLAGS="$LDFLAGS -lm -static-libgcc -Llib/prefix/lib"
 
 [[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libzip/build lib/mbedtls-2.27.0/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
 
-# Build supporting libraries, libz, libmbedtls, libmbedcrypto, libgit2, liblzma, libarchive, liblua
+# Build supporting libraries, libz, libmbedtls, libmbedcrypto, libgit2, libzip, libmicrotar, liblua
 CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=`pwd`/lib/prefix -DCMAKE_INSTALL_PREFIX=`pwd`/lib/prefix -DBUILD_SHARED_LIBS=OFF"
 mkdir -p lib/prefix/include lib/prefix/lib
 if [[ "$@" != *"-lz"* ]]; then
@@ -42,7 +42,7 @@ if [[ "$@" != *"-DLPM_LIVE" ]]; then
   xxd -i src/lpm.luac > src/lpm.lua.c
 fi
 
-[[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && LDFLAGS=" $LDFLAGS -ldl -pthread"
+[[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && LDFLAGS=" $LDFLAGS -ldl"
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && LDFLAGS="$LDFLAGS -lbcrypt -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4"
 
 [[ " $@" != *" -g"* && " $@" != *" -O"* ]] && CFLAGS="$CFLAGS -O3" && LDFLAGS="$LDFLAGS -s"
