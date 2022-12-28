@@ -1619,6 +1619,9 @@ Flags have the following effects:
   --no-install-optional    On install, anything marked as optional
                            won't prompt.
   --post                   Run post-install build steps. Must be explicitly enabled.
+                           Official repositories must function without this
+                           flag being needed; generally they must provide
+                           binaries if there is a native compilation step.
 ]]
     )
     return 0
