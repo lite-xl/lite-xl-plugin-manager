@@ -443,8 +443,15 @@ function common.reset(path, ref, type)
     if not pcall(system.reset, path, "refs/tags/" .. ref, type) then system.reset(path, "refs/remotes/origin/" .. ref, type) end
   end
 end
+function common.chdir(dir, callback)
+  local wd = system.pwd()
+  system.chdir(dir)
+  local status, err = pcall(callback)
+  system.chdir(wd)
+  if not status then error(err)
+end
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, repositories, lite_xls, system_bottle
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle
 
 local Plugin, Repository, LiteXL, Bottle = {}, {}, {}, {}
 
@@ -691,6 +698,13 @@ function Plugin:install(bottle, installing)
     common.rmrf(temporary_install_path)
     error(err)
   else
+    if POST and self.post then
+      common.chdir(temporary_install_path, function() 
+        if type(self.post) == "table" and not self.post[ARCH] then error("can't find post command for arch " .. ARCH) end
+        local code = os.system(type(self.post) == "table" and self.post[ARCH] or self.post) ~= 0 
+        if code ~= 0 then error("post step failed with error code " .. code) end
+      end)
+    end
     common.rmrf(install_path)
     common.mkdirp(common.dirname(install_path))
     common.rename(temporary_install_path, install_path)
@@ -1514,7 +1528,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl_certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
-  [--datadir=directory] [--binary=path]
+  [--datadir=directory] [--binary=path] [--post]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1604,6 +1618,7 @@ Flags have the following effects:
                            to all.
   --no-install-optional    On install, anything marked as optional
                            won't prompt.
+  --post                   Run post-install build steps. Must be explicitly enabled.
 ]]
     )
     return 0
@@ -1613,6 +1628,7 @@ Flags have the following effects:
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
+  POST = ARGS["post"]
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]

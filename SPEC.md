@@ -149,7 +149,8 @@ that any version greater than `0.1` can be used.
       "version": "1.0",
       "mod_version": 3,
       "remote": "https://github.com/anthonyaxenov/lite-xl-ignore-syntax:2ed993ed4376e1840b0824d7619f2d3447891d3aa234459378fcf9387c4e4680", # The remote to be used for this plugin.
-      "name": "language_ignore"
+      "name": "language_ignore",
+      "post": {"x86-linux":"cp language_ignore.lua /tmp/somewhere-else", "x86-windows":"COPY language_ignore.lua C:\\Users\\Someone\\ignore.lua"} # Post download steps to run to fully set up the plugin. Does not run by default, requires --post.
     },
     {
       "description": "Provides a GUI to manage core and plugin settings, bindings and select color theme. Depends on widget.",

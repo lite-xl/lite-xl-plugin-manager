@@ -788,6 +788,19 @@ static int lpm_get(lua_State* L) {
   return 2;
 }
 
+static int lpm_chdir(lua_State* L) {
+  if (chdir(luaL_checkstring(L, 1)))
+    return luaL_error(L, "error chdiring: %s", strerror(errno));
+  return 0;
+}
+
+static int lpm_pwd(lua_State* L) {
+  char buffer[MAX_PATH];
+  if (!getcwd(buffer, sizeof(buffer)))
+    return luaL_error(L, "error getcwd: %s", strerror(errno));
+  lua_pushstring(L, buffer);
+  return 1;
+}
 
 static const luaL_Reg system_lib[] = {
   { "ls",        lpm_ls    },   // Returns an array of files.
@@ -803,6 +816,8 @@ static const luaL_Reg system_lib[] = {
   { "get",       lpm_get },     // HTTP(s) GET request.
   { "extract",   lpm_extract }, // Extracts .tar.gz, and .zip files.
   { "certs",     lpm_certs },   // Sets the SSL certificate chain folder/file.
+  { "chdir",     lpm_chdir },   // Changes directory. Only use for --post actions.
+  { "pwd",       lpm_pwd },     // Gets existing directory. Only use for --post actions.
   { NULL,        NULL }
 };
 
