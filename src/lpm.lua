@@ -1606,22 +1606,24 @@ Flags have the following effects:
   --quiet                  Outputs nothing but explicit responses.
   --mod-version            Sets the mod version of lite-xl to install plugins.
   --version                Returns version information.
-  --remotes                Automatically adds any specified remotes in the 
-                           repository to the end of the resolution list.
-                           This is a potential security risk, so be careful.
   --help                   Displays this help text.
   --ssl_certs              Sets the SSL certificate store.
   --arch                   Sets the architecture (default: ]] .. _G.ARCH .. [[).
-  --force                  Ignores checksum inconsitencies. 
-                           Not recommended; security risk.
   --assume-yes             Ignores any prompts, and automatically answers yes
                            to all.
   --no-install-optional    On install, anything marked as optional
                            won't prompt.
+
+There also several flags which are classified as "risky", and are never enabled
+in any circumstance unless explicitly supplied.
+
+  --force                  Ignores checksum inconsitencies. 
   --post                   Run post-install build steps. Must be explicitly enabled.
                            Official repositories must function without this
                            flag being needed; generally they must provide
                            binaries if there is a native compilation step.
+  --remotes                Automatically adds any specified remotes in the 
+                           repository to the end of the resolution list.
 ]]
     )
     return 0
