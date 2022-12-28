@@ -448,7 +448,7 @@ function common.chdir(dir, callback)
   system.chdir(dir)
   local status, err = pcall(callback)
   system.chdir(wd)
-  if not status then error(err)
+  if not status then error(err) end
 end
 
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle
