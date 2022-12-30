@@ -1674,13 +1674,16 @@ in any circumstance unless explicitly supplied.
       common.mkdirp(TMPDIR)
       system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
     else
+      local has_certs = false
       for i, path in ipairs(paths) do
         local stat = system.stat(path) 
         if stat then 
+          has_certs = true
           system.certs(stat.type, path) 
           break 
         end
       end
+      if not has_certs then error("can't find your system's SSL ceritficates; please specify specify a certificate bundle or certificat directory with --ssl_certs") end
     end
   end
 

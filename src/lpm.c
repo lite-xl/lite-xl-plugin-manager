@@ -475,7 +475,7 @@ static int lpm_certs(lua_State* L) {
         CFTypeRef copyResult = NULL;
         OSStatus err = SecItemCopyMatching(query, &copyResult);
         if (err == errSecSuccess) {
-            CFShow(copyResult);
+          // Try and 
         }
       #else
         return luaL_error(L, "can't use system certificates on windows or mac");
