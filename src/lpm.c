@@ -32,6 +32,9 @@
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <mbedtls/net.h>
+#ifdef MBEDTLS_DEBUG_C
+  #include <mbedtls/debug.h>
+#endif
 
 #include <zlib.h>
 #include <microtar.h>
@@ -405,6 +408,9 @@ static int luaL_mbedtls_error(lua_State* L, int code, const char* str, ...) {
   return luaL_error(L, "%s: %s", vsnbuffer, mbed_buffer);
 }
 
+static void lpm_tls_debug(void *ctx, int level, const char *file, int line, const char *str) {
+  fprintf(stderr, "%s:%04d: |%d| %s", file, line, level, str);
+}
 
 static int lpm_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
@@ -430,6 +436,10 @@ static int lpm_certs(lua_State* L) {
   mbedtls_ssl_conf_authmode(&ssl_config, MBEDTLS_SSL_VERIFY_REQUIRED);
   mbedtls_ssl_conf_rng(&ssl_config, mbedtls_ctr_drbg_random, &drbg_context);
   mbedtls_ssl_conf_read_timeout(&ssl_config, 5000);
+  #ifdef MBEDTLS_DEBUG_C
+    mbedtls_debug_set_threshold(5);
+    mbedtls_ssl_conf_dbg(&ssl_config, lpm_tls_debug, NULL);
+  #endif
   has_setup_ssl = 1;
   if (strcmp(type, "dir") == 0) {
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
@@ -461,7 +471,7 @@ static int lpm_certs(lua_State* L) {
         }
         fclose(file);
         CertCloseStore(hSystemStore, 0);
-      #elif __APPLE__ // https://developer.apple.com/forums/thread/691009; also pulled from curl
+      #elif __APPLE__ // https://developer.apple.com/forums/thread/691009; see also curl
         /*CFStringRef keys[] = { kSecClass,    kSecMatchLimit,    kSecReturnRef };
         CFTypeRef values[] = { kSecClassCertificate, kSecMatchLimitAll, kCFBooleanTrue };
         CFDictionaryRef query = CFDictionaryCreate(

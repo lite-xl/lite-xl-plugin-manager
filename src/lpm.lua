@@ -1440,8 +1440,8 @@ local function parse_arguments(arguments, options)
       if flag_type == "flag" then
         args[option] = true
       elseif flag_type == "string" or flag_type == "number" then
-        if not value then
-          if i < #arguments then error("option " .. option .. " requires a " .. flag_type) end
+        if not value or value == "" then
+          if i == #arguments then error("option " .. option .. " requires a " .. flag_type) end
           value = arguments[i+1]
           i = i + 1
         end
