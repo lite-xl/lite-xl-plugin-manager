@@ -410,6 +410,7 @@ static int luaL_mbedtls_error(lua_State* L, int code, const char* str, ...) {
 
 static void lpm_tls_debug(void *ctx, int level, const char *file, int line, const char *str) {
   fprintf(stderr, "%s:%04d: |%d| %s", file, line, level, str);
+  fflush(stderr);
 }
 
 static int lpm_certs(lua_State* L) {
@@ -436,7 +437,7 @@ static int lpm_certs(lua_State* L) {
   mbedtls_ssl_conf_authmode(&ssl_config, MBEDTLS_SSL_VERIFY_REQUIRED);
   mbedtls_ssl_conf_rng(&ssl_config, mbedtls_ctr_drbg_random, &drbg_context);
   mbedtls_ssl_conf_read_timeout(&ssl_config, 5000);
-  #ifdef MBEDTLS_DEBUG_C
+  #if defined(MBEDTLS_DEBUG_C) && defined(LPM_MBEDTLS_DEBUG)
     mbedtls_debug_set_threshold(5);
     mbedtls_ssl_conf_dbg(&ssl_config, lpm_tls_debug, NULL);
   #endif
@@ -673,21 +674,20 @@ static int lpm_get(lua_State* L) {
   const char* hostname = luaL_checkstring(L, 2);
 
   int s = -2;
+  mbedtls_net_context net_context;
+  mbedtls_ssl_context ssl_context;
   mbedtls_ssl_context* ssl_ctx = NULL;
   mbedtls_net_context* net_ctx = NULL;
   if (strcmp(protocol, "https") == 0) {
     int status;
     const char* port = lua_tostring(L, 3);
     // https://gist.github.com/Barakat/675c041fd94435b270a25b5881987a30
-    mbedtls_net_context net_context;
-    mbedtls_ssl_context ssl_context;
     ssl_ctx = &ssl_context;
-    net_ctx = &net_context;
     mbedtls_ssl_init(&ssl_context);
-    
     if ((status = mbedtls_ssl_setup(&ssl_context, &ssl_config)) != 0) {
-      return luaL_error(L, "can't set up ssl for %s: %d", hostname, status);
+      mbedtls_snprintf(err, sizeof(err), status, "can't set up ssl for %s: %d", hostname, status); goto cleanup;
     }
+    net_ctx = &net_context;
     mbedtls_net_init(&net_context);
     mbedtls_net_set_block(&net_context);
     mbedtls_ssl_set_bio(&ssl_context, &net_context, mbedtls_net_send, NULL, mbedtls_net_recv_timeout);
@@ -781,7 +781,7 @@ static int lpm_get(lua_State* L) {
       int length = lpm_socket_read(s, buffer, sizeof(buffer), ssl_ctx);
       if (length == 0) break;
       if (length < 0) {
-        snprintf(err, sizeof(err), "error retrieving full response for %s%s: %s", hostname, rest, strerror(errno)); goto cleanup;
+        snprintf(err, sizeof(err), "error retrieving full response for %s%s: %s (%d)", hostname, rest, strerror(errno), length); goto cleanup;
       }
       fwrite(buffer, sizeof(char), length, file);
       remaining -= length;
@@ -796,7 +796,7 @@ static int lpm_get(lua_State* L) {
       int length = lpm_socket_read(s, buffer, sizeof(buffer), ssl_ctx);
       if (length == 0) break;
       if (length < 0) {
-        snprintf(err, sizeof(err), "error retrieving full response for %s%s: %s", hostname, rest, strerror(errno)); goto cleanup;
+        snprintf(err, sizeof(err), "error retrieving full response for %s%s: %s (%d)", hostname, rest, strerror(errno), length); goto cleanup;
       }
       luaL_addlstring(&B, buffer, length);
       remaining -= length;
