@@ -1670,7 +1670,7 @@ in any circumstance unless explicitly supplied.
       "/etc/openssl/certs",                                -- NetBSD
       "/var/ssl/certs",                                    -- AIX
     }
-    if PLATFORM == "windows" then
+    if PLATFORM == "windows" or PLATFORM == "darwin" then
       common.mkdirp(TMPDIR)
       system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
     else

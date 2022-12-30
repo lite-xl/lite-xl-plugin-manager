@@ -37,6 +37,10 @@
 #include <microtar.h>
 #include <zip.h>
 
+#ifdef __APPLE__
+  #include <Security/Security.h>
+#endif
+
 static char hex_digits[] = "0123456789abcdef";
 static int lpm_hash(lua_State* L) {
   size_t len;
@@ -457,8 +461,24 @@ static int lpm_certs(lua_State* L) {
         }
         fclose(file);
         CertCloseStore(hSystemStore, 0);
+      #elseif __APPLE__ // https://developer.apple.com/forums/thread/691009
+        CFStringRef keys[] = { kSecClass,    kSecMatchLimit,    kSecReturnRef };
+        CFTypeRef values[] = { kSecClassCertificate, kSecMatchLimitAll, kCFBooleanTrue };
+        CFDictionaryRef query = CFDictionaryCreate(
+            NULL,
+            (const void **) keys,
+            values,
+            sizeof(keys) / sizeof(keys[0]),
+            &kCFTypeDictionaryKeyCallBacks,
+            &kCFTypeDictionaryValueCallBacks
+        );
+        CFTypeRef copyResult = NULL;
+        OSStatus err = SecItemCopyMatching(query, &copyResult);
+        if (err == errSecSuccess) {
+            CFShow(copyResult);
+        }
       #else
-        return luaL_error(L, "can't use system certificates on non-windows");
+        return luaL_error(L, "can't use system certificates on windows or mac");
       #endif
     }
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
@@ -827,12 +847,16 @@ static const luaL_Reg system_lib[] = {
 #endif
 
 
-#ifndef LITE_ARCH_TUPLE
+#ifndef ARCH_PROCESSOR
   #if __x86_64__ || _WIN64 || __MINGW64__
     #define ARCH_PROCESSOR "x86_64"
-  #else
+  #elif __i386__
     #define ARCH_PROCESSOR "x86"
+  #else
+    #error "Please define -DARCH_PROCESSOR."
   #endif
+#endif
+#ifndef ARCH_PLATFORM
   #if _WIN32
     #define ARCH_PLATFORM "windows"
   #elif __linux__
@@ -840,8 +864,10 @@ static const luaL_Reg system_lib[] = {
   #elif __APPLE__
     #define ARCH_PLATFORM "darwin"
   #else
-    #error "Please define -DLITE_ARCH_TUPLE."
+    #error "Please define -DARCH_PLATFORM."
   #endif
+#endif
+#ifndef LITE_ARCH_TUPLE
   #define LITE_ARCH_TUPLE ARCH_PROCESSOR "-" ARCH_PLATFORM
 #endif
 
@@ -865,15 +891,14 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "ARGV");
   lua_pushliteral(L, LPM_VERSION);
   lua_setglobal(L, "VERSION");
+  lua_pushliteral(L, ARCH_PLATFORM);
+  lua_setglobal(L, "PLATFORM");
   #if _WIN32 
-    lua_pushliteral(L, "windows");
     lua_pushliteral(L, "\\");
   #else
-    lua_pushliteral(L, "posix");
     lua_pushliteral(L, "/");
   #endif
   lua_setglobal(L, "PATHSEP");
-  lua_setglobal(L, "PLATFORM");
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
   #ifndef LPM_STATIC
