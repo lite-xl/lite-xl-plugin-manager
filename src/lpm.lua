@@ -1645,7 +1645,7 @@ in any circumstance unless explicitly supplied.
   USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
   AUTO_PULL_REMOTES = ARGS["remotes"]
-  if not system.stat(USERDIR) then error("can't find user directory " .. USERDIR) end
+  if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
 
