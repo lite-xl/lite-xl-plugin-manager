@@ -11,7 +11,7 @@ CFLAGS="$CFLAGS -Ilib/prefix/include"
 LDFLAGS="$LDFLAGS -lm -Llib/prefix/lib"
 
 [[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libzip/build lib/mbedtls-2.27.0/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
-cmake --version >/dev/null && [[ "$?" != 0 ]] && echo "Please ensure that you have cmake installed." && exit -1
+cmake --version >/dev/null 2>/dev/null || { echo "Please ensure that you have cmake installed." && exit -1; }
 
 # Build supporting libraries, libz, libmbedtls, libmbedcrypto, libgit2, libzip, libmicrotar, liblua
 CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=`pwd`/lib/prefix -DCMAKE_INSTALL_PREFIX=`pwd`/lib/prefix -DBUILD_SHARED_LIBS=OFF"
