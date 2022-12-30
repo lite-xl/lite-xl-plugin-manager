@@ -1662,7 +1662,7 @@ in any circumstance unless explicitly supplied.
       "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
       "/etc/pki/tls/cacert.pem",                           -- OpenELEC
       "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
-      "/etc/ssl/cert.pem",                                 -- Alpine Linux
+      "/etc/ssl/cert.pem",                                 -- Alpine Linux (and Mac OSX)
       "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
       "/system/etc/security/cacerts",                      -- Android
       "/usr/local/share/certs",                            -- FreeBSD
@@ -1670,7 +1670,7 @@ in any circumstance unless explicitly supplied.
       "/etc/openssl/certs",                                -- NetBSD
       "/var/ssl/certs",                                    -- AIX
     }
-    if PLATFORM == "windows" or PLATFORM == "darwin" then
+    if PLATFORM == "windows" then
       common.mkdirp(TMPDIR)
       system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
     else

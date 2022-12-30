@@ -461,8 +461,8 @@ static int lpm_certs(lua_State* L) {
         }
         fclose(file);
         CertCloseStore(hSystemStore, 0);
-      #elseif __APPLE__ // https://developer.apple.com/forums/thread/691009
-        CFStringRef keys[] = { kSecClass,    kSecMatchLimit,    kSecReturnRef };
+      #elif __APPLE__ // https://developer.apple.com/forums/thread/691009; also pulled from curl
+        /*CFStringRef keys[] = { kSecClass,    kSecMatchLimit,    kSecReturnRef };
         CFTypeRef values[] = { kSecClassCertificate, kSecMatchLimitAll, kCFBooleanTrue };
         CFDictionaryRef query = CFDictionaryCreate(
             NULL,
@@ -476,9 +476,10 @@ static int lpm_certs(lua_State* L) {
         OSStatus err = SecItemCopyMatching(query, &copyResult);
         if (err == errSecSuccess) {
           // Try and 
-        }
+        }*/
+        return luaL_error(L, "can't use system on mac yet");
       #else
-        return luaL_error(L, "can't use system certificates on windows or mac");
+        return luaL_error(L, "can't use system certificates except on windows or mac");
       #endif
     }
     git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
