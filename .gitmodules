@@ -1,16 +1,21 @@
 [submodule "lua"]
 	path = lib/lua
 	url = https://github.com/lua/lua.git
+	shallow = true
 [submodule "lib/libgit2"]
 	path = lib/libgit2
 	url = https://github.com/libgit2/libgit2.git
 	branch = main
+	shallow = true
 [submodule "lib/zlib"]
 	path = lib/zlib
 	url = https://github.com/madler/zlib.git
+	shallow = true
 [submodule "lib/libzip"]
 	path = lib/libzip
 	url = https://github.com/nih-at/libzip.git
+	shallow = true
 [submodule "lib/microtar"]
 	path = lib/microtar
 	url = https://github.com/rxi/microtar.git
+	shallow = true
