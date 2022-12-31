@@ -14,7 +14,7 @@ jobs:
         run: git submodule update --init --depth=1
       - name: Build Linux
         run: |
-          SSL_CONFIGURE="no-tests" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
+          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
           cp lpm /tmp/lpm
       - name: Package Debian/Ubuntu
@@ -55,8 +55,9 @@ jobs:
         run: git submodule update --init --depth=1
       - name: Build MacOS 
         run: |
-          SSL_CONFIGURE="no-tests" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
+          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
           cp lpm lpm.x86_64-darwin
+          gh release upload continuous lpm.x86_64-darwin
           if [[ `git tag --points-at HEAD | head -c 4` == "v"* ]]; then
             export RELEASE=`git tag --points-at HEAD | head -c 4 | sed 's/^v//'`
             gh release upload v$RELEASE lpm.x86_64-darwin
