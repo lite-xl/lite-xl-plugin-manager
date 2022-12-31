@@ -363,6 +363,22 @@ static int lpm_git_transport_certificate_check_cb(struct git_cert *cert, int val
   return 0; // If no_verify_ssl is enabled, basically always return 0 when this is set as callback.
 }
 
+static int lpm_git_transfer_progress_cb(const git_transfer_progress *stats, void *payload) {
+  lua_State* L = payload;
+  lua_pushvalue(L, 2);
+  lua_pushinteger(L, stats->received_bytes);
+  lua_pushinteger(L, stats->total_objects);
+  lua_pushinteger(L, stats->indexed_objects);
+  lua_pushinteger(L, stats->received_objects);
+  lua_pushinteger(L, stats->local_objects);
+  lua_pushinteger(L, stats->total_deltas);
+  lua_pushinteger(L, stats->indexed_deltas);
+  lua_call(L, 7, 1);
+  int value = lua_tointeger(L, -1);
+  lua_pop(L, 1);
+  return value;
+}
+
 static int lpm_fetch(lua_State* L) {
   git_repository* repository = luaL_checkgitrepo(L, 1);
   git_remote* remote;
@@ -372,8 +388,11 @@ static int lpm_fetch(lua_State* L) {
   }
   git_fetch_options fetch_opts = GIT_FETCH_OPTIONS_INIT;
   fetch_opts.download_tags = GIT_REMOTE_DOWNLOAD_TAGS_ALL;
+  fetch_opts.callbacks.payload = L;
   if (no_verify_ssl)
     fetch_opts.callbacks.certificate_check = lpm_git_transport_certificate_check_cb;
+  if (lua_type(L, 2) == LUA_TFUNCTION)
+    fetch_opts.callbacks.transfer_progress = lpm_git_transfer_progress_cb;
   if (git_remote_fetch(remote, NULL, &fetch_opts, NULL)) {
     git_remote_free(remote);
     git_repository_free(repository);
@@ -381,6 +400,11 @@ static int lpm_fetch(lua_State* L) {
   }
   git_remote_free(remote);
   git_repository_free(repository);
+  if (lua_type(L, 2) == LUA_TFUNCTION) {
+    lua_pushvalue(L, 2);
+    lua_pushboolean(L, 1);
+    lua_call(L, 1, 0);
+  }
   return 0;
 }
 
@@ -778,8 +802,10 @@ static int lpm_get(lua_State* L) {
   if (content_length_value)
     content_length = atoi(content_length_value);
   const char* path = luaL_optstring(L, 5, NULL);
+  int callback_function = lua_type(L, 6) == LUA_TFUNCTION ? 6 : 0;
   
   int body_length = buffer_length - (header_end - buffer);
+  int total_downloaded = body_length;
   int remaining = content_length - body_length;
   if (path) {
     FILE* file = fopen(path, "wb");
@@ -790,8 +816,14 @@ static int lpm_get(lua_State* L) {
       if (length < 0) {
         snprintf(err, sizeof(err), "error retrieving full response for %s%s: %s (%d)", hostname, rest, strerror(errno), length); goto cleanup;
       }
+      if (callback_function) {
+        lua_pushvalue(L, callback_function);
+        lua_pushinteger(L, total_downloaded);
+        lua_call(L, 1, 0);
+      }
       fwrite(buffer, sizeof(char), length, file);
       remaining -= length;
+      total_downloaded += length;
     }
     fclose(file);
     lua_pushnil(L);
@@ -805,13 +837,24 @@ static int lpm_get(lua_State* L) {
       if (length < 0) {
         snprintf(err, sizeof(err), "error retrieving full response for %s%s: %s (%d)", hostname, rest, strerror(errno), length); goto cleanup;
       }
+      if (callback_function) {
+        lua_pushvalue(L, callback_function);
+        lua_pushinteger(L, total_downloaded);
+        lua_call(L, 1, 0);
+      }
       luaL_addlstring(&B, buffer, length);
       remaining -= length;
+      total_downloaded += length;
     }
     luaL_pushresult(&B);
   }
   if (content_length != -1 && remaining != 0) {
     snprintf(err, sizeof(err), "error retrieving full response for %s%s", hostname, rest); goto cleanup;
+  }
+  if (callback_function) {
+    lua_pushvalue(L, callback_function);
+    lua_pushboolean(L, 1);
+    lua_call(L, 1, 0);
   }
   lua_newtable(L);
   cleanup:
