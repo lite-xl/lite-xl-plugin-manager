@@ -54,6 +54,7 @@ jobs:
       - name: Clone Submodules
         run: git submodule update --init --depth=1
       - name: Build MacOS 
+        env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
           cp lpm lpm.x86_64-darwin
