@@ -1515,7 +1515,7 @@ xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
     quiet = "flag", version = "string", ["mod-version"] = "string", remotes = "flag", help = "flag",
-    remotes = "flag", ssl_certs = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
+    remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
     ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag"
   })
   if ARGS["version"] then
@@ -1526,7 +1526,7 @@ xpcall(function()
     io.stderr:write([[
 Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory] 
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
-  [--ssl_certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
+  [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
   [--datadir=directory] [--binary=path] [--post]
 
@@ -1607,7 +1607,7 @@ Flags have the following effects:
   --mod-version            Sets the mod version of lite-xl to install plugins.
   --version                Returns version information.
   --help                   Displays this help text.
-  --ssl_certs              Sets the SSL certificate store. Can be a directory,
+  --ssl-certs              Sets the SSL certificate store. Can be a directory,
                            or path to a certificate bundle.
   --arch                   Sets the architecture (default: ]] .. _G.ARCH .. [[).
   --assume-yes             Ignores any prompts, and automatically answers yes
@@ -1628,7 +1628,7 @@ in any circumstance unless explicitly supplied.
                            binaries if there is a native compilation step.
   --remotes                Automatically adds any specified remotes in the 
                            repository to the end of the resolution list.
-  --ssl_certs=noverify     Ignores SSL certificate validation. Opens you up to
+  --ssl-certs=noverify     Ignores SSL certificate validation. Opens you up to
                            man-in-the-middle attacks.
 ]]
     )
@@ -1658,15 +1658,16 @@ in any circumstance unless explicitly supplied.
 
   repositories = {}
   if ARGS[2] == "purge" then return lpm_purge() end
-  if ARGS["ssl_certs"] then 
-    if ARGS["ssl_certs"] == "noverify" then
+  local ssl_certs = ARGS["ssl-certs"] or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
+  if ssl_certs then 
+    if ssl_certs == "noverify" then
       system.certs("noverify")
     else
-      local stat = system.stat(ARGS["ssl_certs"])
-      if not stat then error("can't find " .. ARGS["ssl_certs"]) end
-      system.certs(stat.type, ARGS["ssl_certs"])
+      local stat = system.stat(ssl_certs)
+      if not stat then error("can't find " .. ssl_certs) end
+      system.certs(stat.type, ssl_certs)
     end
-  elseif not os.getenv("SSL_CERT_DIR") and not os.getenv("SSL_CERT_FILE") then
+  else
     local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
       "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
       "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
@@ -1694,7 +1695,7 @@ in any circumstance unless explicitly supplied.
           break 
         end
       end
-      if not has_certs then error("can't find your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl_certs") end
+      if not has_certs then error("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs") end
     end
   end
 

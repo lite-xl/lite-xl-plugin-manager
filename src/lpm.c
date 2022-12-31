@@ -352,9 +352,7 @@ static int lpm_init(lua_State* L) {
   return 0;
 }
 
-static int no_verify_ssl = 0;
-static int has_setup_ssl = 0;
-static int print_trace = 0;
+static int no_verify_ssl, has_setup_ssl, print_trace;
 static mbedtls_x509_crt x509_certificate;
 static mbedtls_entropy_context entropy_context;
 static mbedtls_ctr_drbg_context drbg_context;
@@ -362,7 +360,7 @@ static mbedtls_ssl_config ssl_config;
 static mbedtls_ssl_context ssl_context;
 
 static int lpm_git_transport_certificate_check_cb(struct git_cert *cert, int valid, const char *host, void *payload) {
-  return 0;
+  return 0; // If no_verify_ssl is enabled, basically always return 0 when this is set as callback.
 }
 
 static int lpm_fetch(lua_State* L) {
@@ -425,8 +423,7 @@ static void lpm_libgit2_debug(git_trace_level_t level, const char *msg) {
 }
 
 static int lpm_trace(lua_State* L) {
-  int trace = lua_toboolean(L, 1);
-  print_trace = trace ? 1 : 0;
+  print_trace = lua_toboolean(L, 1) ? 1 : 0;
   return 0;
 }
 
@@ -818,12 +815,12 @@ static int lpm_get(lua_State* L) {
   }
   lua_newtable(L);
   cleanup:
-    if (ssl_ctx) {
+    if (ssl_ctx)
       mbedtls_ssl_free(ssl_ctx);
+    if (net_ctx)
       mbedtls_net_free(net_ctx);
-    } else if (s != -2) {
+    if (s != -2) 
       close(s);
-    }
     if (err[0])
       return luaL_error(L, "%s", err);
   return 2;

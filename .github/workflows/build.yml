@@ -57,8 +57,9 @@ jobs:
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
+          cp lpm lpm.x86_64-darwin
           gh release upload continuous *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 4` == "v"* ]]; then
             export RELEASE=`git tag --points-at HEAD | head -c 4 | sed 's/^v//'`
-            gh release upload v$RELEASE *.tar.gz
+            gh release upload v$RELEASE lpm.x86_64-darwin
           fi
