@@ -1516,7 +1516,7 @@ xpcall(function()
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
     quiet = "flag", version = "string", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ssl_certs = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
-    ["install-optional"] = "flag", datadir = "string", binary = "string"
+    ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -1614,6 +1614,9 @@ Flags have the following effects:
                            to all.
   --no-install-optional    On install, anything marked as optional
                            won't prompt.
+  --trace                  Dumps to STDERR useful debugging information, in
+                           particular information relating to SSL connections,
+                           and other network activity.
 
 There also several flags which are classified as "risky", and are never enabled
 in any circumstance unless explicitly supplied.
@@ -1651,6 +1654,7 @@ in any circumstance unless explicitly supplied.
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
+  if ARGS["trace"] then system.trace(true) end
 
   repositories = {}
   if ARGS[2] == "purge" then return lpm_purge() end

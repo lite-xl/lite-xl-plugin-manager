@@ -354,6 +354,7 @@ static int lpm_init(lua_State* L) {
 
 static int no_verify_ssl = 0;
 static int has_setup_ssl = 0;
+static int print_trace = 0;
 static mbedtls_x509_crt x509_certificate;
 static mbedtls_entropy_context entropy_context;
 static mbedtls_ctr_drbg_context drbg_context;
@@ -418,6 +419,17 @@ static void lpm_tls_debug(void *ctx, int level, const char *file, int line, cons
   fflush(stderr);
 }
 
+static void lpm_libgit2_debug(git_trace_level_t level, const char *msg) {
+  fprintf(stderr, "[libgit2]: %s\n", msg);
+  fflush(stderr);
+}
+
+static int lpm_trace(lua_State* L) {
+  int trace = lua_toboolean(L, 1);
+  print_trace = trace ? 1 : 0;
+  return 0;
+}
+
 static int lpm_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
   int status;
@@ -441,9 +453,12 @@ static int lpm_certs(lua_State* L) {
   mbedtls_ssl_conf_authmode(&ssl_config, MBEDTLS_SSL_VERIFY_REQUIRED);
   mbedtls_ssl_conf_rng(&ssl_config, mbedtls_ctr_drbg_random, &drbg_context);
   mbedtls_ssl_conf_read_timeout(&ssl_config, 5000);
-  #if defined(MBEDTLS_DEBUG_C) && defined(LPM_MBEDTLS_DEBUG)
+  #if defined(MBEDTLS_DEBUG_C)
+  if (print_trace) {
     mbedtls_debug_set_threshold(5);
     mbedtls_ssl_conf_dbg(&ssl_config, lpm_tls_debug, NULL);
+    git_trace_set(GIT_TRACE_TRACE, lpm_libgit2_debug);
+  }
   #endif
   has_setup_ssl = 1;
   if (strcmp(type, "noverify") == 0) {
@@ -841,6 +856,7 @@ static const luaL_Reg system_lib[] = {
   { "reset",     lpm_reset },   // Updates a git repository to the specified commit/hash/branch.
   { "get",       lpm_get },     // HTTP(s) GET request.
   { "extract",   lpm_extract }, // Extracts .tar.gz, and .zip files.
+  { "trace",     lpm_trace },   // Sets trace bit.
   { "certs",     lpm_certs },   // Sets the SSL certificate chain folder/file.
   { "chdir",     lpm_chdir },   // Changes directory. Only use for --post actions.
   { "pwd",       lpm_pwd },     // Gets existing directory. Only use for --post actions.

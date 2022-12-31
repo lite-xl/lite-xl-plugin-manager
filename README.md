@@ -84,15 +84,15 @@ lpm uninstall aligncarets
 lpm --help
 ```
 
-## Building
+## Building & Running
 
-### Linux
+### Linux & MacOS & Windows MSYS
 
 ```
-./build.sh -DLPM_STATIC -DLPM_VERSION='"'0.1-x86_64-linux-`git rev-parse --short HEAD`'"'
+./build.sh && ./lpm
 ```
 
-### Linux to Windows
+### Linux -> Windows
 
 ```
 CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres 
