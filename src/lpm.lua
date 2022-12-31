@@ -1690,7 +1690,7 @@ in any circumstance unless explicitly supplied.
           break 
         end
       end
-      if not has_certs then error("can't find your system's SSL ceritficates; please specify specify a certificate bundle or certificat directory with --ssl_certs") end
+      if not has_certs then error("can't find your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl_certs") end
     end
   end
 
