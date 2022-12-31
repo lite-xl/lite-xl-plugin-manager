@@ -2,7 +2,7 @@ name: CI
 on: { push: { branches: [master] } }
 env: { VERSION: "0.1" }
 jobs:
-  build-linux-windows:
+  build_linux_windows:
     runs-on: ubuntu-latest
     defaults: { run: { shell: bash } }
     steps:
@@ -40,8 +40,9 @@ jobs:
             gh release delete -y v$RELEASE || true; 
             gh release create -t v$RELEASE v$RELEASE lpm.x86_64-linux lpm.x86_64-windows.exe
           fi
-  build-macos:
-    needs: build-linux-windows
+
+  build_macos:
+    needs: build_linux_windows
     runs-on: macos-11
     env:
       CC: clang
