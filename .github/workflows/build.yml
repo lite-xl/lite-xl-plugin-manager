@@ -1,6 +1,6 @@
 name: CI
 on: { push: { branches: [master] } }
-env: { VERSION: "0.1" }
+env: { VERSION: "0.9" }
 jobs:
   build_linux_windows:
     runs-on: ubuntu-latest
