@@ -352,6 +352,17 @@ static int lpm_init(lua_State* L) {
   return 0;
 }
 
+static int no_verify_ssl = 0;
+static int has_setup_ssl = 0;
+static mbedtls_x509_crt x509_certificate;
+static mbedtls_entropy_context entropy_context;
+static mbedtls_ctr_drbg_context drbg_context;
+static mbedtls_ssl_config ssl_config;
+static mbedtls_ssl_context ssl_context;
+
+static int lpm_git_transport_certificate_check_cb(struct git_cert *cert, int valid, const char *host, void *payload) {
+  return 0;
+}
 
 static int lpm_fetch(lua_State* L) {
   git_repository* repository = luaL_checkgitrepo(L, 1);
@@ -362,6 +373,8 @@ static int lpm_fetch(lua_State* L) {
   }
   git_fetch_options fetch_opts = GIT_FETCH_OPTIONS_INIT;
   fetch_opts.download_tags = GIT_REMOTE_DOWNLOAD_TAGS_ALL;
+  if (no_verify_ssl)
+    fetch_opts.callbacks.certificate_check = lpm_git_transport_certificate_check_cb;
   if (git_remote_fetch(remote, NULL, &fetch_opts, NULL)) {
     git_remote_free(remote);
     git_repository_free(repository);
@@ -371,14 +384,6 @@ static int lpm_fetch(lua_State* L) {
   git_repository_free(repository);
   return 0;
 }
-
-
-static int has_setup_ssl = 0;
-static mbedtls_x509_crt x509_certificate;
-static mbedtls_entropy_context entropy_context;
-static mbedtls_ctr_drbg_context drbg_context;
-static mbedtls_ssl_config ssl_config;
-static mbedtls_ssl_context ssl_context;
 
 static int mbedtls_snprintf(char* buffer, int len, int status, const char* str, ...) {
   char mbed_buffer[128];
@@ -415,7 +420,6 @@ static void lpm_tls_debug(void *ctx, int level, const char *file, int line, cons
 
 static int lpm_certs(lua_State* L) {
   const char* type = luaL_checkstring(L, 1);
-  const char* path = luaL_checkstring(L, 2);
   int status;
   if (has_setup_ssl) {
     mbedtls_ssl_config_free(&ssl_config);
@@ -442,61 +446,52 @@ static int lpm_certs(lua_State* L) {
     mbedtls_ssl_conf_dbg(&ssl_config, lpm_tls_debug, NULL);
   #endif
   has_setup_ssl = 1;
-  if (strcmp(type, "dir") == 0) {
-    git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
+  if (strcmp(type, "noverify") == 0) {
+    no_verify_ssl = 1;
+    mbedtls_ssl_conf_authmode(&ssl_config, MBEDTLS_SSL_VERIFY_OPTIONAL);
   } else {
-    if (strcmp(type, "system") == 0) {
-      #if _WIN32
-        FILE* file = fopen(path, "wb");
-        if (!file)
-          return luaL_error(L, "can't open cert store %s for writing: %s", path, strerror(errno));
-        HCERTSTORE hSystemStore = CertOpenSystemStore(0, TEXT("ROOT"));
-        if (!hSystemStore) {
-          fclose(file);
-          return luaL_error(L, "error getting system certificate store");
-        }
-        PCCERT_CONTEXT pCertContext = NULL;
-        while (1) {
-          pCertContext = CertEnumCertificatesInStore(hSystemStore, pCertContext);
-          if (!pCertContext)
-            break;
-          BYTE keyUsage[2];
-          if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING && (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && (keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))) {
-            DWORD size = 0;
-            CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
-            char* buffer = malloc(size);
-            CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
-            fwrite(buffer, sizeof(char), size, file);
-            free(buffer);
+    const char* path = luaL_checkstring(L, 2);
+    if (strcmp(type, "dir") == 0) {
+      git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
+    } else {
+      if (strcmp(type, "system") == 0) {
+        #if _WIN32
+          FILE* file = fopen(path, "wb");
+          if (!file)
+            return luaL_error(L, "can't open cert store %s for writing: %s", path, strerror(errno));
+          HCERTSTORE hSystemStore = CertOpenSystemStore(0, TEXT("ROOT"));
+          if (!hSystemStore) {
+            fclose(file);
+            return luaL_error(L, "error getting system certificate store");
           }
-        }
-        fclose(file);
-        CertCloseStore(hSystemStore, 0);
-      #elif __APPLE__ // https://developer.apple.com/forums/thread/691009; see also curl
-        /*CFStringRef keys[] = { kSecClass,    kSecMatchLimit,    kSecReturnRef };
-        CFTypeRef values[] = { kSecClassCertificate, kSecMatchLimitAll, kCFBooleanTrue };
-        CFDictionaryRef query = CFDictionaryCreate(
-            NULL,
-            (const void **) keys,
-            values,
-            sizeof(keys) / sizeof(keys[0]),
-            &kCFTypeDictionaryKeyCallBacks,
-            &kCFTypeDictionaryValueCallBacks
-        );
-        CFTypeRef copyResult = NULL;
-        OSStatus err = SecItemCopyMatching(query, &copyResult);
-        if (err == errSecSuccess) {
-          // Try and 
-        }*/
-        return luaL_error(L, "can't use system on mac yet");
-      #else
-        return luaL_error(L, "can't use system certificates except on windows or mac");
-      #endif
+          PCCERT_CONTEXT pCertContext = NULL;
+          while (1) {
+            pCertContext = CertEnumCertificatesInStore(hSystemStore, pCertContext);
+            if (!pCertContext)
+              break;
+            BYTE keyUsage[2];
+            if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING && (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && (keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))) {
+              DWORD size = 0;
+              CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
+              char* buffer = malloc(size);
+              CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
+              fwrite(buffer, sizeof(char), size, file);
+              free(buffer);
+            }
+          }
+          fclose(file);
+          CertCloseStore(hSystemStore, 0);
+        #elif __APPLE__ // https://developer.apple.com/forums/thread/691009; see also curl's mac version
+          return luaL_error(L, "can't use system on mac yet");
+        #else
+          return luaL_error(L, "can't use system certificates except on windows or mac");
+        #endif
+      }
+      git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
+      if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
+        return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s", path);
+      mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
     }
-    git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
-    if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
-      return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s", path);
-    mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
   }
   return 0;
 }
@@ -697,7 +692,7 @@ static int lpm_get(lua_State* L) {
       mbedtls_snprintf(err, sizeof(err), status, "can't set hostname %s", hostname); goto cleanup;
     } else if ((status = mbedtls_ssl_handshake(&ssl_context)) != 0) {
       mbedtls_snprintf(err, sizeof(err), status, "can't handshake with %s", hostname); goto cleanup;
-    } else if ((status = mbedtls_ssl_get_verify_result(&ssl_context)) != 0) {
+    } else if (((status = mbedtls_ssl_get_verify_result(&ssl_context)) != 0) && !no_verify_ssl) {
       mbedtls_snprintf(err, sizeof(err), status, "can't verify result for %s", hostname); goto cleanup;
     }
   } else {

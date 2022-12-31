@@ -1607,7 +1607,8 @@ Flags have the following effects:
   --mod-version            Sets the mod version of lite-xl to install plugins.
   --version                Returns version information.
   --help                   Displays this help text.
-  --ssl_certs              Sets the SSL certificate store.
+  --ssl_certs              Sets the SSL certificate store. Can be a directory,
+                           or path to a certificate bundle.
   --arch                   Sets the architecture (default: ]] .. _G.ARCH .. [[).
   --assume-yes             Ignores any prompts, and automatically answers yes
                            to all.
@@ -1624,6 +1625,8 @@ in any circumstance unless explicitly supplied.
                            binaries if there is a native compilation step.
   --remotes                Automatically adds any specified remotes in the 
                            repository to the end of the resolution list.
+  --ssl_certs=noverify     Ignores SSL certificate validation. Opens you up to
+                           man-in-the-middle attacks.
 ]]
     )
     return 0
@@ -1652,9 +1655,13 @@ in any circumstance unless explicitly supplied.
   repositories = {}
   if ARGS[2] == "purge" then return lpm_purge() end
   if ARGS["ssl_certs"] then 
-    local stat = system.stat(ARGS["ssl_certs"])
-    if not stat then error("can't find " .. ARGS["ssl_certs"]) end
-    system.certs(stat.type, ARGS["ssl_certs"])
+    if ARGS["ssl_certs"] == "noverify" then
+      system.certs("noverify")
+    else
+      local stat = system.stat(ARGS["ssl_certs"])
+      if not stat then error("can't find " .. ARGS["ssl_certs"]) end
+      system.certs(stat.type, ARGS["ssl_certs"])
+    end
   elseif not os.getenv("SSL_CERT_DIR") and not os.getenv("SSL_CERT_FILE") then
     local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
       "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.

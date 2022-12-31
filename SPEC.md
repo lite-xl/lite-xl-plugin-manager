@@ -51,6 +51,8 @@ The vast majority of plugins are `singleton` plugins.
 * `tags`:  Optional freeform tags that may describe attributes of the plugin.
 * `path`: Optional path to the plugin. If omitted, will only pull the files in
   `files`. To pull the whole repository, use `"."`.
+* `post`: Optionally a string which represents a command to run. If presented
+  with a dictionary, takes `ARCH` keys, and runs a different command per `ARCH`.
 
 ### Dependencies
 
