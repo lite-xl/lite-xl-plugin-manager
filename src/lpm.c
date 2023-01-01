@@ -593,14 +593,19 @@ static int lpm_extract(lua_State* L) {
           zip_close(archive);
           return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
         }
+        
+        mode_t m = S_IRUSR | S_IRGRP | S_IROTH;
         zip_uint8_t os;
         zip_uint32_t attr;
         zip_file_get_external_attributes(archive, i, 0, &os, &attr);
-        mode_t m = S_IRUSR | S_IRGRP | S_IROTH;
-        if (0 == (attr & FA_RDONLY))
-            m |= S_IWUSR | S_IWGRP | S_IWOTH;
-        if (attr & FA_DIREC)
-            m = (S_IFDIR | (m & ~S_IFMT)) | S_IXUSR | S_IXGRP | S_IXOTH;
+        if (os == ZIP_OPSYS_DOS) {
+          if (0 == (attr & FA_RDONLY))
+              m |= S_IWUSR | S_IWGRP | S_IWOTH;
+          if (attr & FA_DIREC)
+              m = (S_IFDIR | (m & ~S_IFMT)) | S_IXUSR | S_IXGRP | S_IXOTH;
+        } else {
+          m = (attr >> 16) & ~0222; 
+        }
         if (chmod(target, m)) {
           zip_fclose(zip_file);
           zip_close(archive);
