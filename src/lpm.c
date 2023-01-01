@@ -553,6 +553,9 @@ static int gzip_read(mtar_t* tar, void* data, unsigned int size) { return gzread
 static int gzip_seek(mtar_t* tar, unsigned int pos) { return gzseek(tar->stream, pos, SEEK_SET) >= 0 ? MTAR_ESUCCESS : -1; }
 static int gzip_close(mtar_t* tar) { return gzclose(tar->stream) == Z_OK ? MTAR_ESUCCESS : -1; }
 
+#define FA_RDONLY       0x01            // FILE_ATTRIBUTE_READONLY
+#define FA_DIREC        0x10            // FILE_ATTRIBUTE_DIRECTORY
+
 static int lpm_extract(lua_State* L) {
   const char* src = luaL_checkstring(L, 1);
   const char* dst = luaL_checkstring(L, 2);
@@ -578,7 +581,7 @@ static int lpm_extract(lua_State* L) {
       }
       char target[MAX_PATH];
       int target_length = snprintf(target, sizeof(target), "%s/%s", dst, zip_name);
-      if (!mkdirp(target, target_length)) {
+      if (mkdirp(target, target_length)) {
         zip_fclose(zip_file);
         zip_close(archive);
         return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
@@ -589,6 +592,19 @@ static int lpm_extract(lua_State* L) {
           zip_fclose(zip_file);
           zip_close(archive);
           return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
+        }
+        zip_uint8_t os;
+        zip_uint32_t attr;
+        zip_file_get_external_attributes(archive, i, 0, &os, &attr);
+        mode_t m = S_IRUSR | S_IRGRP | S_IROTH;
+        if (0 == (attr & FA_RDONLY))
+            m |= S_IWUSR | S_IWGRP | S_IWOTH;
+        if (attr & FA_DIREC)
+            m = (S_IFDIR | (m & ~S_IFMT)) | S_IXUSR | S_IXGRP | S_IXOTH;
+        if (chmod(target, m)) {
+          zip_fclose(zip_file);
+          zip_close(archive);
+          return luaL_error(L, "can't chmod file %s: %s", target, strerror(errno));
         }
         while (1) {
           char buffer[8192];
