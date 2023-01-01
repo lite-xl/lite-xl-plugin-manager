@@ -41,8 +41,41 @@
       ]
     }
   ],
+  "lite-xls": [
+    {
+      "version": "2.1-simplified",
+      "mod_version": 3,
+      "files": [
+        {
+          "arch": "x86_64-linux",
+          "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1/lite-xl-2.1.0-simplified-x86_64-linux.tar.gz",
+          "checksum": "b5087bd03fb491c9424485ba5cb16fe3bb0a6473fdc801704e43f82cdf960448"
+        },
+        {
+          "arch": "x86_64-windows",
+          "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1/lite-xl-2.1.0-simplified-x86_64-windows.zip",
+          "checksum": "f12cc1c172299dd25575ae1b7473599a21431f9c4e14e73b271ff1429913275d"
+        }
+      ]
+    },
+    {
+      "version": "2.1-simplified-enhanced",
+      "mod_version": 3,
+      "files": [
+        {
+          "arch": "x86_64-linux",
+          "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1/lite-xl-2.1.0-simplified-x86_64-linux-enhanced.tar.gz",
+          "checksum": "4625c7aac70a2834ef5ce5ba501af2d72d203441303e56147dcf8bcc4b889e40"
+        },
+        {
+          "arch": "x86_64-windows",
+          "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1/lite-xl-2.1.0-simplified-x86_64-windows-enhanced.zip",
+          "checksum": "5ac009e3d5a5c99ca7fbd4f6b5bd4e25612909bf59c0925eddb41fe294ce28a4"
+        }
+      ]
+    }
+  ],
   "remotes": [
-    "https://github.com/lite-xl/lite-xl-plugins.git:master",
-    "https://github.com/adamharrison/lite-xl-simplified.git:master"
+    "https://github.com/lite-xl/lite-xl-plugins.git:master"
   ]
 }
