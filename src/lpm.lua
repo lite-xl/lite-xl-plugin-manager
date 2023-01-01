@@ -486,7 +486,7 @@ function common.get(source, target, checksum, callback, depth)
   if not source then error("requires url") end
   if (depth or 0) > 10 then error("too many redirects") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
-  log_progress_action("Downloading " .. source .. "...")
+  log_progress_action("Downloading " .. source:sub(1, 60) .. "...")
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
   if not checksum then 
@@ -682,6 +682,7 @@ function Plugin:install(bottle, installing)
     elseif self.path then
       local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      if self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
       log_action("Copying " .. self.local_path .. " to " .. path)
       common.copy(self.local_path, temporary_path)
     elseif self.organization == 'complex' then
@@ -696,7 +697,13 @@ function Plugin:install(bottle, installing)
           log_action("Downloading file " .. file.url .. "...")
           common.get(file.url, temporary_path, file.checksum, write_progress_bar)
           log_action("Downloaded file " .. file.url .. " to " .. path)
-          if file.arch then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
+          local basename = common.basename(path)
+          if basename:find("%.zip$") or basename:find("%.tar%.gz$") then 
+            log_action("Extracting file " .. basename .. " in " .. install_path)
+            system.extract(temporary_path, temporary_install_path) 
+          else
+            if file.arch then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
+          end
         end
       end
     end
@@ -785,7 +792,9 @@ function Repository:parse_manifest(already_pulling)
   if system.stat(self.local_path) and system.stat(self.local_path .. PATHSEP .. (self.commit or self.branch)) then
     self.manifest_path = self.local_path .. PATHSEP .. (self.commit or self.branch) .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then self:generate_manifest() end
-    self.manifest = json.decode(common.read(self.manifest_path)) 
+    local status, manifest = pcall(json.decode, common.read(self.manifest_path))
+    if not status then error("error parsing manifest for " .. self:url() .. ": " .. manifest) end
+    self.manifest = manifest
     self.plugins = {}
     self.remotes = {}
     for i, metadata in ipairs(self.manifest["plugins"] or {}) do

@@ -535,7 +535,7 @@ static int lpm_certs(lua_State* L) {
 
 static int mkdirp(char* path, int len) {
   for (int i = 0; i < len; ++i) {
-    if (path[i] == '/') {
+    if (path[i] == '/' && i > 0) {
       path[i] = 0;
       #ifndef _WIN32
         if (mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
@@ -610,14 +610,42 @@ static int lpm_extract(lua_State* L) {
   } else if (strstr(src, ".tar")) {
     mtar_t tar = {0};
     int err;
+    char actual_src[PATH_MAX];
     if (strstr(src, ".gz")) {
-      tar.stream = gzopen(src, "rb");
-      if (!tar.stream)
+      gzFile gzfile = gzopen(src, "rb");
+      if (!gzfile)
         return luaL_error(L, "can't open tar.gz archive %s: %s", src, strerror(errno));
+      /* It's increidbly slow to do it this way, probably because of all the seeking.
+      For now, just gunzip the whole file at once, and then untar it.
       tar.read = gzip_read;
       tar.seek = gzip_seek;
-      tar.close = gzip_close;
-    } else if ((err = mtar_open(&tar, src, "r")))
+      tar.close = gzip_close;*/
+      char buffer[8192];
+      int len = strlen(src);
+      strncpy(actual_src, src, len - 3);
+      actual_src[len-3] = 0;
+      FILE* file = fopen(actual_src, "wb");
+      while (1) {
+        int length = gzread(gzfile, buffer, sizeof(buffer));
+        if (length == 0)
+          break;
+        fwrite(buffer, sizeof(char), length, file);
+      }
+      char error[128];
+      error[0] = 0;
+      if (!gzeof(gzfile)) {
+        int error_number;
+        strncpy(error, gzerror(gzfile, &error_number), sizeof(error));
+        error[sizeof(error)-1] = 0;
+      }
+      fclose(file);
+      gzclose(gzfile);
+      if (error[0])
+        return luaL_error(L, "can't unzip tar archive %s: %s", src, error);
+    } else {
+      strcpy(actual_src, src);
+    }
+    if ((err = mtar_open(&tar, actual_src, "r")))
       return luaL_error(L, "can't open tar archive %s: %s", src, mtar_strerror(err));
     mtar_header_t h;
     while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD ) {
@@ -634,6 +662,8 @@ static int lpm_extract(lua_State* L) {
           mtar_close(&tar);
           return luaL_error(L, "can't extract tar archive file %s, can't create file %s: %s", src, target, strerror(errno));
         }
+        if (chmod(target, h.mode))
+           return luaL_error(L, "can't extract tar archive file %s, can't chmod file %s: %s", src, target, strerror(errno));
         int remaining = h.size;
         while (remaining > 0) {
           int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
@@ -650,6 +680,8 @@ static int lpm_extract(lua_State* L) {
       mtar_next(&tar);
     }
     mtar_close(&tar);
+    if (strstr(src, ".gz"))
+      unlink(actual_src);
   } else
     return luaL_error(L, "unrecognized archive format %s", src);
   return 0;
