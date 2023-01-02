@@ -23,6 +23,12 @@ For details about the `manifest.json` files that `lpm` consumes,
 
 ## Quickstart
 
+The fastest way to get started with lpm is to simply pull a release.
+
+```
+  wget https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.92/lpm.x86_64-linux -O lpm && chmod +x lpm
+```
+
 If you have a C compiler, and `git`, and want to compile from scratch, 
 you can do:
 

@@ -60,5 +60,5 @@ jobs:
           cp lpm lpm.x86_64-darwin
           gh release upload continuous *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
-            gh release upload $VERSION lpm.x86_64-darwin
+            gh release upload v$VERSION lpm.x86_64-darwin
           fi

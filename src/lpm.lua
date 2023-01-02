@@ -1621,6 +1621,10 @@ It has the following commands:
   lpm describe [bottle]                    Describes the bottle specified in the form
                                            of a list of commands, that allow someone
                                            else to run your configuration.
+  lpm table <manifest path> [readme path]  Formats a markdown table of all specified 
+                                           plugins. Dumps to stdout normally, but if
+                                           supplied a readme, will remove all tables
+                                           from the readme, and append the new one.
           
   lpm purge                                Completely purge all state for LPM.
   lpm -                                    Read these commands from stdin in
