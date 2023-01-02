@@ -10,14 +10,14 @@ jobs:
         with:
           fetch-depth: 0
       - name: Clone Submodules
-        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2`
+        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2` && export REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1))
       - name: Build Linux
         run: |
-          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
+          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-linux"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
           cp lpm /tmp/lpm
       - name: Package Debian/Ubuntu
-        env: { REV: "1", ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
+        env: { ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
         run: |
           export NAME=lpm_$VERSION.0-$REV""_$ARCH
           mkdir -p $NAME/usr/bin $NAME/DEBIAN && cp lpm $NAME/usr/bin
@@ -25,7 +25,7 @@ jobs:
           dpkg-deb --build --root-owner-group $NAME
       - name: Build Windows
         run: |
-          sudo apt-get install mingw-w64 && ./build.sh clean && CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_INCLUDE_PATH=/usr/share/mingw-w64/include" LZMA_CONFIGURE="--host=x86_64-w64-mingw32" GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-windows-`git rev-parse --short HEAD`'"' && zip -r lpm-$VERSION-x86_64-windows.zip lpm.exe
+          sudo apt-get install mingw-w64 && ./build.sh clean && CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_INCLUDE_PATH=/usr/share/mingw-w64/include" LZMA_CONFIGURE="--host=x86_64-w64-mingw32" GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-windows'"' && zip -r lpm-$VERSION-x86_64-windows.zip lpm.exe
           cp lpm.exe lpm.x86_64-windows.exe
       - name: Run Tests
         run: |
@@ -50,11 +50,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Clone Submodules
-        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2`
+        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2` && export REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1))
       - name: Build MacOS 
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
-          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
+          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
           cp lpm lpm.x86_64-darwin
           gh release upload continuous *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
