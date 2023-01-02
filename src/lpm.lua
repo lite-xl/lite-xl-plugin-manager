@@ -1775,7 +1775,7 @@ in any circumstance unless explicitly supplied.
     local names = common.map(plugins, function(plugin) 
       if plugin.path then return string.format("[`%s`](%s?raw=1)", plugin.name, plugin.path) end
       if plugin.url then return string.format("[`%s`](%s)", plugin.name, plugin.url) end
-      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.name, plugin.remote:gsub(":%w+$")) end
+      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.name, plugin.remote:gsub(":%w+$", "")) end
       return plugin.name
     end)
     local descriptions = common.map(plugins, function(e) return e.description or "" end)
