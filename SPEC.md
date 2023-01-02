@@ -38,7 +38,8 @@ The vast majority of plugins are `singleton` plugins.
 
 ### Metadata
 
-* `name`: The name of the plugin.
+* `id`: The semantic id of the plugin, only containing `[a-z0-9\-_]`.
+* `name`: The optional name of the plugin.
 * `version`: The plugin's semantic version.
 * `description`: An english-language description of the plugin.
 * `mod_version`: The mod_version this plugin is compatible with.
@@ -111,7 +112,7 @@ that any version greater than `0.1` can be used.
 {
   "plugins": [ # The plugins array contains a list of all plugins registered on this repository.
     {
-      "name": "plugin_manager", # Unique name, used to reference the plugin.
+      "id": "plugin_manager", # Unique name, used to reference the plugin.
       "version": "0.1", # Semantic version.
       "description": "A GUI interface to the Adam's lite plugin manager.", # English description of the plugin.
       "path": "plugins/plugin_manager", # The path to the plugin in this repository.
@@ -136,7 +137,7 @@ that any version greater than `0.1` can be used.
       }
     },
     {
-      "name": "json",
+      "id": "json",
       "version": "1.0",
       "description": "JSON support plugin, provides encoding/decoding.",
       "type": "library",
@@ -151,7 +152,7 @@ that any version greater than `0.1` can be used.
       "version": "1.0",
       "mod_version": 3,
       "remote": "https://github.com/anthonyaxenov/lite-xl-ignore-syntax:2ed993ed4376e1840b0824d7619f2d3447891d3aa234459378fcf9387c4e4680", # The remote to be used for this plugin.
-      "name": "language_ignore",
+      "id": "language_ignore",
       "post": {"x86-linux":"cp language_ignore.lua /tmp/somewhere-else", "x86-windows":"COPY language_ignore.lua C:\\Users\\Someone\\ignore.lua"} # Post download steps to run to fully set up the plugin. Does not run by default, requires --post.
     },
     {
@@ -163,12 +164,12 @@ that any version greater than `0.1` can be used.
       "version": "1.0",
       "mod_version": "3",
       "path": "plugins/settings.lua",
-      "name": "settings"
+      "id": "settings"
     },
     {
       "description": "Syntax for Kaitai struct files",
       "url": "https://raw.githubusercontent.com/whiteh0le/lite-plugins/main/plugins/language_ksy.lua?raw=1", # URL directly to the singleton plugin file.
-      "name": "language_ksy",
+      "id": "language_ksy",
       "version": "1.0",
       "mod_version": 3,
       "checksum": "08a9f8635b09a98cec9dfca8bb65f24fd7b6585c7e8308773e7ddff9a3e5a60f", # Checksum for this particular URL.
