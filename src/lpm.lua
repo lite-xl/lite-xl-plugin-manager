@@ -1748,6 +1748,8 @@ in any circumstance unless explicitly supplied.
     end
   end
 
+  -- Small utility functions that don't play into the larger app; are used for testing
+  -- or for handy scripts.
   if ARGS[2] == "download" then
     local file = common.get(ARGS[3]);
     print(file)
@@ -1755,6 +1757,25 @@ in any circumstance unless explicitly supplied.
   end
   if ARGS[2] == "extract" then
     system.extract(ARGS[3], ARGS[4] or ".")
+    os.exit(0)
+  end
+  if ARGS[2] == "table" then
+    local plugins = json.decode(common.read(ARGS[3]))["plugins"]
+    table.sort(plugins, function(a,b) return string.lower(a.name) < string.lower(b.name) end)
+    local names = common.map(plugins, function(plugin) 
+      if plugin.path then return string.format("[`%s`](%s?raw=1)", plugin.name, plugin.path) end
+      if plugin.url then  return string.format("[`%s`](%s)", plugin.name, plugin.url) end
+      if plugin.remote then  return string.format("[`%s`](%s)\\*", plugin.name, plugin.remote) end
+      return plugin.name
+    end)
+    local descriptions = common.map(plugins, function(e) return e.description or "" end)
+    local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
+    local max_name = math.max(table.unpack(common.map(names, function(e) return #e end)))
+    print("| Plugin" .. string.rep(" ", max_name - 6) .. " | Description" .. string.rep(" ", max_description - 11) .. " |")
+    print("| :" .. string.rep("-", max_name-1) .. " | :" .. string.rep("-", max_description - 1) .. " |")
+    for i = 1, #plugins do
+      print("| " .. names[i] .. string.rep(" ", max_name - #names[i]) .. " | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i]) .. " |")
+    end
     os.exit(0)
   end
 
