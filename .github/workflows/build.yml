@@ -14,7 +14,7 @@ jobs:
         run: git submodule update --init --depth=1
       - name: Build Linux
         run: |
-            ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
+          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
           cp lpm /tmp/lpm
       - name: Package Debian/Ubuntu
