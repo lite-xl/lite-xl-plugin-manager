@@ -646,10 +646,16 @@ function Plugin:install(bottle, installing)
       if incompatible[plugin] then error("can't install " .. self.name .. ": incompatible with " .. incompatible[plugin][1].name .. ":" .. incompatible[plugin][1].version) end
     end
     for plugin, v in pairs(self.dependencies) do
-      if not compatible[plugin] then error("can't find dependency " .. plugin .. (v.version and (":" .. v.version) or "")) end
+      if not compatible[plugin] then 
+        if not v.optional then 
+          error("can't find dependency " .. plugin .. (v.version and (":" .. v.version) or "")) 
+        else
+          log_warning("can't find optional dependency " .. plugin .. (v.version and (":" .. v.version) or ""))
+        end
+      end
     end
     for plugin, v in pairs(self.dependencies) do
-      if not compatible[plugin]:is_core(bottle) and not compatible[plugin]:is_installed(bottle) then
+      if compatible[plugin] and not compatible[plugin]:is_core(bottle) and not compatible[plugin]:is_installed(bottle) then
         if installing[plugin] then
           error("circular dependency detected in " .. self.name .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.name)
         end
@@ -668,7 +674,6 @@ function Plugin:install(bottle, installing)
 
     if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end  
     if self.url then
-      log_action("Downloading file " .. self.url .. "...")
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, path, self.checksum, write_progress_bar)
       log_action("Downloaded file " .. self.url .. " to " .. path)
@@ -686,7 +691,7 @@ function Plugin:install(bottle, installing)
       log_action("Copying " .. self.local_path .. " to " .. path)
       common.copy(self.local_path, temporary_path)
     elseif self.organization == 'complex' then
-      common.mkdirp(temporary_install_path)
+      common.copy(self.local_path, temporary_install_path)
     end
     for i,file in ipairs(self.files or {}) do
       if not file.arch or file.arch == ARCH then
@@ -694,9 +699,7 @@ function Plugin:install(bottle, installing)
           if not file.checksum then error("requires a checksum") end
           local path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
           local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
-          log_action("Downloading file " .. file.url .. "...")
           common.get(file.url, temporary_path, file.checksum, write_progress_bar)
-          log_action("Downloaded file " .. file.url .. " to " .. path)
           local basename = common.basename(path)
           if basename:find("%.zip$") or basename:find("%.tar%.gz$") then 
             log_action("Extracting file " .. basename .. " in " .. install_path)
@@ -1331,7 +1334,7 @@ local function lpm_install(...)
       lpm_lite_xl_install(version)
     else
       local plugins = common.grep({ system_bottle:get_plugin(name, version, { mod_version = system_bottle.lite_xl.mod_version }) }, function(e) return not e:is_installed(system_bottle) end)
-      if #plugins == 0 then error("can't find plugin " .. name .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+      if #plugins == 0 then error("can't find not installed plugin " .. name .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       for j,v in ipairs(plugins) do v:install(system_bottle) end
     end
   end
