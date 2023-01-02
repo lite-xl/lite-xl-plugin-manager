@@ -573,6 +573,12 @@ function Plugin.is_path_different(path1, path2)
   end
 end
 
+function Plugin.is_plugin_different(downloaded_path, installed_path) 
+  local is_downloaded_single = downloaded_path:find("%.lua$")
+  local is_installed_single = installed_path:find("%.lua$")
+  local target = is_downloaded_single and not is_installed_single and installed_path .. PATHSEP .. "init.lua" or installed_path
+  return Plugin.is_path_different(downloaded_path, target)
+end
 
 function Plugin:get_install_path(bottle)
   local folder = self.type == "library" and "libraries" or "plugins" 
@@ -588,13 +594,13 @@ function Plugin:is_installed(bottle)
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
   if #common.grep({ bottle:get_plugin(self.name, nil, {  }) }, function(plugin) return not plugin.repository end) > 0 then return false end
-  return not Plugin.is_path_different(self.local_path, install_path)
+  return not Plugin.is_plugin_different(self.local_path, install_path)
 end
 function Plugin:is_upgradable(bottle)
   if self:is_installed(bottle) then
     local plugins = { bottle:get_plugin(self.name) }
     for i, v in ipairs(plugins) do
-      if v ~= self and compare_version(self.version, v.version) <= 1 then
+      if self.version and v.version and v ~= self and compare_version(self.version, v.version) <= 1 then
         return true
       end
     end
@@ -968,7 +974,7 @@ end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
-function LiteXL:is_compatible(plugin) return compare_version(self.mod_version, plugin.mod_version) == 0 end
+function LiteXL:is_compatible(plugin) return not plugin.mod_version or compare_version(self.mod_version, plugin.mod_version) == 0 end
 function LiteXL:is_installed()  return system.stat(self.local_path) end
 
 function LiteXL:install()
@@ -1086,7 +1092,7 @@ function Bottle:all_plugins()
     for j, v in ipairs(system.ls(plugin_path)) do
       local name = v:gsub("%.lua$", "")
       local path = plugin_path .. PATHSEP .. v
-      local matching = hash[name] and common.grep(hash[name], function(e) return not Plugin.is_path_different(e.local_path, path) end)[1]
+      local matching = hash[name] and common.grep(hash[name], function(e) return not Plugin.is_plugin_different(e.local_path, path) end)[1]
       if i == 2 or not hash[name] or not matching then
         table.insert(t, Plugin.new(nil, {
           name = name,
@@ -1333,8 +1339,10 @@ local function lpm_install(...)
     if name == "lite-xl" then
       lpm_lite_xl_install(version)
     else
-      local plugins = common.grep({ system_bottle:get_plugin(name, version, { mod_version = system_bottle.lite_xl.mod_version }) }, function(e) return not e:is_installed(system_bottle) end)
-      if #plugins == 0 then error("can't find not installed plugin " .. name .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+      local potential_plugins = { system_bottle:get_plugin(name, version, { mod_version = system_bottle.lite_xl.mod_version }) }
+      local plugins = common.grep(potential_plugins, function(e) return not e:is_installed(system_bottle) end)
+      if #plugins == 0 and #potential_plugins == 0 then error("can't find plugin " .. name .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+      if #plugins == 0 then error("plugin " .. name .. " already installed") end
       for j,v in ipairs(plugins) do v:install(system_bottle) end
     end
   end
@@ -1639,7 +1647,7 @@ Flags have the following effects:
 There also several flags which are classified as "risky", and are never enabled
 in any circumstance unless explicitly supplied.
 
-  --force                  Ignores checksum inconsitencies. 
+  --force                  Ignores checksum inconsistencies. 
   --post                   Run post-install build steps. Must be explicitly enabled.
                            Official repositories must function without this
                            flag being needed; generally they must provide
