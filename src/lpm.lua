@@ -540,7 +540,7 @@ end
 -- incompatible: Plugin is not installed and conflicts with existing installed plugins.
 function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
-  if type(metadata.id) ~= 'string' or metadata.id:find("[^a-z0-9%-_]") then error("plugin requires a valid id") end
+  if type(metadata.id) ~= 'string' or metadata.id:find("[^a-z0-9%-_]") then error("plugin requires a valid id " .. (metadata.id and "(" .. metadata.id .. " is invalid)" or "")) end
   local type = metadata.type or "plugin"
   local folder = metadata.type == "library" and "libraries" or "plugins"
   if metadata.path then metadata.path = metadata.path:gsub("/", PATHSEP) end
