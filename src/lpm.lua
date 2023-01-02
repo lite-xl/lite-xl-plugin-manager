@@ -1781,10 +1781,22 @@ in any circumstance unless explicitly supplied.
     local descriptions = common.map(plugins, function(e) return e.description or "" end)
     local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
     local max_name = math.max(table.unpack(common.map(names, function(e) return #e end)))
-    print("| Plugin" .. string.rep(" ", max_name - 6) .. " | Description" .. string.rep(" ", max_description - 11) .. " |")
-    print("| :" .. string.rep("-", max_name-1) .. " | :" .. string.rep("-", max_description - 1) .. " |")
+    local t = { }
+    table.insert(t, "| Plugin" .. string.rep(" ", max_name - 6) .. " | Description" .. string.rep(" ", max_description - 11) .. " |")
+    table.insert(t, "| :" .. string.rep("-", max_name-1) .. " | :" .. string.rep("-", max_description - 1) .. " |")
     for i = 1, #plugins do
-      print("| " .. names[i] .. string.rep(" ", max_name - #names[i]) .. " | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i]) .. " |")
+      table.insert(t, "| " .. names[i] .. string.rep(" ", max_name - #names[i]) .. " | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i]) .. " |")
+    end
+    if ARGS[4] then
+      local file = {}
+      for line in io.lines(ARGS[4]) do
+        if not line:find("^|.*") then
+          table.insert(file, line)
+        end
+      end
+      io.open(ARGS[4], "wb"):write(table.concat(file, "\n") .. "\n" .. table.concat(t, "\n") .. "\n")
+    else
+      print(table.concat(t, "\n"))
     end
     os.exit(0)
   end

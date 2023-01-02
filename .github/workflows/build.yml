@@ -1,6 +1,5 @@
 name: CI
 on: { push: { branches: [master] } }
-env: { VERSION: "0.9" }
 jobs:
   build_linux_windows:
     runs-on: ubuntu-latest
@@ -11,7 +10,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Clone Submodules
-        run: git submodule update --init --depth=1
+        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2`
       - name: Build Linux
         run: |
           ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-linux-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
@@ -35,10 +34,9 @@ jobs:
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz *.deb
-          if [[ `git tag --points-at HEAD | head -c 4` == "v"* ]]; then
-            export RELEASE=`git tag --points-at HEAD | head -c 4 | sed 's/^v//'`
-            gh release delete -y v$RELEASE || true; 
-            gh release create -t v$RELEASE v$RELEASE lpm.x86_64-linux lpm.x86_64-windows.exe
+          if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
+            gh release delete -y $VERSION || true; 
+            gh release create -t v$VERSION v$VERSION lpm.x86_64-linux lpm.x86_64-windows.exe
           fi
 
   build_macos:
@@ -52,14 +50,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Clone Submodules
-        run: git submodule update --init --depth=1
+        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2`
       - name: Build MacOS 
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin-`git rev-parse --short HEAD`'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
           cp lpm lpm.x86_64-darwin
           gh release upload continuous *.tar.gz
-          if [[ `git tag --points-at HEAD | head -c 4` == "v"* ]]; then
-            export RELEASE=`git tag --points-at HEAD | head -c 4 | sed 's/^v//'`
-            gh release upload v$RELEASE lpm.x86_64-darwin
+          if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
+            gh release upload $VERSION lpm.x86_64-darwin
           fi
