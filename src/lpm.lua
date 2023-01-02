@@ -540,6 +540,7 @@ end
 -- incompatible: Plugin is not installed and conflicts with existing installed plugins.
 function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
 function Plugin.new(repository, metadata)
+  if type(metadata.id) ~= 'string' or metadata.id:find("[^a-z0-9%-_]") then error("plugin requires a valid id") end
   local type = metadata.type or "plugin"
   local folder = metadata.type == "library" and "libraries" or "plugins"
   if metadata.path then metadata.path = metadata.path:gsub("/", PATHSEP) end
@@ -553,6 +554,7 @@ function Plugin.new(repository, metadata)
     dependencies = {},
     conflicts = {},
     local_path = repository and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")),
+    name = metadata.id
   }, metadata), Plugin)
   self.type = type
   -- Directory.
@@ -593,12 +595,12 @@ function Plugin:is_installed(bottle)
   if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
-  if #common.grep({ bottle:get_plugin(self.name, nil, {  }) }, function(plugin) return not plugin.repository end) > 0 then return false end
+  if #common.grep({ bottle:get_plugin(self.id, nil, {  }) }, function(plugin) return not plugin.repository end) > 0 then return false end
   return not Plugin.is_plugin_different(self.local_path, install_path)
 end
 function Plugin:is_upgradable(bottle)
   if self:is_installed(bottle) then
-    local plugins = { bottle:get_plugin(self.name) }
+    local plugins = { bottle:get_plugin(self.id) }
     for i, v in ipairs(plugins) do
       if self.version and v.version and v ~= self and compare_version(self.version, v.version) <= 1 then
         return true
@@ -608,8 +610,8 @@ function Plugin:is_upgradable(bottle)
   return false
 end
 function Plugin:is_incompatible(plugin) 
-  return (self.dependencies[plugin.name] and not match_version(plugin.version, self.dependencies[plugin.name] and self.dependencies[plugin.name].version)) or 
-    (self.conflicts[plugin.name] and match_version(plugin.version, self.conflicts[plugin.name] and self.conflicts[plugin.name].version)) 
+  return (self.dependencies[plugin.id] and not match_version(plugin.version, self.dependencies[plugin.id] and self.dependencies[plugin.id].version)) or 
+    (self.conflicts[plugin.id] and match_version(plugin.version, self.conflicts[plugin.id] and self.conflicts[plugin.id].version)) 
 end
 
 function Plugin:get_path(bottle)
@@ -641,15 +643,15 @@ end
 
 
 function Plugin:install(bottle, installing)
-  if self:is_installed(bottle) then error("plugin " .. self.name .. " is already installed") return end
+  if self:is_installed(bottle) then error("plugin " .. self.id .. " is already installed") return end
   local install_path = self:get_install_path(bottle)
   local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#USERDIR + 2)
   local status, err = pcall(function()
     installing = installing or {}
-    installing[self.name] = true
+    installing[self.id] = true
     local compatible, incompatible = self:get_compatibilities(bottle)
     for plugin, version in pairs(self.dependencies) do
-      if incompatible[plugin] then error("can't install " .. self.name .. ": incompatible with " .. incompatible[plugin][1].name .. ":" .. incompatible[plugin][1].version) end
+      if incompatible[plugin] then error("can't install " .. self.id .. ": incompatible with " .. incompatible[plugin][1].id .. ":" .. incompatible[plugin][1].version) end
     end
     for plugin, v in pairs(self.dependencies) do
       if not compatible[plugin] then 
@@ -663,9 +665,9 @@ function Plugin:install(bottle, installing)
     for plugin, v in pairs(self.dependencies) do
       if compatible[plugin] and not compatible[plugin]:is_core(bottle) and not compatible[plugin]:is_installed(bottle) then
         if installing[plugin] then
-          error("circular dependency detected in " .. self.name .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.name)
+          error("circular dependency detected in " .. self.id .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.id)
         end
-        if not NO_INSTALL_OPTIONAL and (not v.optional or prompt(plugin .. " is an optional dependency of " .. self.name .. ". Should we install it?")) then
+        if not NO_INSTALL_OPTIONAL and (not v.optional or prompt(plugin .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
           compatible[plugin]:install(bottle, installing)
         end
       end
@@ -702,7 +704,7 @@ function Plugin:install(bottle, installing)
     end
     for i,file in ipairs(self.files or {}) do
       if not file.arch or file.arch == ARCH then
-        if not NO_INSTALL_OPTIONAL and (not file.optional or prompt(common.basename(file.url) .. " is an optional dependency of " .. self.name .. ". Should we install it?")) then
+        if not NO_INSTALL_OPTIONAL and (not file.optional or prompt(common.basename(file.url) .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
           if not file.checksum then error("requires a checksum") end
           local path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
           local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
@@ -737,17 +739,17 @@ function Plugin:install(bottle, installing)
 end
 
 function Plugin:depends_on(plugin)
-  if self.dependencies[plugin.name] and self.dependencies[plugin.name].optional ~= true then return true end
+  if self.dependencies[plugin.id] and self.dependencies[plugin.id].optional ~= true then return true end
   for i,v in ipairs(plugin.provides or {}) do if self.dependencies[v] and self.dependencies[v].optional ~= true then return true end end
   return false
 end
 
 function Plugin:uninstall(bottle)
   local install_path = self:get_install_path(bottle)
-  if self:is_core(bottle) then error("can't uninstall " .. self.name .. "; is a core plugin") end
+  if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core plugin") end
   log_action("Uninstalling plugin located at " .. install_path)
   local incompatible_plugins = common.grep(bottle:installed_plugins(), function(p) return p:depends_on(self) end)
-  if #incompatible_plugins == 0 or prompt(self.name .. " is depended upon by " .. common.join(", ", common.map(incompatible_plugins, function(p) return p.name end)) .. ". Remove as well?") then
+  if #incompatible_plugins == 0 or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_plugins, function(p) return p.id end)) .. ". Remove as well?") then
     for i,plugin in ipairs(incompatible_plugins) do 
       if not plugin:uninstall(bottle) then return false end
     end
@@ -805,36 +807,37 @@ function Repository:parse_manifest(already_pulling)
       log_action("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
       self:generate_manifest() 
     end
-    local status, manifest = pcall(json.decode, common.read(self.manifest_path))
-    if not status then error("error parsing manifest for " .. self:url() .. ": " .. manifest) end
-    self.manifest = manifest
-    self.plugins = {}
-    self.remotes = {}
-    for i, metadata in ipairs(self.manifest["plugins"] or {}) do
-      if metadata.remote then
-        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
-        if branch_or_commit and is_commit_hash(branch_or_commit) then
+    local status, err = pcall(function()
+      self.manifest = json.decode(common.read(self.manifest_path))
+      self.plugins = {}
+      self.remotes = {}
+      for i, metadata in ipairs(self.manifest["plugins"] or {}) do
+        if metadata.remote then
+          local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
+          if branch_or_commit and is_commit_hash(branch_or_commit) then
+            table.insert(self.plugins, Plugin.new(self, metadata))
+          else
+            -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
+          end
+        else
           table.insert(self.plugins, Plugin.new(self, metadata))
-        else
-          -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
         end
-      else
-        table.insert(self.plugins, Plugin.new(self, metadata))
       end
-    end
-    for i, metadata in ipairs(self.manifest["lite-xls"] or {}) do
-      if metadata.remote then
-        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
-        if branch_or_commit and is_commit_hash(branch_or_commit) then
+      for i, metadata in ipairs(self.manifest["lite-xls"] or {}) do
+        if metadata.remote then
+          local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
+          if branch_or_commit and is_commit_hash(branch_or_commit) then
+            table.insert(self.lite_xls, LiteXL.new(self, metadata))
+          else
+            -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
+          end
+        else
           table.insert(self.lite_xls, LiteXL.new(self, metadata))
-        else
-          -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
         end
-      else
-        table.insert(self.lite_xls, LiteXL.new(self, metadata))
       end
-    end
-    self.remotes = common.map(self.manifest["remotes"] or {}, function(r) return Repository.url(r) end)
+      self.remotes = common.map(self.manifest["remotes"] or {}, function(r) return Repository.url(r) end)
+    end)
+    if not status then error("error parsing manifest for " .. self:url() .. ": " .. err) end
   end
   return self.manifest, self.remotes
 end
@@ -849,40 +852,40 @@ function Repository:generate_manifest()
   local plugins, plugin_map = {}, {}
   if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
     for line in io.lines(path .. PATHSEP .. "README.md") do
-      local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
-      if name then
-        plugin_map[name] = { name = name, description = description }
+      local _, _, id, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
+      if id then
+        plugin_map[id] = { id = id, description = description }
         if path:find("^http") then
           if path:find("%.lua") then
-            plugin_map[name].url = path
+            plugin_map[id].url = path
             local file = common.get(path, nil, nil, write_progress_bar)
-            plugin_map[name].checksum = system.hash(file)
+            plugin_map[id].checksum = system.hash(file)
           else
             path = path:gsub("\\", "")
-            plugin_map[name].remote = path
+            plugin_map[id].remote = path
             pcall(function()
               local repo = Repository.url(path):add()
-              plugin_map[name].remote = path .. ":" .. system.revparse(repo.local_path .. PATHSEP .. (repo.branch))
+              plugin_map[id].remote = path .. ":" .. system.revparse(repo.local_path .. PATHSEP .. (repo.branch))
             end)
           end
         else
-          plugin_map[name].path = path:gsub("%?.*$", "")
+          plugin_map[id].path = path:gsub("%?.*$", "")
         end 
       end
     end
   end
   for i, file in ipairs(system.ls(path .. plugin_dir)) do
     if file:find("%.lua$") then
-      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), mod_version = 3, version = "0.1", path = plugin_dir .. file  }
+      local plugin = { description = nil, id = common.basename(file):gsub("%.lua$", ""), mod_version = 3, version = "0.1", path = plugin_dir .. file  }
       for line in io.lines(path .. plugin_dir .. file) do
         local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
         if mod_version then plugin.mod_version = mod_version end
         local _, _, required_plugin = line:find("require [\"']plugins.([%w_]+)")
-        if required_plugin then if required_plugin ~= plugin.name then if not plugin.dependencies then plugin.dependencies = {} end plugin.dependencies[required_plugin] = ">=1.0" end end
+        if required_plugin then if required_plugin ~= plugin.id then if not plugin.dependencies then plugin.dependencies = {} end plugin.dependencies[required_plugin] = ">=0.1" end end
       end
-      if plugin_map[plugin.name] then 
-        plugin = common.merge(plugin, plugin_map[plugin.name])
-        plugin_map[plugin.name].plugin = plugin 
+      if plugin_map[plugin.id] then 
+        plugin = common.merge(plugin, plugin_map[plugin.id])
+        plugin_map[plugin.id].plugin = plugin 
       end
       table.insert(plugins, plugin)
     end
@@ -892,7 +895,7 @@ function Repository:generate_manifest()
       table.insert(plugins, common.merge({ mod_version = 3, version = "0.1" }, v))
     end
   end
-  table.sort(plugins, function(a,b) return a.name:lower() < b.name:lower() end)
+  table.sort(plugins, function(a,b) return a.id:lower() < b.id:lower() end)
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ plugins = plugins }))
 end
 
@@ -1037,8 +1040,8 @@ function Bottle.new(lite_xl, plugins, is_system)
     is_system = is_system
   }, Bottle)
   if not is_system then 
-    table.sort(self.plugins, function(a, b) return (a.name .. ":" .. a.version) < (b.name .. ":" .. b.version) end)
-    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.plugins, function(p) return p.name .. ":" .. p.version end)))
+    table.sort(self.plugins, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
+    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.plugins, function(p) return p.id .. ":" .. p.version end)))
     self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
   end
   return self
@@ -1072,12 +1075,12 @@ end
 local function get_repository_plugins()
   local t, hash = { }, { }
   for i,p in ipairs(common.flat_map(repositories, function(r) return r.plugins end)) do
-    local id = p.name .. ":" .. p.version
+    local id = p.id .. ":" .. p.version
     if not hash[id] then 
       table.insert(t, p) 
       hash[id] = p 
-      if not hash[p.name] then hash[p.name] = {} end
-      table.insert(hash[p.name], p )
+      if not hash[p.id] then hash[p.id] = {} end
+      table.insert(hash[p.id], p )
     end
   end
   return t, hash
@@ -1096,18 +1099,18 @@ function Bottle:all_plugins()
   }
   for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
     for j, v in ipairs(system.ls(plugin_path)) do
-      local name = v:gsub("%.lua$", "")
+      local id = v:gsub("%.lua$", "")
       local path = plugin_path .. PATHSEP .. v
-      local matching = hash[name] and common.grep(hash[name], function(e) return not Plugin.is_plugin_different(e.local_path, path) end)[1]
-      if i == 2 or not hash[name] or not matching then
+      local matching = hash[id] and common.grep(hash[id], function(e) return not Plugin.is_plugin_different(e.local_path, path) end)[1]
+      if i == 2 or not hash[id] or not matching then
         table.insert(t, Plugin.new(nil, {
-          name = name,
-          type = i == 2 and (hash[name] and "bundled" or "core"),
+          id = id,
+          type = i == 2 and (hash[id] and "bundled" or "core"),
           organization = (v:find("%.lua$") and "singleton" or "complex"),
           mod_version = self.lite_xl.mod_version,
           path = "plugins" .. PATHSEP .. v,
           version = "1.0",
-          description = (hash[name] and hash[name][1].description or nil)
+          description = (hash[id] and hash[id][1].description or nil)
         }))
       end
     end
@@ -1120,19 +1123,19 @@ function Bottle:installed_plugins()
   return common.grep(self:all_plugins(), function(p) return p:is_installed(self) end)
 end
 
-function Bottle:get_plugin(name, version, filter)
+function Bottle:get_plugin(id, version, filter)
   local candidates = {}
-  local wildcard = name:find("%*$")
+  local wildcard = id:find("%*$")
   filter = filter or {}
   for i,plugin in ipairs(self:all_plugins()) do
     if not version and plugin.provides then 
       for k, provides in ipairs(plugin.provides) do
-        if provides == name then
+        if provides == id then
           table.insert(candidates, plugin)
         end
       end
     end
-    if (plugin.name == name or (wildcard and plugin.name:find("^" .. name:sub(1, #name - 1)))) and match_version(plugin.version, version) then
+    if (plugin.id == id or (wildcard and plugin.id:find("^" .. id:sub(1, #id - 1)))) and match_version(plugin.version, version) then
       if (not filter.mod_version or not plugin.mod_version or tonumber(plugin.mod_version) == tonumber(filter.mod_version)) then
         table.insert(candidates, plugin)
       end
@@ -1329,8 +1332,8 @@ local function lpm_lite_xl_run(version, ...)
   local i = 1
   while i < #arguments and arguments[i] ~= "--" do
     local str = arguments[i] 
-    local name, version = common.split(":", str)
-    local plugin = system_bottle:get_plugin(name, version, { mod_version = lite_xl.mod_version })
+    local id, version = common.split(":", str)
+    local plugin = system_bottle:get_plugin(id, version, { mod_version = lite_xl.mod_version })
     if not plugin then error("can't find plugin " .. str) end
     table.insert(plugins, plugin)
     i = i + 1
@@ -1344,15 +1347,15 @@ end
 local function lpm_install(...)
   for i, identifier in ipairs({ ... }) do
     local s = identifier:find(":")
-    local name, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
-    if not name then error('unrecognized identifier ' .. identifier) end
-    if name == "lite-xl" then
+    local id, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
+    if not id then error('unrecognized identifier ' .. identifier) end
+    if id == "lite-xl" then
       lpm_lite_xl_install(version)
     else
-      local potential_plugins = { system_bottle:get_plugin(name, version, { mod_version = system_bottle.lite_xl.mod_version }) }
+      local potential_plugins = { system_bottle:get_plugin(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
       local plugins = common.grep(potential_plugins, function(e) return not e:is_installed(system_bottle) end)
-      if #plugins == 0 and #potential_plugins == 0 then error("can't find plugin " .. name .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-      if #plugins == 0 then error("plugin " .. name .. " already installed") end
+      if #plugins == 0 and #potential_plugins == 0 then error("can't find plugin " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+      if #plugins == 0 then error("plugin " .. id .. " already installed") end
       for j,v in ipairs(plugins) do v:install(system_bottle) end
     end
   end
@@ -1360,16 +1363,16 @@ end
 
 
 local function lpm_plugin_uninstall(...)
-  for i, name in ipairs({ ... }) do
-    local plugins = { system_bottle:get_plugin(name) }
-    if #plugins == 0 then error("can't find plugin " .. name) end
+  for i, id in ipairs({ ... }) do
+    local plugins = { system_bottle:get_plugin(id) }
+    if #plugins == 0 then error("can't find plugin " .. id) end
     local installed_plugins = common.grep(plugins, function(e) return e:is_installed(system_bottle) end)
-    if #installed_plugins == 0 then error("plugin " .. name .. " not installed") end
+    if #installed_plugins == 0 then error("plugin " .. id .. " not installed") end
     for i, plugin in ipairs(installed_plugins) do plugin:uninstall(system_bottle) end
   end
 end
 
-local function lpm_plugin_reinstall(...) for i, name in ipairs({ ... }) do pcall(lpm_plugin_uninstall, name) end lpm_install(...) end
+local function lpm_plugin_reinstall(...) for i, id in ipairs({ ... }) do pcall(lpm_plugin_uninstall, id) end lpm_install(...) end
 
 local function lpm_repo_list() 
   if JSON then
@@ -1385,14 +1388,14 @@ local function lpm_repo_list()
   end
 end
 
-local function lpm_plugin_list(name) 
-  local max_name = 4
+local function lpm_plugin_list(id) 
+  local max_id = 4
   local result = { plugins = { } }
-  for j,plugin in ipairs(common.grep(system_bottle:all_plugins(), function(p) return not name or p.name:find(name) end)) do
-    max_name = math.max(max_name, #plugin.name)
+  for j,plugin in ipairs(common.grep(system_bottle:all_plugins(), function(p) return not id or p.id:find(id) end)) do
+    max_id = math.max(max_id, #plugin.id)
     local repo = plugin.repository
     table.insert(result.plugins, {
-      name = plugin.name,
+      id = plugin.id,
       status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or (plugin:is_bundled(system_bottle) and "bundled" or (plugin:is_core(system_bottle) and "core" or (plugin:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
       version = "" .. plugin.version,
       dependencies = plugin.dependencies,
@@ -1410,12 +1413,13 @@ local function lpm_plugin_list(name)
     io.stdout:write(json.encode(result) .. "\n")
   elseif #result.plugins > 0 then
     if not VERBOSE then
-      print(string.format("%" .. max_name .."s | %10s | %10s | %s", "Name", "Version", "ModVer", "Status"))
-      print(string.format("%" .. max_name .."s | %10s | %10s | %s", string.rep("-", max_name), "-------", "------", "-----------"))
+      print(string.format("%" .. max_id .."s | %10s | %10s | %s", "ID", "Version", "ModVer", "Status"))
+      print(string.format("%" .. max_id .."s | %10s | %10s | %s", string.rep("-", max_name), "-------", "------", "-----------"))
     end
-    for i, plugin in ipairs(common.sort(result.plugins, function(a,b) return a.name < b.name end)) do
+    for i, plugin in ipairs(common.sort(result.plugins, function(a,b) return a.id < b.id end)) do
       if VERBOSE then
         if i ~= 0 then print("---------------------------") end
+        print("ID:            " .. plugin.id)
         print("Name:          " .. plugin.name)
         print("Version:       " .. plugin.version)
         print("Status:        " .. plugin.status)
@@ -1429,7 +1433,7 @@ local function lpm_plugin_list(name)
         print("Tags:          " .. common.join(", ", plugin.tags))
         print("Path:          " .. plugin.path)
       elseif plugin.status ~= "incompatible" then
-        print(string.format("%" .. max_name .."s | %10s | %10s | %s", plugin.name, plugin.version, plugin.mod_version, plugin.status))
+        print(string.format("%" .. max_id .."s | %10s | %10s | %s", plugin.id, plugin.version, plugin.mod_version, plugin.status))
       end
     end
   end
@@ -1441,12 +1445,12 @@ local function lpm_describe()
       io.stdout:write("lpm add " .. v:url() .. " && ")
     end
   end
-  print("lpm run " .. system_bottle.lite_xl.version .. " " .. common.join(" ", common.map(system_bottle:installed_plugins(), function(p) return p.name .. ":" .. p.version end)))
+  print("lpm run " .. system_bottle.lite_xl.version .. " " .. common.join(" ", common.map(system_bottle:installed_plugins(), function(p) return p.id .. ":" .. p.version end)))
 end
 
 local function lpm_plugin_upgrade()
   for i,plugin in ipairs(system_bottle:installed_plugins()) do
-    local upgrade = common.sort(system_bottle:get_plugin(plugin.name, ">" .. plugin.version), function(a, b) return compare_version(b.version, a.version) end)[1]
+    local upgrade = common.sort(system_bottle:get_plugin(plugin.id, ">" .. plugin.version), function(a, b) return compare_version(b.version, a.version) end)[1]
     if upgrade then upgrade:install(system_bottle) end
   end
 end
@@ -1589,12 +1593,12 @@ It has the following commands:
   lpm [repo] update [<repository remote>]  Update all/the specified repos.
     [...<repository remote>]        
   lpm [plugin] install                     Install specific plugins.
-    <plugin name>[:<version>]              If installed, upgrades.
-    [...<plugin name>:<version>]                     
-  lpm [plugin] uninstall <plugin name>     Uninstall the specific plugin.
-    [...<plugin name>]
-  lpm [plugin] reinstall <plugin name>     Uninstall and installs the specific plugin.
-    [...<plugin name>]
+    <plugin id>[:<version>]                If installed, upgrades.
+    [...<plugin id>:<version>]                     
+  lpm [plugin] uninstall <plugin id>       Uninstall the specific plugin.
+    [...<plugin id>]
+  lpm [plugin] reinstall <plugin id>       Uninstall and installs the specific plugin.
+    [...<plugin id>]
   lpm [plugin] list <repository remote>    List all/associated plugins.
     [...<repository remote>]    
   lpm [plugin] upgrade                     Upgrades all installed plugins 
@@ -1775,21 +1779,22 @@ in any circumstance unless explicitly supplied.
   end
   if ARGS[2] == "table" then
     local plugins = json.decode(common.read(ARGS[3]))["plugins"]
-    table.sort(plugins, function(a,b) return string.lower(a.name) < string.lower(b.name) end)
-    local names = common.map(plugins, function(plugin) 
-      if plugin.path then return string.format("[`%s`](%s?raw=1)", plugin.name, plugin.path) end
-      if plugin.url then return string.format("[`%s`](%s)", plugin.name, plugin.url) end
-      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.name, plugin.remote:gsub(":%w+$", "")) end
-      return plugin.name
+    table.sort(plugins, function(a,b) return string.lower(a.id) < string.lower(b.id) end)
+    local ids = common.map(plugins, function(plugin) 
+      if plugin.path and plugin.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", plugin.id, plugin.path) end
+      if plugin.path then return string.format("[`%s`](%s)", plugin.id, plugin.path) end
+      if plugin.url then return string.format("[`%s`](%s)", plugin.id, plugin.url) end
+      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.id, plugin.remote:gsub(":%w+$", "")) end
+      return plugin.id
     end)
     local descriptions = common.map(plugins, function(e) return e.description or "" end)
     local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
-    local max_name = math.max(table.unpack(common.map(names, function(e) return #e end)))
+    local max_id = math.max(table.unpack(common.map(ids, function(e) return #e end)))
     local t = { }
-    table.insert(t, "| Plugin" .. string.rep(" ", max_name - 6) .. " | Description" .. string.rep(" ", max_description - 11) .. " |")
-    table.insert(t, "| :" .. string.rep("-", max_name-1) .. " | :" .. string.rep("-", max_description - 1) .. " |")
+    table.insert(t, "| Plugin" .. string.rep(" ", max_id - 6) .. " | Description" .. string.rep(" ", max_description - 11) .. " |")
+    table.insert(t, "| :" .. string.rep("-", max_id-1) .. " | :" .. string.rep("-", max_description - 1) .. " |")
     for i = 1, #plugins do
-      table.insert(t, "| " .. names[i] .. string.rep(" ", max_name - #names[i]) .. " | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i]) .. " |")
+      table.insert(t, "| " .. ids[i] .. string.rep(" ", max_id - #ids[i]) .. " | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i]) .. " |")
     end
     if ARGS[4] then
       local file = {}
