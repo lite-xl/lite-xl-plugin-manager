@@ -685,11 +685,12 @@ function Plugin:install(bottle, installing)
       log_action("Downloaded file " .. self.url .. " to " .. path)
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     elseif self.remote then
-      log_action("Cloning repository " .. self.remote .. " into " .. install_path)
+      log_progress_action("Fetching repository " .. self.remote .. " into " .. install_path)
       common.mkdirp(temporary_install_path)
       local _, _, url, branch = self.remote:find("^(.*):(.*)$")
       system.init(temporary_install_path, url)
-      common.reset(temporary_install_path, branch)
+      system.fetch(temporary_install_path, write_progress_bar)
+      common.reset(temporary_install_path, branch, "hard")
     elseif self.path then
       local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
@@ -800,7 +801,10 @@ function Repository:parse_manifest(already_pulling)
   if self.manifest then return self.manifest, self.remotes end
   if system.stat(self.local_path) and system.stat(self.local_path .. PATHSEP .. (self.commit or self.branch)) then
     self.manifest_path = self.local_path .. PATHSEP .. (self.commit or self.branch) .. PATHSEP .. "manifest.json"
-    if not system.stat(self.manifest_path) then self:generate_manifest() end
+    if not system.stat(self.manifest_path) then 
+      log_action("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
+      self:generate_manifest() 
+    end
     local status, manifest = pcall(json.decode, common.read(self.manifest_path))
     if not status then error("error parsing manifest for " .. self:url() .. ": " .. manifest) end
     self.manifest = manifest
@@ -808,10 +812,8 @@ function Repository:parse_manifest(already_pulling)
     self.remotes = {}
     for i, metadata in ipairs(self.manifest["plugins"] or {}) do
       if metadata.remote then
-        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(.*)?$")
+        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
         if branch_or_commit and is_commit_hash(branch_or_commit) then
-          repo = Repository.new({ remote = url, commit = branch_or_commit })
-          table.insert(remotes, repo)
           table.insert(self.plugins, Plugin.new(self, metadata))
         else
           -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
@@ -822,10 +824,8 @@ function Repository:parse_manifest(already_pulling)
     end
     for i, metadata in ipairs(self.manifest["lite-xls"] or {}) do
       if metadata.remote then
-        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(.*)?$")
+        local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
         if branch_or_commit and is_commit_hash(branch_or_commit) then
-          repo = Repository.new({ remote = url, commit = branch_or_commit })
-          table.insert(remotes, repo)
           table.insert(self.lite_xls, LiteXL.new(self, metadata))
         else
           -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
@@ -858,7 +858,12 @@ function Repository:generate_manifest()
             local file = common.get(path, nil, nil, write_progress_bar)
             plugin_map[name].checksum = system.hash(file)
           else
+            path = path:gsub("\\", "")
             plugin_map[name].remote = path
+            pcall(function()
+              local repo = Repository.url(path):add()
+              plugin_map[name].remote = path .. ":" .. system.revparse(repo.local_path .. PATHSEP .. (repo.branch))
+            end)
           end
         else
           plugin_map[name].path = path:gsub("%?.*$", "")
@@ -868,7 +873,7 @@ function Repository:generate_manifest()
   end
   for i, file in ipairs(system.ls(path .. plugin_dir)) do
     if file:find("%.lua$") then
-      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), mod_version = 3, version = "1.0", path = plugin_dir .. file  }
+      local plugin = { description = nil, name = common.basename(file):gsub("%.lua$", ""), mod_version = 3, version = "0.1", path = plugin_dir .. file  }
       for line in io.lines(path .. plugin_dir .. file) do
         local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
         if mod_version then plugin.mod_version = mod_version end
@@ -884,9 +889,10 @@ function Repository:generate_manifest()
   end
   for k, v in pairs(plugin_map) do
     if not v.plugin then 
-      table.insert(plugins, common.merge({ mod_version = self.branch == "master" and 2 or 3, version = "1.0" }, v))
+      table.insert(plugins, common.merge({ mod_version = 3, version = "0.1" }, v))
     end
   end
+  table.sort(plugins, function(a,b) return a.name:lower() < b.name:lower() end)
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ plugins = plugins }))
 end
 
@@ -1319,15 +1325,19 @@ local function lpm_lite_xl_run(version, ...)
   if not version then error("requires a version") end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
   local plugins = {}
-  for i, str in ipairs({ ... }) do
+  local arguments = { ... }
+  local i = 1
+  while i < #arguments and arguments[i] ~= "--" do
+    local str = arguments[i] 
     local name, version = common.split(":", str)
     local plugin = system_bottle:get_plugin(name, version, { mod_version = lite_xl.mod_version })
     if not plugin then error("can't find plugin " .. str) end
     table.insert(plugins, plugin)
+    i = i + 1
   end
   local bottle = Bottle.new(lite_xl, plugins)
   if not bottle:is_constructed() then bottle:construct() end
-  bottle:run()
+  bottle:run(common.splice(arguments, i + 1))
 end
 
 
@@ -1764,8 +1774,8 @@ in any circumstance unless explicitly supplied.
     table.sort(plugins, function(a,b) return string.lower(a.name) < string.lower(b.name) end)
     local names = common.map(plugins, function(plugin) 
       if plugin.path then return string.format("[`%s`](%s?raw=1)", plugin.name, plugin.path) end
-      if plugin.url then  return string.format("[`%s`](%s)", plugin.name, plugin.url) end
-      if plugin.remote then  return string.format("[`%s`](%s)\\*", plugin.name, plugin.remote) end
+      if plugin.url then return string.format("[`%s`](%s)", plugin.name, plugin.url) end
+      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.name, plugin.remote:gsub(":%w+$")) end
       return plugin.name
     end)
     local descriptions = common.map(plugins, function(e) return e.description or "" end)
@@ -1778,7 +1788,6 @@ in any circumstance unless explicitly supplied.
     end
     os.exit(0)
   end
-
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   lpm_repo_init()

@@ -79,7 +79,6 @@ static int lpm_hash(lua_State* L) {
     hex_buffer[i*2+1] = hex_digits[buffer[i] & 0xF];
   }
   lua_pushlstring(L, hex_buffer, digest_length * 2);
-  hex_buffer[digest_length*2]=0;
   return 1;
 }
 
@@ -335,6 +334,22 @@ static int lpm_reset(lua_State* L) {
   return 0;
 }
 
+static int lpm_revparse(lua_State* L) {
+  git_repository* repository = luaL_checkgitrepo(L, 1);
+  git_oid commit_id;
+  int got_commit = git_get_id(&commit_id, repository, "HEAD");
+  git_repository_free(repository);
+  if (got_commit)
+    return luaL_error(L, "git retrieve commit error: %s", git_error_last_string());
+  int digest_length = sizeof(commit_id.id);
+  char hex_buffer[digest_length * 2];
+  for (size_t i = 0; i < digest_length; ++i) {
+    hex_buffer[i*2+0] = hex_digits[commit_id.id[i] >> 4];
+    hex_buffer[i*2+1] = hex_digits[commit_id.id[i] & 0xF];
+  }
+  lua_pushlstring(L, hex_buffer, digest_length * 2);
+  return 1;
+}
 
 static int lpm_init(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
@@ -937,22 +952,23 @@ static int lpm_pwd(lua_State* L) {
 }
 
 static const luaL_Reg system_lib[] = {
-  { "ls",        lpm_ls    },   // Returns an array of files.
-  { "stat",      lpm_stat  },   // Returns info about a single file.
-  { "mkdir",     lpm_mkdir },   // Makes a directory.
-  { "rmdir",     lpm_rmdir },   // Removes a directory.
-  { "hash",      lpm_hash  },   // Returns a hex sha256 hash.
-  { "symlink",   lpm_symlink }, // Creates a symlink.
-  { "chmod",     lpm_chmod },   // Chmod's a file.
-  { "init",      lpm_init },    // Initializes a git repository with the specified remote.
-  { "fetch",     lpm_fetch },   // Updates a git repository with the specified remote.
-  { "reset",     lpm_reset },   // Updates a git repository to the specified commit/hash/branch.
-  { "get",       lpm_get },     // HTTP(s) GET request.
-  { "extract",   lpm_extract }, // Extracts .tar.gz, and .zip files.
-  { "trace",     lpm_trace },   // Sets trace bit.
-  { "certs",     lpm_certs },   // Sets the SSL certificate chain folder/file.
-  { "chdir",     lpm_chdir },   // Changes directory. Only use for --post actions.
-  { "pwd",       lpm_pwd },     // Gets existing directory. Only use for --post actions.
+  { "ls",        lpm_ls    },    // Returns an array of files.
+  { "stat",      lpm_stat  },    // Returns info about a single file.
+  { "mkdir",     lpm_mkdir },    // Makes a directory.
+  { "rmdir",     lpm_rmdir },    // Removes a directory.
+  { "hash",      lpm_hash  },    // Returns a hex sha256 hash.
+  { "symlink",   lpm_symlink },  // Creates a symlink.
+  { "chmod",     lpm_chmod },    // Chmod's a file.
+  { "init",      lpm_init },     // Initializes a git repository with the specified remote.
+  { "fetch",     lpm_fetch },    // Updates a git repository with the specified remote.
+  { "reset",     lpm_reset },    // Updates a git repository to the specified commit/hash/branch.
+  { "revparse",  lpm_revparse }, // Gets a commit id.
+  { "get",       lpm_get },      // HTTP(s) GET request.
+  { "extract",   lpm_extract },  // Extracts .tar.gz, and .zip files.
+  { "trace",     lpm_trace },    // Sets trace bit.
+  { "certs",     lpm_certs },    // Sets the SSL certificate chain folder/file.
+  { "chdir",     lpm_chdir },    // Changes directory. Only use for --post actions.
+  { "pwd",       lpm_pwd },      // Gets existing directory. Only use for --post actions.
   { NULL,        NULL }
 };
 
