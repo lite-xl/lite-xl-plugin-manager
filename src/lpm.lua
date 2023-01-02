@@ -852,9 +852,10 @@ function Repository:generate_manifest()
   local plugins, plugin_map = {}, {}
   if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
     for line in io.lines(path .. PATHSEP .. "README.md") do
-      local _, _, id, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
-      if id then
-        plugin_map[id] = { id = id, description = description }
+      local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
+      if name then
+        local id = name:lower():gsub("[^a-z0-9%-_]", "")
+        plugin_map[id] = { id = id, description = description, name = name }
         if path:find("^http") then
           if path:find("%.lua") then
             plugin_map[id].url = path
@@ -876,7 +877,8 @@ function Repository:generate_manifest()
   end
   for i, file in ipairs(system.ls(path .. plugin_dir)) do
     if file:find("%.lua$") then
-      local plugin = { description = nil, id = common.basename(file):gsub("%.lua$", ""), mod_version = 3, version = "0.1", path = plugin_dir .. file  }
+      local name = common.basename(file):gsub("%.lua$", "")
+      local plugin = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = plugin_dir .. file  }
       for line in io.lines(path .. plugin_dir .. file) do
         local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
         if mod_version then plugin.mod_version = mod_version end
@@ -1781,11 +1783,11 @@ in any circumstance unless explicitly supplied.
     local plugins = json.decode(common.read(ARGS[3]))["plugins"]
     table.sort(plugins, function(a,b) return string.lower(a.id) < string.lower(b.id) end)
     local ids = common.map(plugins, function(plugin) 
-      if plugin.path and plugin.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", plugin.id, plugin.path) end
-      if plugin.path then return string.format("[`%s`](%s)", plugin.id, plugin.path) end
-      if plugin.url then return string.format("[`%s`](%s)", plugin.id, plugin.url) end
-      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.id, plugin.remote:gsub(":%w+$", "")) end
-      return plugin.id
+      if plugin.path and plugin.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", plugin.name or plugin.id, plugin.path) end
+      if plugin.path then return string.format("[`%s`](%s)", plugin.name or plugin.id, plugin.path) end
+      if plugin.url then return string.format("[`%s`](%s)", plugin.name or plugin.id, plugin.url) end
+      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.name or plugin.id, plugin.remote:gsub(":%w+$", "")) end
+      return plugin.name or plugin.id
     end)
     local descriptions = common.map(plugins, function(e) return e.description or "" end)
     local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
