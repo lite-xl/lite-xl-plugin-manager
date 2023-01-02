@@ -7,8 +7,9 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
+      - name: Set Environment Variables
+        run: echo VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
       - name: Clone Submodules
         run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2` && export REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1))
       - name: Build Linux
@@ -47,8 +48,9 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
+      - name: Set Environment Variables
+        run: echo VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
       - name: Clone Submodules
         run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2` && export REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1))
       - name: Build MacOS 
