@@ -1550,7 +1550,7 @@ end
 xpcall(function()
   local ARGS = parse_arguments(ARGV, { 
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
-    quiet = "flag", version = "string", ["mod-version"] = "string", remotes = "flag", help = "flag",
+    quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
     ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag"
   })

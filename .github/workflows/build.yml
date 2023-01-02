@@ -9,12 +9,12 @@ jobs:
         uses: actions/checkout@v3
         with: { fetch-depth: 0 }
       - name: Set Environment Variables
-        run: echo VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
+        run: echo VERSION=`git describe --tags --abbrev=0 | tail -c +2` >> $GITHUB_ENV && echo FULL_VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
       - name: Clone Submodules
-        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2` && export REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1))
+        run: git submodule update --init --depth=1
       - name: Build Linux
         run: |
-          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-linux'"' && tar -czvf lpm-$VERSION-x86_64-linux.tar.gz lpm
+            ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
           cp lpm /tmp/lpm
       - name: Package Debian/Ubuntu
@@ -50,13 +50,13 @@ jobs:
         uses: actions/checkout@v3
         with: { fetch-depth: 0 }
       - name: Set Environment Variables
-        run: echo VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
+        run: echo VERSION=`git describe --tags --abbrev=0 | tail -c +2` >> $GITHUB_ENV && echo FULL_VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
       - name: Clone Submodules
-        run: git submodule update --init --depth=1 && export VERSION=`git describe --tags | tail -c +2` && export REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1))
+        run: git submodule update --init --depth=1
       - name: Build MacOS 
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
-          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-darwin'"' && tar -czvf lpm-$VERSION-x86_64-darwin.tar.gz lpm
+          ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-darwin'"' && tar -czvf lpm-$FULL_VERSION-x86_64-darwin.tar.gz lpm
           cp lpm lpm.x86_64-darwin
           gh release upload continuous *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
