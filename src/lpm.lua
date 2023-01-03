@@ -1781,7 +1781,7 @@ in any circumstance unless explicitly supplied.
   end
   if ARGS[2] == "table" then
     local plugins = json.decode(common.read(ARGS[3]))["plugins"]
-    table.sort(plugins, function(a,b) return string.lower(a.id) < string.lower(b.id) end)
+    table.sort(plugins, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
     local ids = common.map(plugins, function(plugin) 
       if plugin.path and plugin.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", plugin.name or plugin.id, plugin.path) end
       if plugin.path then return string.format("[`%s`](%s)", plugin.name or plugin.id, plugin.path) end
