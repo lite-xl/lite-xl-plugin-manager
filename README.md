@@ -117,9 +117,3 @@ If you find a bug, please create an issue with the following information:
 * Your operating system.
 * The commit or version of LPM you're using.
 * The exact steps to reproduce in LPM invocations, if possible from a fresh LPM install (targeting an empty folder with `--userdir`).
-
-
-| Plugin                                           | Description                                        |
-| :----------------------------------------------- | :------------------------------------------------- |
-| [`json`](plugins/json.lua?raw=1)                 | JSON support plugin, provides encoding/decoding.   |
-| [`plugin_manager`](plugins/plugin_manager?raw=1) | A GUI interface to the Adam's lite plugin manager. |
