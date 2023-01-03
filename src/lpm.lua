@@ -1274,10 +1274,10 @@ end
 
 
 local function lpm_lite_xl_list()
-  local result = { ["lite-xl"] = { } }
+  local result = { ["lite-xls"] = { } }
   local max_version = 0
   for i,lite_xl in ipairs(lite_xls) do
-    table.insert(result["lite-xl"], {
+    table.insert(result["lite-xls"], {
       version = lite_xl.version,
       mod_version = lite_xl.mod_version,
       tags = lite_xl.tags,
@@ -1291,7 +1291,7 @@ local function lpm_lite_xl_list()
   for i,repo in ipairs(repositories) do
     if not repo.lite_xls then error("can't find lite-xl for repo " .. repo:url()) end
     for j, lite_xl in ipairs(repo.lite_xls) do
-      table.insert(result["lite-xl"], {
+      table.insert(result["lite-xls"], {
         version = lite_xl.version,
         mod_version = lite_xl.mod_version,
         repository = repo:url(),
@@ -1308,7 +1308,7 @@ local function lpm_lite_xl_list()
     io.stdout:write(json.encode(result) .. "\n")
   else
     if VERBOSE then
-      for i, lite_xl in ipairs(result["lite-xl"]) do
+      for i, lite_xl in ipairs(result["lite-xls"]) do
         if i ~= 0 then print("---------------------------") end
         print("Version:       " .. lite_xl.version)
         print("Status:        " .. lite_xl.status)
@@ -1319,7 +1319,7 @@ local function lpm_lite_xl_list()
       max_version = max_version + 2
       print(string.format("%" .. max_version .. "s | %10s | %s", "Version", "Status", "Location"))
       print(string.format("%" .. max_version .."s | %10s | %s", "-------", "---------", "---------------------------"))
-      for i, lite_xl in ipairs(result["lite-xl"]) do
+      for i, lite_xl in ipairs(result["lite-xls"]) do
         print(string.format("%" .. max_version .. "s | %10s | %s", (lite_xl.is_system and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.is_installed and lite_xl.local_path or lite_xl.repository)))
       end
     end
