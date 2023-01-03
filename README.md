@@ -12,7 +12,8 @@ Also contains a plugin_manager.lua plugin to integrate the binary with lite in
 the form of an easy-to-use GUI.
 
 By default in releases, `lpm` will automatically consume the specification 
-in the `latest` branch of this repository.
+in the `latest` branch of this repository, which corresponds to the most
+recent versioned release.
 
 Conforms to [SCPS3](https://github.com/adamharrison/straightforward-c-project-standard#SCPS3).
 
@@ -53,7 +54,9 @@ gcc src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
 ```
 
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
-`continuous` [release page](https://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/continuous).
+`continuous` [release page](https://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/continuous),
+which is a nightly, or the `latest` [release page](https://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/latest),
+which holds the most recent released version.
 
 You can get a feel for how to use `lpm` by typing `./lpm --help`.
 

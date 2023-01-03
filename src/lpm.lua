@@ -1101,7 +1101,7 @@ function Bottle:all_plugins()
   }
   for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
     for j, v in ipairs(system.ls(plugin_path)) do
-      local id = v:gsub("%.lua$", "")
+      local id = v:gsub("%.lua$", ""):lower():gsub("[a-z0-9%-_]", "")
       local path = plugin_path .. PATHSEP .. v
       local matching = hash[id] and common.grep(hash[id], function(e) return not Plugin.is_plugin_different(e.local_path, path) end)[1]
       if i == 2 or not hash[id] or not matching then
@@ -1422,7 +1422,7 @@ local function lpm_plugin_list(id)
       if VERBOSE then
         if i ~= 0 then print("---------------------------") end
         print("ID:            " .. plugin.id)
-        print("Name:          " .. plugin.name)
+        print("Name:          " .. (plugin.name or plugin.id))
         print("Version:       " .. plugin.version)
         print("Status:        " .. plugin.status)
         print("Author:        " .. (plugin.author or ""))
