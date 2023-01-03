@@ -40,9 +40,9 @@ The vast majority of plugins are `singleton` plugins.
 
 * `id`: The semantic id of the plugin, a string only containing `[a-z0-9\-_]`.
 * `name`: The optional name of the plugin.
-* `version`: The plugin's semantic version. A string that can contains [0-9\.].
+* `version`: The plugin's semantic version. A string that can contains `[0-9\.]`.
 * `description`: An english-language description of the plugin.
-* `mod_version`: The mod_version this plugin is compatible with. A string that can contains [0-9\.].
+* `mod_version`: The mod_version this plugin is compatible with. A string that can contains `[0-9\.]`.
 * `provides`: An optional array of strings that are a shorthand of functionality
  this plugin provides. Can be used as a dependency.
 * `dependencies`: Optionally a hash of dependencies required, or optional 
