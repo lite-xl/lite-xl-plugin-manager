@@ -26,14 +26,14 @@ For details about the `manifest.json` files that `lpm` consumes,
 The fastest way to get started with lpm is to simply pull a release.
 
 ```
-  wget https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.92/lpm.x86_64-linux -O lpm && chmod +x lpm
+  wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/v0.92/lpm.x86_64-linux -O lpm && chmod +x lpm
 ```
 
 If you have a C compiler, and `git`, and want to compile from scratch, 
 you can do:
 
 ```
-git clone git@github.com:adamharrison/lite-xl-plugin-manager.git \
+git clone git@github.com:lite-xl/lite-xl-plugin-manager.git \
   --shallow-submodules --recurse-submodules && cd lite-xl-plugin-manager &&\
   ./build.sh && ./lpm
 ````
@@ -53,7 +53,7 @@ gcc src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
 ```
 
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
-`continuous` [release page](https://github.com/adamharrison/lite-xl-plugin-manager/releases/tag/continuous).
+`continuous` [release page](https://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/continuous).
 
 You can get a feel for how to use `lpm` by typing `./lpm --help`.
 
