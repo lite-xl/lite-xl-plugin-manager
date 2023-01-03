@@ -11,17 +11,17 @@
       ],
       "files": [
         {
-          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.9/lpm.x86_64-linux",
+          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux",
           "arch": "x86_64-linux",
           "checksum": "SKIP"
         },
         {
-          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.9/lpm.x86_64-windows.exe",
+          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe",
           "arch": "x86_64-windows",
           "checksum": "SKIP"
         },
         {
-          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.9/lpm.x86_64-darwin",
+          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-darwin",
           "arch": "x86_64-darwin",
           "checksum": "SKIP"
         }

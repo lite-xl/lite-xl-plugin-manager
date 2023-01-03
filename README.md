@@ -1,7 +1,7 @@
 # Lite XL Plugin Manager
 
 A standalone binary that provides an easy way of installing, and uninstalling
-plugins from lite-xl, as well as different version fo lite-xl.
+plugins from lite-xl, as well as different version of lite-xl.
 
 Can be used by a package manager plugin that works from inside the editor 
 and calls this binary.
@@ -26,7 +26,7 @@ For details about the `manifest.json` files that `lpm` consumes,
 The fastest way to get started with lpm is to simply pull a release.
 
 ```
-  wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/v0.92/lpm.x86_64-linux -O lpm && chmod +x lpm
+wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm && chmod +x lpm
 ```
 
 If you have a C compiler, and `git`, and want to compile from scratch, 

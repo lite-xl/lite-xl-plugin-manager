@@ -9,7 +9,9 @@ jobs:
         uses: actions/checkout@v3
         with: { fetch-depth: 0 }
       - name: Set Environment Variables
-        run: echo VERSION=`git describe --tags --abbrev=0 | tail -c +2` >> $GITHUB_ENV && echo FULL_VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
+        run: |
+          git config --global user.name "Github Actions" && git config --global user.email "adamdharrison@gmail.com"
+          echo VERSION=`git describe --tags --abbrev=0 | tail -c +2` >> $GITHUB_ENV && echo FULL_VERSION=`git describe --tags | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
       - name: Clone Submodules
         run: git submodule update --init --depth=1
       - name: Build Linux
@@ -38,6 +40,10 @@ jobs:
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
             gh release delete -y $VERSION || true; 
             gh release create -t v$VERSION v$VERSION lpm.x86_64-linux lpm.x86_64-windows.exe
+            gh release delete -y latest || true; 
+            gh release create -t latest latest lpm.x86_64-linux lpm.x86_64-windows.exe
+            git branch -f latest HEAD
+            git push origin latest
           fi
 
   build_macos:
@@ -61,4 +67,5 @@ jobs:
           gh release upload continuous *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
             gh release upload v$VERSION lpm.x86_64-darwin
+            gh release upload latest lpm.x86_64-darwin
           fi
