@@ -1416,7 +1416,7 @@ local function lpm_plugin_list(id)
   elseif #result.plugins > 0 then
     if not VERBOSE then
       print(string.format("%" .. max_id .."s | %10s | %10s | %s", "ID", "Version", "ModVer", "Status"))
-      print(string.format("%" .. max_id .."s | %10s | %10s | %s", string.rep("-", max_name), "-------", "------", "-----------"))
+      print(string.format("%" .. max_id .."s | %10s | %10s | %s", string.rep("-", max_id), "-------", "------", "-----------"))
     end
     for i, plugin in ipairs(common.sort(result.plugins, function(a,b) return a.id < b.id end)) do
       if VERBOSE then
