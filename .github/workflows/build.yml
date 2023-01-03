@@ -43,7 +43,7 @@ jobs:
             gh release delete -y latest || true; 
             gh release create -t latest latest lpm.x86_64-linux lpm.x86_64-windows.exe
             git branch -f latest HEAD
-            git push -f origin latest
+            git push -f origin refs/heads/latest
           fi
 
   build_macos:
