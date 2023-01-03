@@ -1101,7 +1101,7 @@ function Bottle:all_plugins()
   }
   for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
     for j, v in ipairs(system.ls(plugin_path)) do
-      local id = v:gsub("%.lua$", ""):lower():gsub("[a-z0-9%-_]", "")
+      local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
       local path = plugin_path .. PATHSEP .. v
       local matching = hash[id] and common.grep(hash[id], function(e) return not Plugin.is_plugin_different(e.local_path, path) end)[1]
       if i == 2 or not hash[id] or not matching then
@@ -1284,7 +1284,7 @@ local function lpm_lite_xl_list()
       is_system = lite_xl:is_system(),
       is_installed = lite_xl:is_installed(),
       status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
-      local_path = lite_xl.local_path
+      local_path = lite_xl:is_installed() and lite_xl.local_path
     })
     max_version = math.max(max_version, #lite_xl.version)
   end
@@ -1299,7 +1299,7 @@ local function lpm_lite_xl_list()
         is_system = lite_xl:is_system(),
         is_installed = lite_xl:is_installed(),
         status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
-        local_path = lite_xl.local_path
+        local_path = lite_xl:is_installed() and lite_xl.local_path
       })
       max_version = math.max(max_version, #lite_xl.version)
     end
