@@ -986,7 +986,7 @@ end
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
 function LiteXL:is_compatible(plugin) return not plugin.mod_version or compare_version(self.mod_version, plugin.mod_version) == 0 end
-function LiteXL:is_installed()  return system.stat(self.local_path) end
+function LiteXL:is_installed()  return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
   if self:is_installed() then log_warning("lite-xl " .. self.version .. " already installed") return end
@@ -1655,7 +1655,7 @@ Flags have the following effects:
   --help                   Displays this help text.
   --ssl-certs              Sets the SSL certificate store. Can be a directory,
                            or path to a certificate bundle.
-  --arch                   Sets the architecture (default: ]] .. _G.ARCH .. [[).
+  --arch=architecture      Sets the architecture (default: ]] .. _G.ARCH .. [[).
   --assume-yes             Ignores any prompts, and automatically answers yes
                            to all.
   --no-install-optional    On install, anything marked as optional
