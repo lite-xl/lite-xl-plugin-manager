@@ -17,7 +17,7 @@ jobs:
       - name: Build Linux
         run: |
           sudo apt-get install musl-tools musl musl-dev
-          CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
+          CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
           cp lpm /tmp/lpm
       - name: Package Debian/Ubuntu
