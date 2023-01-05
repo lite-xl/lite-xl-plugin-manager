@@ -55,6 +55,9 @@ The vast majority of plugins are `singleton` plugins.
 * `post`: Optionally a string which represents a command to run. If presented
   with a dictionary, takes `ARCH` keys, and runs a different command per `ARCH`.
 
+Any keys not present in this official listing are acceptbale, although they 
+can be ignored by any particular package manager or parser.
+
 ### Dependencies
 
 Depedencies are specified in an object, with the key being the name of the 
