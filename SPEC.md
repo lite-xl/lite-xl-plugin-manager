@@ -54,9 +54,10 @@ The vast majority of plugins are `singleton` plugins.
   `files`. To pull the whole repository, use `"."`.
 * `post`: Optionally a string which represents a command to run. If presented
   with a dictionary, takes `ARCH` keys, and runs a different command per `ARCH`.
+* `extra`: Optionally a dictionary which holds any desired extra information.
 
-Any keys not present in this official listing are acceptbale, although they 
-can be ignored by any particular package manager or parser.
+Any keys not present in this official listing render the manifest non-conforming.
+Any extra keys should be placed in `extra`.
 
 ### Dependencies
 
