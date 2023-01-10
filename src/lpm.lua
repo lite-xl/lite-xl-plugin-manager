@@ -981,7 +981,7 @@ function LiteXL.new(repository, metadata)
     files = {}
   }, metadata), LiteXL)
   self.hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version .. common.join("", common.map(self.files, function(f) return f.checksum end)))
-  self.local_path = self:is_local() and self.path or (CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. self.version .. PATHSEP .. self.hash)
+  self.local_path = self:is_local() and self.path or (CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. self.version .. PATHSEP .. self.hash)
   self.binary_path = self.binary_path or (self.local_path .. PATHSEP .. "lite-xl")
   self.datadir_path = self.datadir_path or (self.local_path .. PATHSEP .. "data")
   return self
@@ -1228,8 +1228,8 @@ local function get_lite_xl(version)
 end
 
 local function lpm_lite_xl_save()
-  common.mkdirp(CACHEDIR .. PATHSEP .. "lite_xls")
-  common.write(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
+  common.mkdirp(CACHEDIR .. PATHSEP .. ARCH .. PATHSEP .. "lite_xls")
+  common.write(CACHEDIR .. PATHSEP .. ARCH .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
     json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
   )
 end
@@ -1825,8 +1825,8 @@ in any circumstance unless explicitly supplied.
       repositories[#repositories]:parse_manifest()
     end
   end
-  if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
-    for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json"))) do
+  if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json") then
+    for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json"))) do
       table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
     end
   end
