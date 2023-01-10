@@ -413,13 +413,14 @@ function common.mkdirp(path)
     if target ~= "" and not target:find("^[A-Z]:$") and not system.stat(target) then system.mkdir(target) end
   end
 end
-function common.copy(src, dst)
+function common.copy(src, dst, hidden)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
-  if dst_stat and dst_stat.type == "dir" then return common.copy(src, dst .. PATHSEP .. common.basename(src)) end
+  if not hidden and common.basename(src):find("^%.") then return end
+  if dst_stat and dst_stat.type == "dir" then return common.copy(src, dst .. PATHSEP .. common.basename(src), hidden) end
   if src_stat.type == "dir" then
     common.mkdirp(dst)
-    for i, file in ipairs(system.ls(src)) do common.copy(src .. PATHSEP .. file, dst .. PATHSEP .. file) end
+    for i, file in ipairs(system.ls(src)) do common.copy(src .. PATHSEP .. file, dst .. PATHSEP .. file, hidden) end
   else
     local src_io, err1 = io.open(src, "rb")
     if err1 then error("can't open for reading " .. src .. ": " .. err1) end
@@ -694,6 +695,8 @@ function Plugin:install(bottle, installing)
       system.init(temporary_install_path, url)
       system.fetch(temporary_install_path, write_progress_bar)
       common.reset(temporary_install_path, branch, "hard")
+      common.rmrf(temporary_install_path .. PATHSEP .. ".git")
+      common.rmrf(temporary_install_path .. PATHSEP .. ".gitignore")
     elseif self.path then
       local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
