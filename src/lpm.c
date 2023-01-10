@@ -999,7 +999,7 @@ static const luaL_Reg system_lib[] = {
   #endif
 #endif
 #ifndef LITE_ARCH_TUPLE
-  #define LITE_ARCH_TUPLE (ARCH_PROCESSOR "-" ARCH_PLATFORM)
+  #define LITE_ARCH_TUPLE ARCH_PROCESSOR "-" ARCH_PLATFORM
 #endif
 
 
