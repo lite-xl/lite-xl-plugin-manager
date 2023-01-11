@@ -24,6 +24,7 @@
 #include <fcntl.h>
 
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <git2.h>
 #include <mbedtls/sha256.h>
 #include <mbedtls/x509.h>
@@ -98,38 +99,43 @@ int lpm_chmod(lua_State* L) {
   return 0;
 }
 
-/** BEGIN STOLEN LITE CODE **/
 #if _WIN32
-static LPWSTR utfconv_utf8towc(const char *str) {
-  LPWSTR output;
+static LPCWSTR lua_toutf16(lua_State* L, const char* str) {
+  if (str && str[0] == 0)
+    return L"";
   int len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
-  if (len == 0)
-    return NULL;
-  output = (LPWSTR) malloc(sizeof(WCHAR) * len);
-  if (output == NULL)
-    return NULL;
-  len = MultiByteToWideChar(CP_UTF8, 0, str, -1, output, len);
-  if (len == 0) {
-    free(output);
-    return NULL;
+  if (len > 0) {
+    LPWSTR output = (LPWSTR) malloc(sizeof(WCHAR) * len);
+    if (output) {
+      len = MultiByteToWideChar(CP_UTF8, 0, str, -1, output, len);
+      if (len > 0) {
+        lua_pushlstring(L, (char*)output, len * 2);
+        free(output);
+        return (LPCWSTR)lua_tostring(L, -1);
+      }
+      free(output);
+    }
   }
-  return output;
+  luaL_error(L, "can't convert utf8 string");
+  return NULL;
 }
 
-static char *utfconv_wctoutf8(LPCWSTR str) {
-  char *output;
+static const char* lua_toutf8(lua_State* L, LPCWSTR str) {
   int len = WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
-  if (len == 0)
-    return NULL;
-  output = (char *) malloc(sizeof(char) * len);
-  if (output == NULL)
-    return NULL;
-  len = WideCharToMultiByte(CP_UTF8, 0, str, -1, output, len, NULL, NULL);
-  if (len == 0) {
-    free(output);
-    return NULL;
+  if (len > 0) {
+    char* output = (char *) malloc(sizeof(char) * len);
+    if (output) {
+      len = WideCharToMultiByte(CP_UTF8, 0, str, -1, output, len, NULL, NULL);
+      if (len) {
+        lua_pushlstring(L, output, len);
+        free(output);
+        return lua_tostring(L, -1);
+      }
+      free(output);
+    }
   }
-  return output;
+  luaL_error(L, "can't convert utf16 string");
+  return NULL;
 }
 #endif
 
@@ -141,22 +147,16 @@ static int lpm_ls(lua_State *L) {
   lua_pushstring(L, path[0] == 0 || strchr("\\/", path[strlen(path) - 1]) != NULL ? "*" : "\\*");
   lua_concat(L, 2);
   path = lua_tostring(L, -1);
-
-  LPWSTR wpath = utfconv_utf8towc(path);
-  if (wpath == NULL)
-    return luaL_error(L, "can't ls %s: invalid utf8 character conversion", path);
     
   WIN32_FIND_DATAW fd;
-  HANDLE find_handle = FindFirstFileExW(wpath, FindExInfoBasic, &fd, FindExSearchNameMatch, NULL, 0);
-  free(wpath);
+  HANDLE find_handle = FindFirstFileExW(lua_toutf16(L, path), FindExInfoBasic, &fd, FindExSearchNameMatch, NULL, 0);
   if (find_handle == INVALID_HANDLE_VALUE)
     return luaL_error(L, "can't ls %s: %d", path, GetLastError());
   char mbpath[MAX_PATH * 4]; // utf-8 spans 4 bytes at most
   int len, i = 1;
   lua_newtable(L);
 
-  do
-  {
+  do {
     if (wcscmp(fd.cFileName, L".") == 0) { continue; }
     if (wcscmp(fd.cFileName, L"..") == 0) { continue; }
 
@@ -193,10 +193,7 @@ static int lpm_ls(lua_State *L) {
 static int lpm_rmdir(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
 #ifdef _WIN32
-  LPWSTR wpath = utfconv_utf8towc(path);
-  int deleted = RemoveDirectoryW(wpath);
-  free(wpath);
-  if (!deleted)
+  if (!RemoveDirectoryW(lua_toutf16(L, path)))
     return luaL_error(L, "can't rmdir %s: %d", path, GetLastError());
 #else
   if (remove(path))
@@ -208,11 +205,7 @@ static int lpm_rmdir(lua_State *L) {
 static int lpm_mkdir(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
 #ifdef _WIN32
-  LPWSTR wpath = utfconv_utf8towc(path);
-  if (wpath == NULL)
-    return luaL_error(L, "can't mkdir %s: invalid utf8 character conversion", path);
-  int err = _wmkdir(wpath);
-  free(wpath);
+  int err = _wmkdir(lua_toutf16(L, path));
 #else
   int err = mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
 #endif
@@ -223,29 +216,25 @@ static int lpm_mkdir(lua_State *L) {
 
 static int lpm_stat(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
-  lua_newtable(L);
 #ifdef _WIN32
   #define realpath(x, y) _wfullpath(y, x, MAX_PATH)
   struct _stat s;
-  LPWSTR wpath = utfconv_utf8towc(path);
-  if (wpath == NULL)
-    return luaL_error(L, "can't stat %s: invalid utf8 character conversion", path);
+  LPCWSTR wpath = lua_toutf16(L, path);
   int err = _wstat(wpath, &s);
-  LPWSTR wfullpath = realpath(wpath, NULL);
-  free(wpath);
+  LPCWSTR wfullpath = realpath(wpath, NULL);
   if (!wfullpath) return 0;
-  char *abs_path = utfconv_wctoutf8(wfullpath);
-  free(wfullpath);
+  const char *abs_path = lua_toutf8(L, wfullpath);
 #else
   struct stat s;
   int err = lstat(path, &s);
-  char *abs_path = realpath(path, NULL);
+  const char *abs_path = realpath(path, NULL);
 #endif
   if (err || !abs_path) {
     lua_pushnil(L);
     lua_pushstring(L, strerror(errno));
     return 2;
   }
+  lua_newtable(L);
   lua_pushstring(L, abs_path); lua_setfield(L, -2, "abs_path");
   lua_pushvalue(L, 1); lua_setfield(L, -2, "path");
 
@@ -658,7 +647,7 @@ static int lpm_extract(lua_State* L) {
       tar.close = gzip_close;*/
       char buffer[8192];
       int len = strlen(src);
-      strncpy(actual_src, src, len - 3);
+      strncpy(actual_src, src, min(len - 3, PATH_MAX));
       actual_src[len-3] = 0;
       FILE* file = fopen(actual_src, "wb");
       while (1) {
@@ -951,6 +940,41 @@ static int lpm_pwd(lua_State* L) {
   return 1;
 }
 
+int lpm_flock(lua_State* L) {
+  const char* path = luaL_checkstring(L, 1);
+  luaL_checktype(L, 2, LUA_TFUNCTION);
+  #ifdef _WIN32
+    HANDLE file = CreateFileW(lua_toutf16(L, path), FILE_SHARE_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+    if (!file || file == INVALID_HANDLE_VALUE)
+      return luaL_error(L, "can't open for flock %s: %d", path, GetLastError());
+    OVERLAPPED overlapped = {0};
+    if (!LockFileEx(file, LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 1, &overlapped)) {
+      CloseHandle(file);
+      return luaL_error(L, "can't flock %s: %d", path, GetLastError());
+    }
+  #else 
+    int fd = open(path, 0);
+    if (fd == -1)
+      return luaL_error(L, "can't flock %s: %s", path, strerror(errno));
+    if (flock(fd, LOCK_EX) == -1) {
+      close(fd);
+      return luaL_error(L, "can't acquire exclusive lock on %s: %s", strerror(errno));
+    }
+  #endif
+  lua_pushvalue(L, 2);
+  lua_pushvalue(L, 1);
+  int err = lua_pcall(L, 1, 0, 0);
+  #ifdef _WIN32
+    UnlockFile(file, 0, 0, 1, 0);
+    CloseHandle(file);
+  #else
+    close(fd);
+  #endif
+  if (err)
+    return lua_error(L);
+  return 0;
+}
+
 static const luaL_Reg system_lib[] = {
   { "ls",        lpm_ls    },    // Returns an array of files.
   { "stat",      lpm_stat  },    // Returns info about a single file.
@@ -969,6 +993,7 @@ static const luaL_Reg system_lib[] = {
   { "certs",     lpm_certs },    // Sets the SSL certificate chain folder/file.
   { "chdir",     lpm_chdir },    // Changes directory. Only use for --post actions.
   { "pwd",       lpm_pwd },      // Gets existing directory. Only use for --post actions.
+  { "flock",     lpm_flock },    // Locks a file.
   { NULL,        NULL }
 };
 

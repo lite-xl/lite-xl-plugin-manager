@@ -455,6 +455,13 @@ end
 
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
+local function engage_locks(func)
+  if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
+  local lockfile = USERDIR .. PATHSEP .. ".lock"
+  if not system.stat(lockfile) then common.write(lockfile, "") end
+  system.flock(lockfile, func)
+end
+
 local Plugin, Repository, LiteXL, Bottle = {}, {}, {}, {}
 
 local actions, warnings = {}, {}
@@ -1817,44 +1824,48 @@ in any circumstance unless explicitly supplied.
   end
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
-  lpm_repo_init()
-  repositories, lite_xls = {}, {}
-  if system.stat(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") then
-    for url in io.lines(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") do
-      table.insert(repositories, Repository.url(url))
-      repositories[#repositories]:parse_manifest()
+  engage_locks(function()
+    lpm_repo_init()
+    repositories, lite_xls = {}, {}
+    if system.stat(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") then
+      for url in io.lines(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") do
+        table.insert(repositories, Repository.url(url))
+        repositories[#repositories]:parse_manifest()
+      end
     end
-  end
-  if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json") then
-    for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json"))) do
-      table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
+    if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json") then
+      for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json"))) do
+        table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
+      end
     end
-  end
-  local lite_xl_binary = BINARY or common.path("lite-xl")
-  if lite_xl_binary then
-    local stat = system.stat(lite_xl_binary)
-    if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
-    lite_xl_binary = stat.symlink or lite_xl_binary
-    local directory = common.dirname(lite_xl_binary)
-    local hash = system.hash(lite_xl_binary, "file")
-    local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
-    if not system_lite_xl then 
-      system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
-      if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.binary_path .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
-      system_lite_xl = LiteXL.new(nil, { datadir_path = DATADIR, binary_path = BINARY, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
-      table.insert(lite_xls, system_lite_xl)
-      lpm_lite_xl_save()
+    local lite_xl_binary = BINARY or common.path("lite-xl")
+    if lite_xl_binary then
+      local stat = system.stat(lite_xl_binary)
+      if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
+      lite_xl_binary = stat.symlink or lite_xl_binary
+      local directory = common.dirname(lite_xl_binary)
+      local hash = system.hash(lite_xl_binary, "file")
+      local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
+      if not system_lite_xl then 
+        system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
+        if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.binary_path .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+        system_lite_xl = LiteXL.new(nil, { datadir_path = DATADIR, binary_path = BINARY, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
+        table.insert(lite_xls, system_lite_xl)
+        lpm_lite_xl_save()
+      else
+        table.insert(system_lite_xl.tags, "system")
+      end
+      system_bottle = Bottle.new(system_lite_xl, nil, true) 
     else
-      table.insert(system_lite_xl.tags, "system")
+      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } }), nil, true)
     end
-    system_bottle = Bottle.new(system_lite_xl, nil, true) 
-  else
-    system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } }), nil, true)
-  end
-  if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
+    if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
+  end)
   
   if ARGS[2] ~= '-' then
-    run_command(ARGS)
+    engage_locks(function()
+      run_command(ARGS)
+    end)
   else
     while true do
       local line = io.stdin:read("*line")
@@ -1868,7 +1879,9 @@ in any circumstance unless explicitly supplied.
         s = e + 1
       end
       xpcall(function()
-        run_command(args)
+        engage_locks(function()
+          run_command(args)
+        end)
       end, error_handler)
       actions, warnings = {}, {}
     end
