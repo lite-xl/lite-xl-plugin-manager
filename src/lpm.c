@@ -22,7 +22,6 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <math.h>
 
 #include <sys/stat.h>
 #include <sys/file.h>
@@ -647,9 +646,9 @@ static int lpm_extract(lua_State* L) {
       tar.seek = gzip_seek;
       tar.close = gzip_close;*/
       char buffer[8192];
-      int len = strlen(src);
-      strncpy(actual_src, src, min(len - 3, PATH_MAX));
-      actual_src[len-3] = 0;
+      int len = strlen(src) - 3;
+      strncpy(actual_src, src, len < PATH_MAX ? len : PATH_MAX);
+      actual_src[len] = 0;
       FILE* file = fopen(actual_src, "wb");
       while (1) {
         int length = gzread(gzfile, buffer, sizeof(buffer));
