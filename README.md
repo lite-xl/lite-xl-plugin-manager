@@ -36,21 +36,21 @@ you can do:
 ```
 git clone git@github.com:lite-xl/lite-xl-plugin-manager.git \
   --shallow-submodules --recurse-submodules && cd lite-xl-plugin-manager &&\
-  ./build.sh && ./lpm
+  ./build.sh -DLPM_STATIC && ./lpm
 ````
 
 If you want to build it quickly, and have the right modules installed, you can
 do:
 
 ```
-./build.sh -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz
+./build.sh -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz -DLPM_STATIC
 ```
 
 OR
 
 ```
 gcc src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
-  -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -o lpm
+  -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -DLPM_STATIC -o lpm
 ```
 
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
@@ -98,7 +98,7 @@ lpm --help
 ### Linux & MacOS & Windows MSYS
 
 ```
-./build.sh clean && ./build.sh && ./lpm
+./build.sh clean && ./build.sh -DLPM_STATIC && ./lpm
 ```
 
 ### Linux -> Windows
