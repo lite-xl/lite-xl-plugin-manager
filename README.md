@@ -17,6 +17,12 @@ recent versioned release.
 
 Conforms to [SCPS3](https://github.com/adamharrison/straightforward-c-project-standard#SCPS3).
 
+## Status
+
+Please note that `lpm` has currently not reached version 1.0. As such, it is still heavily in flux, and may change without notice.
+
+Once 1.0 is released, changleogs will be produced, and a more stable process that uses semver will be used.
+
 ## Specification
 
 For details about the `manifest.json` files that `lpm` consumes, 
