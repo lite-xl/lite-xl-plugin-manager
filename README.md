@@ -50,7 +50,7 @@ OR
 
 ```
 gcc src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
-  -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -DLPM_STATIC -o lpm
+  -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -o lpm
 ```
 
 CI is enabled on this repository, so you can grab Windows and Linux builds from the 
