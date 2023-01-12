@@ -943,6 +943,7 @@ static int lpm_pwd(lua_State* L) {
 int lpm_flock(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   luaL_checktype(L, 2, LUA_TFUNCTION);
+  int error_handler = lua_type(L, 3) == LUA_TFUNCTION ? 3 : 0;
   #ifdef _WIN32
     HANDLE file = CreateFileW(lua_toutf16(L, path), FILE_SHARE_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
     if (!file || file == INVALID_HANDLE_VALUE)
@@ -963,7 +964,7 @@ int lpm_flock(lua_State* L) {
   #endif
   lua_pushvalue(L, 2);
   lua_pushvalue(L, 1);
-  int err = lua_pcall(L, 1, 0, 0);
+  int err = lua_pcall(L, 1, 0, error_handler);
   #ifdef _WIN32
     UnlockFile(file, 0, 0, 1, 0);
     CloseHandle(file);

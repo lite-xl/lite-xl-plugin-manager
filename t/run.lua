@@ -104,6 +104,10 @@ local tests = {
     assert(plugins[1].organization == "complex")
     assert(plugins[1].status == "installed")
   end,
+  ["04_list_plugins"] = function()
+    local plugins = lpm("list")["plugins"]
+    assert(#plugins > 20)
+  end
 }
 
 

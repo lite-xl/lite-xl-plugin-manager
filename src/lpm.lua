@@ -455,11 +455,11 @@ end
 
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
-local function engage_locks(func)
+local function engage_locks(func, err)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   local lockfile = USERDIR .. PATHSEP .. ".lock"
   if not system.stat(lockfile) then common.write(lockfile, "") end
-  system.flock(lockfile, func)
+  system.flock(lockfile, func, err)
 end
 
 local Plugin, Repository, LiteXL, Bottle = {}, {}, {}, {}
@@ -562,7 +562,7 @@ function Plugin.new(repository, metadata)
     version = "1.0",
     dependencies = {},
     conflicts = {},
-    local_path = repository and not metadata.remote and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")),
+    local_path = repository and not metadata.remote and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")) or nil,
     name = metadata.id
   }, metadata), Plugin)
   self.type = type
@@ -585,6 +585,7 @@ function Plugin.is_path_different(path1, path2)
 end
 
 function Plugin.is_plugin_different(downloaded_path, installed_path) 
+  print("K", downloaded_path, installed_path)
   local is_downloaded_single = downloaded_path:find("%.lua$")
   local is_installed_single = installed_path:find("%.lua$")
   local target = is_downloaded_single and not is_installed_single and installed_path .. PATHSEP .. "init.lua" or installed_path
@@ -1128,7 +1129,7 @@ function Bottle:all_plugins()
     for j, v in ipairs(system.ls(plugin_path)) do
       local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
       local path = plugin_path .. PATHSEP .. v
-      local matching = hash[id] and common.grep(hash[id], function(e) return not Plugin.is_plugin_different(e.local_path, path) end)[1]
+      local matching = hash[id] and common.grep(hash[id], function(e) return e.local_path and not Plugin.is_plugin_different(e.local_path, path) end)[1]
       if i == 2 or not hash[id] or not matching then
         table.insert(t, Plugin.new(nil, {
           id = id,
@@ -1457,7 +1458,7 @@ local function lpm_plugin_list(id)
         print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
         print("Dependencies:  " .. json.encode(plugin.dependencies))
         print("Tags:          " .. common.join(", ", plugin.tags))
-        print("Path:          " .. plugin.path)
+        print("Path:          " .. (plugin.path or ""))
       elseif plugin.status ~= "incompatible" then
         print(string.format("%" .. max_id .."s | %10s | %10s | %s", plugin.id, plugin.version, plugin.mod_version, plugin.status))
       end
@@ -1524,7 +1525,7 @@ end
 
 local status = 0
 local function error_handler(err)
-  local s, e = err:find(":%d+")
+  local s, e = err and err:find(":%d+")
   local message = e and err:sub(e + 3) or err
   if JSON then
     if VERBOSE then 
@@ -1533,7 +1534,7 @@ local function error_handler(err)
       io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
     end
   else
-    io.stderr:write((not VERBOSE and message or err) .. "\n")
+    if err then io.stderr:write((not VERBOSE and message or err) .. "\n") end
     if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
   end
   status = -1
@@ -1873,12 +1874,12 @@ in any circumstance unless explicitly supplied.
       system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } }), nil, true)
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
-  end)
+  end, error_handler)
   
   if ARGS[2] ~= '-' then
     engage_locks(function()
       run_command(ARGS)
-    end)
+    end, error_handler)
   else
     while true do
       local line = io.stdin:read("*line")
