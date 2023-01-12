@@ -81,7 +81,9 @@ Files are objects that contain at least two keys, `url`, and `checksum`. They
 can also optionally contain the `arch` and `path` keys. 
 
 * `url` represents the URL to grab the particular file from.
-* `checksum` is the sha256hex checksum for the file.
+* `checksum` is the sha256hex checksum for the file. If `"SKIP"` is specified, the 
+  check is skipped. This is fine for development purposes, but any publically
+  accessible manifest, should specify a checksum.
 * `arch` is the lite-xl/clang architecture tuple that the file is relevant for.
   if omitted, file is to be assumed to be valid for all arhcitectures.
 * `path` is the location to install this file inside the plugin's directory.

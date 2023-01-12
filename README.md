@@ -17,6 +17,12 @@ recent versioned release.
 
 Conforms to [SCPS3](https://github.com/adamharrison/straightforward-c-project-standard#SCPS3).
 
+## Status
+
+Please note that `lpm` has currently not reached version 1.0. As such, it is still heavily in flux, and may change without notice.
+
+Once 1.0 is released, changleogs will be produced, and a more stable process that uses semver will be used.
+
 ## Specification
 
 For details about the `manifest.json` files that `lpm` consumes, 
@@ -36,14 +42,14 @@ you can do:
 ```
 git clone git@github.com:lite-xl/lite-xl-plugin-manager.git \
   --shallow-submodules --recurse-submodules && cd lite-xl-plugin-manager &&\
-  ./build.sh && ./lpm
+  ./build.sh -DLPM_STATIC && ./lpm
 ````
 
 If you want to build it quickly, and have the right modules installed, you can
 do:
 
 ```
-./build.sh -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz
+./build.sh -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz -DLPM_STATIC
 ```
 
 OR
@@ -98,7 +104,7 @@ lpm --help
 ### Linux & MacOS & Windows MSYS
 
 ```
-./build.sh clean && ./build.sh && ./lpm
+./build.sh clean && ./build.sh -DLPM_STATIC && ./lpm
 ```
 
 ### Linux -> Windows
