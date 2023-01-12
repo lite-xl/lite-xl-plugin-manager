@@ -584,8 +584,7 @@ function Plugin.is_path_different(path1, path2)
   end
 end
 
-function Plugin.is_plugin_different(downloaded_path, installed_path) 
-  print("K", downloaded_path, installed_path)
+function Plugin.is_plugin_different(downloaded_path, installed_path)
   local is_downloaded_single = downloaded_path:find("%.lua$")
   local is_installed_single = installed_path:find("%.lua$")
   local target = is_downloaded_single and not is_installed_single and installed_path .. PATHSEP .. "init.lua" or installed_path

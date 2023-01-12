@@ -1,63 +1,12 @@
 local json = require "plugins.json"
-
-setmetatable(_G, { __index = function(t, k) if not rawget(t, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k) error("cannot set global variable: " .. k, 2) end  })
-
+local lpm
+local function assert_exists(path) if not io.open(path, "rb")  then error("assertion failed: file " .. path .. " does not exist", 2) end end
+local function assert_not_exists(path) if io.open(path, "rb") then error("assertion failed: file " .. path .. " exists", 2) end end
 local tmpdir = os.getenv("TMPDIR") or "/tmp"
 local fast = os.getenv("FAST")
-local last_command_result, last_command
 local userdir = tmpdir .. "/lpmtest"
-local function lpm(cmd)
-  last_command = "./lpm --quiet --json --userdir=" .. userdir .. " " .. cmd
-  local pipe = io.popen(last_command, "r")
-  last_command_result = json.decode(pipe:read("*all"))
-  local success = pipe:close()
-  if not success then error("error calling lpm", 2) end
-  return last_command_result
-end
+setmetatable(_G, { __index = function(t, k) if not rawget(t, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k) error("cannot set global variable: " .. k, 2) end  })
 
-local function assert_exists(path)
-  if not io.open(path, "rb")  then error("assertion failed: file " .. path .. " does not exist", 2) end
-end
-local function assert_not_exists(path)
-  if io.open(path, "rb") then error("assertion failed: file " .. path .. " exists", 2) end
-end
-
-local function run_tests(tests, arg)
-  local fail_count = 0
-  local names = {}
-  if #arg == 0 then
-    for k,v in pairs(tests) do table.insert(names, k) end  
-  else
-    names = arg
-  end
-  table.sort(names)
-  local max_name = 0
-  for i,k in ipairs(names) do max_name = math.max(max_name, #k) end  
-  for i,k in ipairs(names) do
-    local v = tests[k]
-    if fast then
-      os.execute("rm -rf " .. tmpdir .. "/lpmtest/plugins && mkdir -p " .. tmpdir .. "/lpmtest");
-    else
-      os.execute("rm -rf " .. tmpdir .. "/lpmtest && mkdir -p " .. tmpdir .. "/lpmtest");
-    end
-    io.stdout:write(string.format("test %-" .. (max_name + 1) .. "s: ", k))
-    local failed = false
-    xpcall(v, function(err)
-      print("[FAIL]: " .. err)
-      print(debug.traceback())
-      print()
-      print()
-      print("Last Command: " .. last_command)
-      print(json.encode(last_command_result)) 
-      fail_count = fail_count + 1
-      failed = true
-    end)
-    if not failed then
-      print("[PASSED]")
-    end
-  end
-  os.exit(fail_count)
-end
 
 local tests = {
   ["00_install_singleton"] = function()
@@ -109,6 +58,56 @@ local tests = {
     assert(#plugins > 20)
   end
 }
+
+
+
+
+
+local last_command_result, last_command
+lpm = function(cmd)
+  last_command = "./lpm --quiet --json --userdir=" .. userdir .. " " .. cmd
+  local pipe = io.popen(last_command, "r")
+  last_command_result = json.decode(pipe:read("*all"))
+  local success = pipe:close()
+  if not success then error("error calling lpm", 2) end
+  return last_command_result
+end
+
+local function run_tests(tests, arg)
+  local fail_count = 0
+  local names = {}
+  if #arg == 0 then
+    for k,v in pairs(tests) do table.insert(names, k) end  
+  else
+    names = arg
+  end
+  table.sort(names)
+  local max_name = 0
+  for i,k in ipairs(names) do max_name = math.max(max_name, #k) end  
+  for i,k in ipairs(names) do
+    local v = tests[k]
+    if fast then
+      os.execute("rm -rf " .. tmpdir .. "/lpmtest/plugins && mkdir -p " .. tmpdir .. "/lpmtest");
+    else
+      os.execute("rm -rf " .. tmpdir .. "/lpmtest && mkdir -p " .. tmpdir .. "/lpmtest");
+    end
+    io.stdout:write(string.format("test %-" .. (max_name + 1) .. "s: ", k))
+    local failed = false
+    xpcall(v, function(err)
+      print("[FAIL]: " .. debug.traceback(err, 2))
+      print()
+      print()
+      print("Last Command: " .. last_command)
+      print(json.encode(last_command_result)) 
+      fail_count = fail_count + 1
+      failed = true
+    end)
+    if not failed then
+      print("[PASSED]")
+    end
+  end
+  os.exit(fail_count)
+end
 
 
 run_tests(tests, arg)
