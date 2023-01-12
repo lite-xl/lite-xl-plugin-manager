@@ -562,7 +562,7 @@ function Plugin.new(repository, metadata)
     version = "1.0",
     dependencies = {},
     conflicts = {},
-    local_path = repository and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")),
+    local_path = repository and not metadata.remote and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")),
     name = metadata.id
   }, metadata), Plugin)
   self.type = type
@@ -1093,7 +1093,21 @@ local function get_repository_plugins()
       table.insert(t, p) 
       hash[id] = p 
       if not hash[p.id] then hash[p.id] = {} end
-      table.insert(hash[p.id], p )
+      table.insert(hash[p.id], p)
+    elseif hash[id].remote and not p.remote then
+      for k,v in ipairs(t) do
+        if v == hash[id] then
+          t[k] = p
+          break
+        end
+      end
+      for k,v in ipairs(hash[p.id]) do
+        if v == hash[id] then
+          hash[p.id][k] = p
+          hash[id] = p
+          break
+        end
+      end
     end
   end
   return t, hash
@@ -1122,7 +1136,6 @@ function Bottle:all_plugins()
           organization = (v:find("%.lua$") and "singleton" or "complex"),
           mod_version = self.lite_xl.mod_version,
           path = "plugins" .. PATHSEP .. v,
-          version = "1.0",
           description = (hash[id] and hash[id][1].description or nil)
         }))
       end
@@ -1413,7 +1426,7 @@ local function lpm_plugin_list(id)
       version = "" .. plugin.version,
       dependencies = plugin.dependencies,
       description = plugin.description,
-      author = plugin.author or (plugin:is_core(system_bottle) and "lite-xl"),
+      author = plugin.author or (plugin:is_core(system_bottle) and "lite-xl") or nil,
       mod_version = plugin.mod_version,
       tags = plugin.tags,
       type = plugin.type,
