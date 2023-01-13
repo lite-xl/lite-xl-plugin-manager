@@ -21,7 +21,7 @@ jobs:
           cp lpm lpm.x86_64-linux
       - name: Run Tests
         run: |
-           ./lpm && gcc -O3 -Ilib/lua lib/lua/onelua.c -DMAKE_LUA -DLUA_USE_LINUX -lm -ldl -o lua && ./lua t/run.lua
+          ./lpm test t/run.lua
       # - name: Package Debian/Ubuntu
       #   env: { ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
       #   run: |

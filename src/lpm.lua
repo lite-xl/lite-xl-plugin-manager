@@ -1370,7 +1370,7 @@ local function lpm_lite_xl_run(version, ...)
   end
   local bottle = Bottle.new(lite_xl, addons)
   if not bottle:is_constructed() then bottle:construct() end
-  bottle:run(common.splice(arguments, i + 1))
+  bottle:run(common.slice(arguments, i + 1))
 end
 
 
@@ -1799,6 +1799,11 @@ in any circumstance unless explicitly supplied.
 
   -- Small utility functions that don't play into the larger app; are used for testing
   -- or for handy scripts.
+  if ARGS[2] == "test" then
+    rawset(_G, "arg", common.slice(ARGS, 4))
+    dofile(ARGS[3])
+    os.exit(0)
+  end
   if ARGS[2] == "download" then
     local file = common.get(ARGS[3]);
     print(file)

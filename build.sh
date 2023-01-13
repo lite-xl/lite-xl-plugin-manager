@@ -43,7 +43,7 @@ if [[ "$@" == *"-DLPM_STATIC"* ]]; then
   xxd -i src/lpm.luac > src/lpm.lua.c
 fi
 
-[[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && LDFLAGS="$LDFLAGS -ldl"
+[[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && CFLAGS="$CFLAGS -DLUA_USE_LINUX" && LDFLAGS="$LDFLAGS -ldl"
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]]                  && LDFLAGS="$LDFLAGS -lbcrypt -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4"
 [[ $OSTYPE == *'darwin'* ]]                                   && LDFLAGS="$LDFLAGS -liconv -framework Security -framework Foundation"
 

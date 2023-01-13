@@ -85,10 +85,6 @@ local tests = {
   end
 }
 
-
-
-
-
 local last_command_result, last_command
 lpm = function(cmd)
   last_command = "./lpm --quiet --json --userdir=" .. userdir .. " " .. cmd
@@ -121,12 +117,14 @@ local function run_tests(tests, arg)
     local failed = false
     xpcall(v, function(err)
       print("[FAIL]: " .. debug.traceback(err, 2))
-      print()
-      print()
       if last_command then
         print("Last Command: " .. last_command)
-        print(json.encode(last_command_result)) 
+        if last_command_result then
+          print(json.encode(last_command_result)) 
+        end
       end
+      print()
+      print()
       fail_count = fail_count + 1
       failed = true
     end)
@@ -136,6 +134,5 @@ local function run_tests(tests, arg)
   end
   os.exit(fail_count)
 end
-
 
 run_tests(tests, arg)
