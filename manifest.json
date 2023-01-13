@@ -59,7 +59,7 @@
     }
   ],
   "remotes": [
-    "https://github.com/lite-xl/lite-xl-plugins.git:master"
+    "https://github.com/lite-xl/lite-xl-plugins.git:master",
     "https://github.com/lite-xl/lite-xl-colors.git:master"
   ]
 }
