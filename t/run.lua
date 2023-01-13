@@ -10,7 +10,7 @@ setmetatable(_G, { __index = function(t, k) if not rawget(t, k) then error("cann
 
 local tests = {
   ["00_install_singleton"] = function()
-    local plugins = lpm("list bracketmatch")["plugins"]
+    local plugins = lpm("list bracketmatch")["addons"]
     assert(#plugins == 1)
     assert(plugins[1].organization == "singleton")
     assert(plugins[1].status == "available")
@@ -22,19 +22,19 @@ local tests = {
   end,
   ["01_upgrade_singleton"] = function()
     lpm("install bracketmatch")
-    local plugins = lpm("list bracketmatch")["plugins"]
+    local plugins = lpm("list bracketmatch")["addons"]
     assert(#plugins == 1)
     assert(plugins[1].status == "installed")
     assert_exists(plugins[1].path)
     io.open(plugins[1].path, "ab"):write("-- this is a test comment to modify the checksum"):close()
-    plugins = lpm("list bracketmatch")["plugins"]
+    plugins = lpm("list bracketmatch")["addons"]
     assert(#plugins == 2)
     lpm("install bracketmatch")
-    plugins = lpm("list bracketmatch")["plugins"]
+    plugins = lpm("list bracketmatch")["addons"]
     assert(#plugins == 1)
   end,
   ["02_install_complex"] = function()
-    local plugins = lpm("list plugin_manager")["plugins"]
+    local plugins = lpm("list plugin_manager")["addons"]
     assert(#plugins == 1)
     assert(plugins[1].organization == "complex")
     assert(plugins[1].status == "available")
@@ -48,14 +48,35 @@ local tests = {
   end,
   ["03_upgrade_complex"] = function()
     local actions = lpm("install plugin_manager")
-    local plugins = lpm("list plugin_manager")["plugins"]
+    local plugins = lpm("list plugin_manager")["addons"]
     assert(#plugins == 1)
     assert(plugins[1].organization == "complex")
     assert(plugins[1].status == "installed")
   end,
   ["04_list_plugins"] = function()
-    local plugins = lpm("list")["plugins"]
+    local plugins = lpm("list")["addons"]
     assert(#plugins > 20)
+  end,
+  ["05_install_url"] = function()
+    local plugins = lpm("list language_ksy")["addons"]
+    assert(#plugins == 1)
+    assert(plugins[1].organization == "singleton")
+    assert(plugins[1].status == "available")
+    local actions = lpm("install language_ksy")
+    assert_exists(userdir .. "/plugins/language_ksy.lua")
+  end,
+  ["06_install_stub"] = function()
+    local plugins = lpm("list lsp")["addons"]
+    assert(#plugins > 1)
+    for i, plugin in ipairs(plugins) do
+      if plugin.id == "lsp" then
+        assert(plugins[1].organization == "complex")
+        assert(plugins[1].status == "available")
+        local actions = lpm("install lsp")
+        assert_exists(userdir .. "/plugins/lsp/init.lua")
+        break
+      end
+    end
   end
 }
 

@@ -462,7 +462,7 @@ local function engage_locks(func, err)
   system.flock(lockfile, func, err)
 end
 
-local Plugin, Repository, LiteXL, Bottle = {}, {}, {}, {}
+local Addon, Repository, LiteXL, Bottle = {}, {}, {}, {}
 
 local actions, warnings = {}, {}
 local function log_action(message)
@@ -539,19 +539,18 @@ local function match_version(version, pattern)
 end
 
 
--- There can exist many different versions of a plugin. All statuses are relative to a particular lite bottle.
--- available: Plugin is available in a repository, and can be installed. There is no comparable version on the system.
--- upgradable: Plugin is installed, but does not match the highest version in any repository.
--- orphan: Plugin is installed, but there is no corresponding plugin in any repository.
--- installed: Plugin is installed, and matches the highest version in any repository, or highest version is incompatible.
--- core: Plugin is a part of the lite data directory, and doesn't have corresponding plugins in any repository.
--- bundled: Plugin is part of the lite data directory, but has corresponding plugins in any repository.
--- incompatible: Plugin is not installed and conflicts with existing installed plugins.
-function Plugin.__index(self, idx) return rawget(self, idx) or Plugin[idx] end
-function Plugin.new(repository, metadata)
-  if type(metadata.id) ~= 'string' or metadata.id:find("[^a-z0-9%-_]") then error("plugin requires a valid id " .. (metadata.id and "(" .. metadata.id .. " is invalid)" or "")) end
+-- There can exist many different versions of an addon. All statuses are relative to a particular lite bottle.
+-- available: Addon is available in a repository, and can be installed. There is no comparable version on the system.
+-- upgradable: Addon is installed, but does not match the highest version in any repository.
+-- orphan: Addon is installed, but there is no corresponding addon in any repository.
+-- installed: Addon is installed, and matches the highest version in any repository, or highest version is incompatible.
+-- core: Addon is a part of the lite data directory, and doesn't have corresponding addons in any repository.
+-- bundled: Addon is part of the lite data directory, but has corresponding addons in any repository.
+-- incompatible: Addon is not installed and conflicts with existing installed addons.
+function Addon.__index(self, idx) return rawget(self, idx) or Addon[idx] end
+function Addon.new(repository, metadata)
+  if type(metadata.id) ~= 'string' or metadata.id:find("[^a-z0-9%-_]") then error("addon requires a valid id " .. (metadata.id and "(" .. metadata.id .. " is invalid)" or "")) end
   local type = metadata.type or "plugin"
-  local folder = metadata.type == "library" and "libraries" or "plugins"
   if metadata.path then metadata.path = metadata.path:gsub("/", PATHSEP) end
   local self = setmetatable(common.merge({
     repository = repository,
@@ -564,53 +563,55 @@ function Plugin.new(repository, metadata)
     conflicts = {},
     local_path = repository and not metadata.remote and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")) or nil,
     name = metadata.id
-  }, metadata), Plugin)
+  }, metadata), Addon)
   self.type = type
   -- Directory.
   self.organization = metadata.organization or (((self.files and #self.files > 0) or self.remote or (not self.path and not self.url)) and "complex" or "singleton")
   return self
 end
 
--- Determines whether two plugins located at different paths are actually different based on their contents.
+function Addon:is_stub() return self.remote end
+
+-- Determines whether two addons located at different paths are actually different based on their contents.
 -- If path1 is a directory, will still return true if it's a subset of path2 (accounting for binary downloads).
-function Plugin.is_path_different(path1, path2) 
+function Addon.is_path_different(path1, path2) 
   local stat1, stat2 = system.stat(path1), system.stat(path2)
   if not stat1 or not stat2 or stat1.type ~= stat2.type or stat1.size ~= stat2.size then return true end
   if stat1.type == "dir" then
-    for i, file in ipairs(system.ls(path1)) do if Plugin.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end end
+    for i, file in ipairs(system.ls(path1)) do if Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end end
     return false
   else
     return system.hash(path1, "file") ~= system.hash(path2, "file")
   end
 end
 
-function Plugin.is_plugin_different(downloaded_path, installed_path)
+function Addon.is_addon_different(downloaded_path, installed_path)
   local is_downloaded_single = downloaded_path:find("%.lua$")
   local is_installed_single = installed_path:find("%.lua$")
   local target = is_downloaded_single and not is_installed_single and installed_path .. PATHSEP .. "init.lua" or installed_path
-  return Plugin.is_path_different(downloaded_path, target)
+  return Addon.is_path_different(downloaded_path, target)
 end
 
-function Plugin:get_install_path(bottle)
-  local folder = self.type == "library" and "libraries" or "plugins" 
+function Addon:get_install_path(bottle)
+  local folder = self.type == "color" and "colors" or (self.type == "library" and "libraries" or "plugins")
   local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
   if self.organization == "singleton" then path = path .. ".lua" end
   return path
 end
 
-function Plugin:is_core(bottle) return self.type == "core" end
-function Plugin:is_bundled(bottle) return self.type == "bundled" end
-function Plugin:is_installed(bottle) 
+function Addon:is_core(bottle) return self.type == "core" end
+function Addon:is_bundled(bottle) return self.type == "bundled" end
+function Addon:is_installed(bottle) 
   if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
-  if #common.grep({ bottle:get_plugin(self.id, nil, {  }) }, function(plugin) return not plugin.repository end) > 0 then return false end
-  return not Plugin.is_plugin_different(self.local_path, install_path)
+  if #common.grep({ bottle:get_addon(self.id, nil, {  }) }, function(addon) return not addon.repository end) > 0 then return false end
+  return not Addon.is_addon_different(self.local_path, install_path)
 end
-function Plugin:is_upgradable(bottle)
+function Addon:is_upgradable(bottle)
   if self:is_installed(bottle) then
-    local plugins = { bottle:get_plugin(self.id) }
-    for i, v in ipairs(plugins) do
+    local addons = { bottle:get_addon(self.id) }
+    for i, v in ipairs(addons) do
       if self.version and v.version and v ~= self and compare_version(self.version, v.version) <= 1 then
         return true
       end
@@ -618,75 +619,75 @@ function Plugin:is_upgradable(bottle)
   end
   return false
 end
-function Plugin:is_incompatible(plugin) 
-  return (self.dependencies[plugin.id] and not match_version(plugin.version, self.dependencies[plugin.id] and self.dependencies[plugin.id].version)) or 
-    (self.conflicts[plugin.id] and match_version(plugin.version, self.conflicts[plugin.id] and self.conflicts[plugin.id].version)) 
+function Addon:is_incompatible(addon) 
+  return (self.dependencies[addon.id] and not match_version(addon.version, self.dependencies[addon.id] and self.dependencies[addon.id].version)) or 
+    (self.conflicts[addon.id] and match_version(addon.version, self.conflicts[addon.id] and self.conflicts[addon.id].version)) 
 end
 
-function Plugin:get_path(bottle)
+function Addon:get_path(bottle)
   return self:is_installed(bottle) and self:get_install_path(bottle) or self.local_path 
 end
 
-function Plugin:get_compatibilities(bottle)
-  local compatible_plugins, incompatible_plugins = {}, {}
-  local installed_plugins = bottle:installed_plugins()
-  for plugin, v in pairs(self.dependencies) do
-    local potential_plugins = { bottle:get_plugin(plugin, v.version, { mod_version = bottle.lite_xl.mod_version }) }
-    for i, potential_plugin in ipairs(potential_plugins) do
-      local incomaptibilities = common.grep(installed_plugins, function(p) return p:is_incompatible(potential_plugin) end)
+function Addon:get_compatibilities(bottle)
+  local compatible_addons, incompatible_addons = {}, {}
+  local installed_addons = bottle:installed_addons()
+  for addon, v in pairs(self.dependencies) do
+    local potential_addons = { bottle:get_addon(addon, v.version, { mod_version = bottle.lite_xl.mod_version }) }
+    for i, potential_addon in ipairs(potential_addons) do
+      local incomaptibilities = common.grep(installed_addons, function(p) return p:is_incompatible(potential_addon) end)
       if #incomaptibilities == 0 then
-        if not compatible_plugins[plugin] or
-          potential_plugin:is_installed(bottle) or
-          (compare_version(compatible_plugins[plugin].version, potential_plugin.version) and not compatible_plugins[plugin]:is_installed(bottle))
+        if not compatible_addons[addon] or
+          potential_addon:is_installed(bottle) or
+          (compare_version(compatible_addons[addon].version, potential_addon.version) and not compatible_addons[addon]:is_installed(bottle))
         then
-          compatible_plugins[plugin] = potential_plugin
+          compatible_addons[addon] = potential_addon
         end
       else
-        incompatible_plugins[plugin] = incompatibilities
+        incompatible_addons[addon] = incompatibilities
       end
     end
   end
-  return compatible_plugins, incompatible_plugins
+  return compatible_addons, incompatible_addons
 end
 
 
 
-function Plugin:install(bottle, installing)
-  if self:is_installed(bottle) then error("plugin " .. self.id .. " is already installed") return end
+function Addon:install(bottle, installing)
+  if self:is_installed(bottle) then error("addon " .. self.id .. " is already installed") return end
   local install_path = self:get_install_path(bottle)
   local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#USERDIR + 2)
   local status, err = pcall(function()
     installing = installing or {}
     installing[self.id] = true
     local compatible, incompatible = self:get_compatibilities(bottle)
-    for plugin, version in pairs(self.dependencies) do
-      if incompatible[plugin] then error("can't install " .. self.id .. ": incompatible with " .. incompatible[plugin][1].id .. ":" .. incompatible[plugin][1].version) end
+    for addon, version in pairs(self.dependencies) do
+      if incompatible[addon] then error("can't install " .. self.id .. ": incompatible with " .. incompatible[addon][1].id .. ":" .. incompatible[addon][1].version) end
     end
-    for plugin, v in pairs(self.dependencies) do
-      if not compatible[plugin] then 
+    for addon, v in pairs(self.dependencies) do
+      if not compatible[addon] then 
         if not v.optional then 
-          error("can't find dependency " .. plugin .. (v.version and (":" .. v.version) or "")) 
+          error("can't find dependency " .. addon .. (v.version and (":" .. v.version) or "")) 
         else
-          log_warning("can't find optional dependency " .. plugin .. (v.version and (":" .. v.version) or ""))
+          log_warning("can't find optional dependency " .. addon .. (v.version and (":" .. v.version) or ""))
         end
       end
     end
-    for plugin, v in pairs(self.dependencies) do
-      if compatible[plugin] and not compatible[plugin]:is_core(bottle) and not compatible[plugin]:is_installed(bottle) then
-        if installing[plugin] then
-          error("circular dependency detected in " .. self.id .. ": requires " .. plugin .. " but, " .. plugin .. " requires " .. self.id)
+    for addon, v in pairs(self.dependencies) do
+      if compatible[addon] and not compatible[addon]:is_core(bottle) and not compatible[addon]:is_installed(bottle) then
+        if installing[addon] then
+          error("circular dependency detected in " .. self.id .. ": requires " .. addon .. " but, " .. addon .. " requires " .. self.id)
         end
-        if not NO_INSTALL_OPTIONAL and (not v.optional or prompt(plugin .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
-          compatible[plugin]:install(bottle, installing)
+        if not NO_INSTALL_OPTIONAL and (not v.optional or prompt(addon .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
+          compatible[addon]:install(bottle, installing)
         end
       end
     end
     common.mkdirp(common.dirname(temporary_install_path))
     if self:is_upgradable(bottle) then 
-      log_action("Upgrading " .. self.organization .. "plugin located at " .. self.local_path .. " to " .. install_path)
-      common.rmrf(install_path) 
+      log_action("Upgrading " .. self.organization .. " " .. self.type .. " located at " .. self.local_path .. " to " .. install_path)
+      common.rmrf(install_path)
     else
-      log_action("Installing " .. self.organization .. " plugin located at " .. self.local_path .. " to " .. install_path)
+      log_action("Installing " .. self.organization .. " " .. self.type .. " located at " .. (self.local_path or self.remote) .. " to " .. install_path)
     end
 
     if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end  
@@ -749,20 +750,20 @@ function Plugin:install(bottle, installing)
   end
 end
 
-function Plugin:depends_on(plugin)
-  if self.dependencies[plugin.id] and self.dependencies[plugin.id].optional ~= true then return true end
-  for i,v in ipairs(plugin.provides or {}) do if self.dependencies[v] and self.dependencies[v].optional ~= true then return true end end
+function Addon:depends_on(addon)
+  if self.dependencies[addon.id] and self.dependencies[addon.id].optional ~= true then return true end
+  for i,v in ipairs(addon.provides or {}) do if self.dependencies[v] and self.dependencies[v].optional ~= true then return true end end
   return false
 end
 
-function Plugin:uninstall(bottle)
+function Addon:uninstall(bottle)
   local install_path = self:get_install_path(bottle)
-  if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core plugin") end
-  log_action("Uninstalling plugin located at " .. install_path)
-  local incompatible_plugins = common.grep(bottle:installed_plugins(), function(p) return p:depends_on(self) end)
-  if #incompatible_plugins == 0 or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_plugins, function(p) return p.id end)) .. ". Remove as well?") then
-    for i,plugin in ipairs(incompatible_plugins) do 
-      if not plugin:uninstall(bottle) then return false end
+  if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
+  log_action("Uninstalling " .. self.type .. " located at " .. install_path)
+  local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) end)
+  if #incompatible_addons == 0 or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?") then
+    for i,addon in ipairs(incompatible_addons) do 
+      if not addon:uninstall(bottle) then return false end
     end
     common.rmrf(install_path)
     return true
@@ -780,7 +781,7 @@ function Repository.new(hash)
     commit = hash.commit,
     remote = hash.remote,
     branch = hash.branch,
-    plugins = nil,
+    addons = nil,
     lite_xls = {},
     local_path = CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. system.hash(hash.remote),
     last_retrieval = nil 
@@ -820,18 +821,18 @@ function Repository:parse_manifest(already_pulling)
     end
     local status, err = pcall(function()
       self.manifest = json.decode(common.read(self.manifest_path))
-      self.plugins = {}
+      self.addons = {}
       self.remotes = {}
-      for i, metadata in ipairs(self.manifest["plugins"] or {}) do
+      for i, metadata in ipairs(self.manifest["addons"] or self.manifest["plugins"] or {}) do
         if metadata.remote then
           local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
           if branch_or_commit and is_commit_hash(branch_or_commit) then
-            table.insert(self.plugins, Plugin.new(self, metadata))
+            table.insert(self.addons, Addon.new(self, metadata))
           else
-            -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
+            -- log_warning("addon " .. metadata.name .. " specifies remote as source, but isn't a commit")
           end
         else
-          table.insert(self.plugins, Plugin.new(self, metadata))
+          table.insert(self.addons, Addon.new(self, metadata))
         end
       end
       for i, metadata in ipairs(self.manifest["lite-xls"] or {}) do
@@ -840,7 +841,7 @@ function Repository:parse_manifest(already_pulling)
           if branch_or_commit and is_commit_hash(branch_or_commit) then
             table.insert(self.lite_xls, LiteXL.new(self, metadata))
           else
-            -- log_warning("plugin " .. metadata.name .. " specifies remote as source, but isn't a commit")
+            -- log_warning("addon " .. metadata.name .. " specifies remote as source, but isn't a commit")
           end
         else
           table.insert(self.lite_xls, LiteXL.new(self, metadata))
@@ -854,62 +855,65 @@ function Repository:parse_manifest(already_pulling)
 end
 
 
--- in the cases where we don't have a manifest, assume generalized structure, take plugins folder, trawl through it, build manifest that way
--- assuming each .lua file under the `plugins` folder is a plugin. also parse the README, if present, and see if any of the plugins 
+-- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
+-- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons 
 function Repository:generate_manifest()
   if not self.commit and not self.branch then error("requires an instantiation") end
   local path = self.local_path .. PATHSEP .. (self.commit or self.branch)
-  local plugin_dir = system.stat(path .. PATHSEP .. "plugins") and PATHSEP .. "plugins" .. PATHSEP or PATHSEP
-  local plugins, plugin_map = {}, {}
-  if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
-    for line in io.lines(path .. PATHSEP .. "README.md") do
-      local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
-      if name then
-        local id = name:lower():gsub("[^a-z0-9%-_]", "")
-        plugin_map[id] = { id = id, description = description, name = name }
-        if path:find("^http") then
-          if path:find("%.lua") then
-            plugin_map[id].url = path
-            local file = common.get(path, nil, nil, write_progress_bar)
-            plugin_map[id].checksum = system.hash(file)
+  local addons, addon_map = {}, {}
+  for _, folder in ipairs({ "plugins", "colors", "libraries" }) do
+    local addon_dir = system.stat(path .. PATHSEP .. folder) and PATHSEP .. folder .. PATHSEP or PATHSEP
+    if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
+      for line in io.lines(path .. PATHSEP .. "README.md") do
+        local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
+        if name then
+          local id = name:lower():gsub("[^a-z0-9%-_]", "")
+          addon_map[id] = { id = id, description = description, name = name }
+          if path:find("^http") then
+            if path:find("%.lua") then
+              addon_map[id].url = path
+              local file = common.get(path, nil, nil, write_progress_bar)
+              addon_map[id].checksum = system.hash(file)
+            else
+              path = path:gsub("\\", "")
+              addon_map[id].remote = path
+              pcall(function()
+                local repo = Repository.url(path):add()
+                addon_map[id].remote = path .. ":" .. system.revparse(repo.local_path .. PATHSEP .. (repo.branch))
+              end)
+            end
           else
-            path = path:gsub("\\", "")
-            plugin_map[id].remote = path
-            pcall(function()
-              local repo = Repository.url(path):add()
-              plugin_map[id].remote = path .. ":" .. system.revparse(repo.local_path .. PATHSEP .. (repo.branch))
-            end)
-          end
-        else
-          plugin_map[id].path = path:gsub("%?.*$", "")
-        end 
+            addon_map[id].path = path:gsub("%?.*$", "")
+          end 
+        end
+      end
+    end
+    for i, file in ipairs(system.ls(path .. addon_dir)) do
+      if file:find("%.lua$") then
+        local name = common.basename(file):gsub("%.lua$", "")
+        local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
+        local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = addon_dir .. file, type = type }
+        for line in io.lines(path .. addon_dir .. file) do
+          local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
+          if mod_version then addon.mod_version = mod_version end
+          local _, _, required_addon = line:find("require [\"']plugins.([%w_]+)")
+          if required_addon then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
+        end
+        if addon_map[addon.id] then 
+          addon = common.merge(addon, addon_map[addon.id])
+          addon_map[addon.id].addon = addon 
+        end
+        table.insert(addons, addon)
       end
     end
   end
-  for i, file in ipairs(system.ls(path .. plugin_dir)) do
-    if file:find("%.lua$") then
-      local name = common.basename(file):gsub("%.lua$", "")
-      local plugin = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = plugin_dir .. file  }
-      for line in io.lines(path .. plugin_dir .. file) do
-        local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
-        if mod_version then plugin.mod_version = mod_version end
-        local _, _, required_plugin = line:find("require [\"']plugins.([%w_]+)")
-        if required_plugin then if required_plugin ~= plugin.id then if not plugin.dependencies then plugin.dependencies = {} end plugin.dependencies[required_plugin] = ">=0.1" end end
-      end
-      if plugin_map[plugin.id] then 
-        plugin = common.merge(plugin, plugin_map[plugin.id])
-        plugin_map[plugin.id].plugin = plugin 
-      end
-      table.insert(plugins, plugin)
+  for k, v in pairs(addon_map) do
+    if not v.addon then 
+      table.insert(addons, common.merge({ mod_version = 3, version = "0.1" }, v))
     end
   end
-  for k, v in pairs(plugin_map) do
-    if not v.plugin then 
-      table.insert(plugins, common.merge({ mod_version = 3, version = "0.1" }, v))
-    end
-  end
-  table.sort(plugins, function(a,b) return a.id:lower() < b.id:lower() end)
-  common.write(path .. PATHSEP .. "manifest.json", json.encode({ plugins = plugins }))
+  table.sort(addons, function(a,b) return a.id:lower() < b.id:lower() end)
+  common.write(path .. PATHSEP .. "manifest.json", json.encode({ addons = addons }))
 end
 
 function Repository:add(pull_remotes)
@@ -996,7 +1000,7 @@ end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
-function LiteXL:is_compatible(plugin) return not plugin.mod_version or compare_version(self.mod_version, plugin.mod_version) == 0 end
+function LiteXL:is_compatible(addon) return not addon.mod_version or compare_version(self.mod_version, addon.mod_version) == 0 end
 function LiteXL:is_installed()  return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
@@ -1046,15 +1050,15 @@ end
 
 
 function Bottle.__index(t, k) return Bottle[k] end
-function Bottle.new(lite_xl, plugins, is_system)
+function Bottle.new(lite_xl, addons, is_system)
   local self = setmetatable({
     lite_xl = lite_xl,
-    plugins = plugins,
+    addons = addons,
     is_system = is_system
   }, Bottle)
   if not is_system then 
-    table.sort(self.plugins, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
-    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.plugins, function(p) return p.id .. ":" .. p.version end)))
+    table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
+    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return p.id .. ":" .. p.version end)))
     self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
   end
   return self
@@ -1070,7 +1074,7 @@ function Bottle:construct()
   common.copy(self.lite_xl.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "lite-xl")
   system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
   common.copy(self.lite_xl.local_path .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
-  for i,plugin in ipairs(self.plugins) do plugin:install(self) end
+  for i,addon in ipairs(self.addons) do addon:install(self) end
 end
 
 function Bottle:destruct()
@@ -1085,9 +1089,9 @@ function Bottle:run(args)
   os.execute(self.local_path .. PATHSEP .. "lite-xl", table.unpack(args))
 end
 
-local function get_repository_plugins()
+local function get_repository_addons()
   local t, hash = { }, { }
-  for i,p in ipairs(common.flat_map(repositories, function(r) return r.plugins end)) do
+  for i,p in ipairs(common.flat_map(repositories, function(r) return r.addons end)) do
     local id = p.id .. ":" .. p.version
     if not hash[id] then 
       table.insert(t, p) 
@@ -1114,23 +1118,23 @@ local function get_repository_plugins()
 end
 
 function Bottle:invalidate_cache()
-  self.all_plugins_cache = nil
+  self.all_addons_cache = nil
 end
 
-function Bottle:all_plugins()
-  if self.all_plugins_cache then return self.all_plugins_cache end
-  local t, hash = get_repository_plugins()
-  local plugin_paths = {
+function Bottle:all_addons()
+  if self.all_addons_cache then return self.all_addons_cache end
+  local t, hash = get_repository_addons()
+  local addon_paths = {
     (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. "plugins",
     self.lite_xl.datadir_path .. PATHSEP .. "plugins"
   }
-  for i, plugin_path in ipairs(common.grep(plugin_paths, function(e) return system.stat(e) end)) do
-    for j, v in ipairs(system.ls(plugin_path)) do
+  for i, addon_path in ipairs(common.grep(addon_paths, function(e) return system.stat(e) end)) do
+    for j, v in ipairs(system.ls(addon_path)) do
       local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
-      local path = plugin_path .. PATHSEP .. v
-      local matching = hash[id] and common.grep(hash[id], function(e) return e.local_path and not Plugin.is_plugin_different(e.local_path, path) end)[1]
+      local path = addon_path .. PATHSEP .. v
+      local matching = hash[id] and common.grep(hash[id], function(e) return e.local_path and not Addon.is_addon_different(e.local_path, path) end)[1]
       if i == 2 or not hash[id] or not matching then
-        table.insert(t, Plugin.new(nil, {
+        table.insert(t, Addon.new(nil, {
           id = id,
           type = i == 2 and (hash[id] and "bundled" or "core"),
           organization = (v:find("%.lua$") and "singleton" or "complex"),
@@ -1141,29 +1145,29 @@ function Bottle:all_plugins()
       end
     end
   end
-  self.all_plugins_cache = t
+  self.all_addons_cache = t
   return t
 end
 
-function Bottle:installed_plugins()
-  return common.grep(self:all_plugins(), function(p) return p:is_installed(self) end)
+function Bottle:installed_addons()
+  return common.grep(self:all_addons(), function(p) return p:is_installed(self) end)
 end
 
-function Bottle:get_plugin(id, version, filter)
+function Bottle:get_addon(id, version, filter)
   local candidates = {}
   local wildcard = id:find("%*$")
   filter = filter or {}
-  for i,plugin in ipairs(self:all_plugins()) do
-    if not version and plugin.provides then 
-      for k, provides in ipairs(plugin.provides) do
+  for i,addon in ipairs(self:all_addons()) do
+    if not version and addon.provides then 
+      for k, provides in ipairs(addon.provides) do
         if provides == id then
-          table.insert(candidates, plugin)
+          table.insert(candidates, addon)
         end
       end
     end
-    if (plugin.id == id or (wildcard and plugin.id:find("^" .. id:sub(1, #id - 1)))) and match_version(plugin.version, version) then
-      if (not filter.mod_version or not plugin.mod_version or tonumber(plugin.mod_version) == tonumber(filter.mod_version)) then
-        table.insert(candidates, plugin)
+    if (addon.id == id or (wildcard and addon.id:find("^" .. id:sub(1, #id - 1)))) and match_version(addon.version, version) then
+      if (not filter.mod_version or not addon.mod_version or tonumber(addon.mod_version) == tonumber(filter.mod_version)) then
+        table.insert(candidates, addon)
       end
     end
   end  
@@ -1353,24 +1357,24 @@ end
 local function lpm_lite_xl_run(version, ...)
   if not version then error("requires a version") end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
-  local plugins = {}
+  local addons = {}
   local arguments = { ... }
   local i = 1
   while i < #arguments and arguments[i] ~= "--" do
     local str = arguments[i] 
     local id, version = common.split(":", str)
-    local plugin = system_bottle:get_plugin(id, version, { mod_version = lite_xl.mod_version })
-    if not plugin then error("can't find plugin " .. str) end
-    table.insert(plugins, plugin)
+    local addon = system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version })
+    if not addon then error("can't find addon " .. str) end
+    table.insert(addons, addon)
     i = i + 1
   end
-  local bottle = Bottle.new(lite_xl, plugins)
+  local bottle = Bottle.new(lite_xl, addons)
   if not bottle:is_constructed() then bottle:construct() end
   bottle:run(common.splice(arguments, i + 1))
 end
 
 
-local function lpm_install(...)
+local function lpm_install(type, ...)
   for i, identifier in ipairs({ ... }) do
     local s = identifier:find(":")
     local id, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
@@ -1378,27 +1382,27 @@ local function lpm_install(...)
     if id == "lite-xl" then
       lpm_lite_xl_install(version)
     else
-      local potential_plugins = { system_bottle:get_plugin(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
-      local plugins = common.grep(potential_plugins, function(e) return not e:is_installed(system_bottle) end)
-      if #plugins == 0 and #potential_plugins == 0 then error("can't find plugin " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-      if #plugins == 0 then error("plugin " .. id .. " already installed") end
-      for j,v in ipairs(plugins) do v:install(system_bottle) end
+      local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
+      local addons = common.grep(potential_addons, function(e) return not e:is_installed(system_bottle) end)
+      if #addons == 0 and #potential_addons == 0 then error("can't find addon " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+      if #addons == 0 then error("addon " .. id .. " already installed") end
+      for j,v in ipairs(addons) do v:install(system_bottle) end
     end
   end
 end
 
 
-local function lpm_plugin_uninstall(...)
+local function lpm_addon_uninstall(type, ...)
   for i, id in ipairs({ ... }) do
-    local plugins = { system_bottle:get_plugin(id) }
-    if #plugins == 0 then error("can't find plugin " .. id) end
-    local installed_plugins = common.grep(plugins, function(e) return e:is_installed(system_bottle) end)
-    if #installed_plugins == 0 then error("plugin " .. id .. " not installed") end
-    for i, plugin in ipairs(installed_plugins) do plugin:uninstall(system_bottle) end
+    local addons = { system_bottle:get_addon(id) }
+    if #addons == 0 then error("can't find addon " .. id) end
+    local installed_addons = common.grep(addons, function(e) return e:is_installed(system_bottle) end)
+    if #installed_addons == 0 then error("addon " .. id .. " not installed") end
+    for i, addon in ipairs(installed_addons) do addon:uninstall(system_bottle) end
   end
 end
 
-local function lpm_plugin_reinstall(...) for i, id in ipairs({ ... }) do pcall(lpm_plugin_uninstall, id) end lpm_install(...) end
+local function lpm_addon_reinstall(type, ...) for i, id in ipairs({ ... }) do pcall(lpm_addon_uninstall, type, id) end lpm_install(type, ...) end
 
 local function lpm_repo_list() 
   if JSON then
@@ -1414,52 +1418,52 @@ local function lpm_repo_list()
   end
 end
 
-local function lpm_plugin_list(id) 
+local function lpm_addon_list(type, id) 
   local max_id = 4
-  local result = { plugins = { } }
-  for j,plugin in ipairs(common.grep(system_bottle:all_plugins(), function(p) return not id or p.id:find(id) end)) do
-    max_id = math.max(max_id, #plugin.id)
-    local repo = plugin.repository
-    table.insert(result.plugins, {
-      id = plugin.id,
-      status = plugin.repository and (plugin:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(plugin) and "available" or "incompatible")) or (plugin:is_bundled(system_bottle) and "bundled" or (plugin:is_core(system_bottle) and "core" or (plugin:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
-      version = "" .. plugin.version,
-      dependencies = plugin.dependencies,
-      description = plugin.description,
-      author = plugin.author or (plugin:is_core(system_bottle) and "lite-xl") or nil,
-      mod_version = plugin.mod_version,
-      tags = plugin.tags,
-      type = plugin.type,
-      organization = plugin.organization,
+  local result = { addons = { } }
+  for j,addon in ipairs(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end)) do
+    max_id = math.max(max_id, #addon.id)
+    local repo = addon.repository
+    table.insert(result.addons, {
+      id = addon.id,
+      status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
+      version = "" .. addon.version,
+      dependencies = addon.dependencies,
+      description = addon.description,
+      author = addon.author or (addon:is_core(system_bottle) and "lite-xl") or nil,
+      mod_version = addon.mod_version,
+      tags = addon.tags,
+      type = addon.type,
+      organization = addon.organization,
       repository = repo and repo:url(),
-      path = plugin:get_path(system_bottle)
+      path = addon:get_path(system_bottle)
     })
   end
   if JSON then
     io.stdout:write(json.encode(result) .. "\n")
-  elseif #result.plugins > 0 then
+  elseif #result.addons > 0 then
     if not VERBOSE then
       print(string.format("%" .. max_id .."s | %10s | %10s | %s", "ID", "Version", "ModVer", "Status"))
       print(string.format("%" .. max_id .."s | %10s | %10s | %s", string.rep("-", max_id), "-------", "------", "-----------"))
     end
-    for i, plugin in ipairs(common.sort(result.plugins, function(a,b) return a.id < b.id end)) do
+    for i, addon in ipairs(common.sort(result.addons, function(a,b) return a.id < b.id end)) do
       if VERBOSE then
         if i ~= 0 then print("---------------------------") end
-        print("ID:            " .. plugin.id)
-        print("Name:          " .. (plugin.name or plugin.id))
-        print("Version:       " .. plugin.version)
-        print("Status:        " .. plugin.status)
-        print("Author:        " .. (plugin.author or ""))
-        print("Type:          " .. plugin.type)
-        print("Orgnization:   " .. plugin.organization)
-        print("Repository:    " .. (plugin.repository or "orphan"))
-        print("Description:   " .. (plugin.description or ""))
-        print("Mod-Version:   " .. (plugin.mod_version or "unknown"))
-        print("Dependencies:  " .. json.encode(plugin.dependencies))
-        print("Tags:          " .. common.join(", ", plugin.tags))
-        print("Path:          " .. (plugin.path or ""))
-      elseif plugin.status ~= "incompatible" then
-        print(string.format("%" .. max_id .."s | %10s | %10s | %s", plugin.id, plugin.version, plugin.mod_version, plugin.status))
+        print("ID:            " .. addon.id)
+        print("Name:          " .. (addon.name or addon.id))
+        print("Version:       " .. addon.version)
+        print("Status:        " .. addon.status)
+        print("Author:        " .. (addon.author or ""))
+        print("Type:          " .. addon.type)
+        print("Orgnization:   " .. addon.organization)
+        print("Repository:    " .. (addon.repository or "orphan"))
+        print("Description:   " .. (addon.description or ""))
+        print("Mod-Version:   " .. (addon.mod_version or "unknown"))
+        print("Dependencies:  " .. json.encode(addon.dependencies))
+        print("Tags:          " .. common.join(", ", addon.tags))
+        print("Path:          " .. (addon.path or ""))
+      elseif addon.status ~= "incompatible" then
+        print(string.format("%" .. max_id .."s | %10s | %10s | %s", addon.id, addon.version, addon.mod_version, addon.status))
       end
     end
   end
@@ -1471,12 +1475,12 @@ local function lpm_describe()
       io.stdout:write("lpm add " .. v:url() .. " && ")
     end
   end
-  print("lpm run " .. system_bottle.lite_xl.version .. " " .. common.join(" ", common.map(system_bottle:installed_plugins(), function(p) return p.id .. ":" .. p.version end)))
+  print("lpm run " .. system_bottle.lite_xl.version .. " " .. common.join(" ", common.map(system_bottle:installed_addons(), function(p) return p.id .. ":" .. p.version end)))
 end
 
-local function lpm_plugin_upgrade()
-  for i,plugin in ipairs(system_bottle:installed_plugins()) do
-    local upgrade = common.sort(system_bottle:get_plugin(plugin.id, ">" .. plugin.version), function(a, b) return compare_version(b.version, a.version) end)[1]
+local function lpm_addon_upgrade()
+  for i,addon in ipairs(system_bottle:installed_addons()) do
+    local upgrade = common.sort(system_bottle:get_addon(addon.id, ">" .. addon.version), function(a, b) return compare_version(b.version, a.version) end)[1]
     if upgrade then upgrade:install(system_bottle) end
   end
 end
@@ -1549,17 +1553,16 @@ local function run_command(ARGS)
   elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_repo_list()
-  elseif ARGS[2] == "plugin" and ARGS[3] == "install" then lpm_install(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "plugin" and ARGS[3] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "plugin" and ARGS[3] == "reinstall" then lpm_plugin_reinstall(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "plugin" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_plugin_list(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "plugin" and ARGS[3] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "upgrade" then return lpm_plugin_upgrade(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "install" then lpm_install(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "uninstall" then lpm_plugin_uninstall(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "reinstall" then lpm_plugin_reinstall(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "describe" then lpm_describe(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "list" then return lpm_plugin_list(table.unpack(common.slice(ARGS, 3)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "reinstall" then lpm_addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "describe" then lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "list" then return lpm_addon_list(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "lite-xl" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm_lite_xl_install(table.unpack(common.slice(ARGS, 4)))
@@ -1600,7 +1603,7 @@ LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
 It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
-be called independently, for from the lite-xl `plugin_manager` plugin.
+be called independently, for from the lite-xl `addon_manager` addon.
 
 LPM will always use https://github.com/lite-xl/lite-xl-plugins as its base
 repository, if none are present, and the cache directory does't exist,
@@ -1618,16 +1621,18 @@ It has the following commands:
     [...<repository remote>]
   lpm [repo] update [<repository remote>]  Update all/the specified repos.
     [...<repository remote>]        
-  lpm [plugin] install                     Install specific plugins.
-    <plugin id>[:<version>]                If installed, upgrades.
-    [...<plugin id>:<version>]                     
-  lpm [plugin] uninstall <plugin id>       Uninstall the specific plugin.
-    [...<plugin id>]
-  lpm [plugin] reinstall <plugin id>       Uninstall and installs the specific plugin.
-    [...<plugin id>]
-  lpm [plugin] list <repository remote>    List all/associated plugins.
-    [...<repository remote>]    
-  lpm [plugin] upgrade                     Upgrades all installed plugins 
+  lpm [plugin|library|color] install       Install specific addons.
+    <addon id>[:<version>]                 If installed, upgrades.
+    [...<addon id>:<version>]                     
+  lpm [plugin|library|color] uninstall     Uninstall the specific addon.
+    <addon id> [...<addon id>]
+  lpm [plugin|library|color] reinstall     Uninstall and installs the specific addon.
+   <addon id> [...<addon id>]        
+    
+  lpm [plugin|library|color] list          List all/associated addons.
+   <remote> [...<remote>]
+        
+  lpm upgrade                              Upgrades all installed addons 
                                            to new version if applicable.
   lpm [lite-xl] install <version>          Installs lite-xl. Infers the
     [binary] [datadir]                     paths on your system if not
@@ -1645,14 +1650,14 @@ It has the following commands:
                                            path can be specifeid.
   lpm lite-xl list                         Lists all installed versions of
                                            lite-xl.
-  lpm run <version> [...plugins]           Sets up a "bottle" to run the specified
-                                           lite version, with the specified plugins
+  lpm run <version> [...addons]           Sets up a "bottle" to run the specified
+                                           lite version, with the specified addons
                                            and then opens it.
   lpm describe [bottle]                    Describes the bottle specified in the form
                                            of a list of commands, that allow someone
                                            else to run your configuration.
   lpm table <manifest path> [readme path]  Formats a markdown table of all specified 
-                                           plugins. Dumps to stdout normally, but if
+                                           addons. Dumps to stdout normally, but if
                                            supplied a readme, will remove all tables
                                            from the readme, and append the new one.
           
@@ -1668,13 +1673,13 @@ Flags have the following effects:
                            If omitted, uses the normal lite-xl logic.
   --cachedir=directory     Sets the directory to store all repositories.
   --tmpdir=directory       During install, sets the staging area.
-  --datadir=directory      Sets the data directory where core plugins are located
+  --datadir=directory      Sets the data directory where core addons are located
                            for the system lite-xl.
   --binary=path            Sets the lite-xl binary path for the system lite-xl.
   --verbose                Spits out more information, including intermediate
                            steps to install and whatnot.
   --quiet                  Outputs nothing but explicit responses.
-  --mod-version            Sets the mod version of lite-xl to install plugins.
+  --mod-version            Sets the mod version of lite-xl to install addons.
   --version                Returns version information.
   --help                   Displays this help text.
   --ssl-certs              Sets the SSL certificate store. Can be a directory,
@@ -1804,22 +1809,23 @@ in any circumstance unless explicitly supplied.
     os.exit(0)
   end
   if ARGS[2] == "table" then
-    local plugins = json.decode(common.read(ARGS[3]))["plugins"]
-    table.sort(plugins, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
-    local ids = common.map(plugins, function(plugin) 
-      if plugin.path and plugin.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", plugin.name or plugin.id, plugin.path) end
-      if plugin.path then return string.format("[`%s`](%s)", plugin.name or plugin.id, plugin.path) end
-      if plugin.url then return string.format("[`%s`](%s)", plugin.name or plugin.id, plugin.url) end
-      if plugin.remote then return string.format("[`%s`](%s)\\*", plugin.name or plugin.id, plugin.remote:gsub(":%w+$", "")) end
-      return plugin.name or plugin.id
+    local info = json.decode(common.read(ARGS[3]))
+    local addons = info["addons"] or info["plugins"]
+    table.sort(addons, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
+    local ids = common.map(addons, function(addon) 
+      if addon.path and addon.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path) end
+      if addon.path then return string.format("[`%s`](%s)", addon.name or addon.id, addon.path) end
+      if addon.url then return string.format("[`%s`](%s)", addon.name or addon.id, addon.url) end
+      if addon.remote then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.remote:gsub(":%w+$", "")) end
+      return addon.name or addon.id
     end)
-    local descriptions = common.map(plugins, function(e) return e.description or "" end)
+    local descriptions = common.map(addons, function(e) return e.description or "" end)
     local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
     local max_id = math.max(table.unpack(common.map(ids, function(e) return #e end)))
     local t = { }
     table.insert(t, "| Plugin" .. string.rep(" ", max_id - 6) .. " | Description" .. string.rep(" ", max_description - 11) .. " |")
     table.insert(t, "| :" .. string.rep("-", max_id-1) .. " | :" .. string.rep("-", max_description - 1) .. " |")
-    for i = 1, #plugins do
+    for i = 1, #addons do
       table.insert(t, "| " .. ids[i] .. string.rep(" ", max_id - #ids[i]) .. " | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i]) .. " |")
     end
     if ARGS[4] then
