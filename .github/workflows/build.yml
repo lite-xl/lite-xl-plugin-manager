@@ -37,7 +37,7 @@ jobs:
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
-          gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz *.deb
+          gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
             gh release delete -y $VERSION || true; 
             gh release create -t v$VERSION v$VERSION lpm.x86_64-linux lpm.x86_64-windows.exe
