@@ -77,6 +77,11 @@ local tests = {
         break
       end
     end
+  end,
+  ["07_manifest"] = function()
+   local results = json.decode(io.open("manifest.json", "rb"):read("*all"))
+   assert(#results["remotes"] == 2)
+   assert(#results["addons"] == 2)
   end
 }
 
@@ -118,8 +123,10 @@ local function run_tests(tests, arg)
       print("[FAIL]: " .. debug.traceback(err, 2))
       print()
       print()
-      print("Last Command: " .. last_command)
-      print(json.encode(last_command_result)) 
+      if last_command then
+        print("Last Command: " .. last_command)
+        print(json.encode(last_command_result)) 
+      end
       fail_count = fail_count + 1
       failed = true
     end)
