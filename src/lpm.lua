@@ -848,28 +848,10 @@ function Repository:parse_manifest(already_pulling)
       self.addons = {}
       self.remotes = {}
       for i, metadata in ipairs(self.manifest["addons"] or self.manifest["plugins"] or {}) do
-        if metadata.remote then
-          local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
-          if branch_or_commit and is_commit_hash(branch_or_commit) then
-            table.insert(self.addons, Addon.new(self, metadata))
-          else
-            -- log_warning("addon " .. metadata.name .. " specifies remote as source, but isn't a commit")
-          end
-        else
-          table.insert(self.addons, Addon.new(self, metadata))
-        end
+        table.insert(self.addons, Addon.new(self, metadata))
       end
       for i, metadata in ipairs(self.manifest["lite-xls"] or {}) do
-        if metadata.remote then
-          local _, _, url, branch_or_commit = metadata.remote:find("^(.-):?(%w*)$")
-          if branch_or_commit and is_commit_hash(branch_or_commit) then
-            table.insert(self.lite_xls, LiteXL.new(self, metadata))
-          else
-            -- log_warning("addon " .. metadata.name .. " specifies remote as source, but isn't a commit")
-          end
-        else
-          table.insert(self.lite_xls, LiteXL.new(self, metadata))
-        end
+        table.insert(self.lite_xls, LiteXL.new(self, metadata))
       end
       self.remotes = common.map(self.manifest["remotes"] or {}, function(r) return Repository.url(r) end)
     end)
@@ -1182,7 +1164,12 @@ function Bottle:all_addons()
         local fetchable = hash[id] and common.grep(hash[id], function(e) return not e.local_path and e:is_stub() end)[1]
         if fetchable then
           local repo = Repository.url(fetchable.remote):fetch()
-          fetchable.local_path = repo.local_path .. PATHSEP .. (fetchable.path and (PATHSEP .. fetchable.path:gsub("^/", "")) or "")
+          local manifest = repo:parse_manifest()
+          local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == id end)
+          if not remote_entry then error("can't find " .. fetchable.type .. " on " .. fetchable.remote) end
+          local addon = Addon.new(repo, remote_entry)
+          -- merge in attribtues that are probably more accurate than the stub
+          for k,v in pairs(addon) do fetchable[k] = v end
         end
         local matching = hash[id] and common.grep(hash[id], function(e) 
           return e.local_path and not Addon.is_addon_different(e.local_path, path) 
@@ -1487,6 +1474,7 @@ local function lpm_addon_list(type, id)
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
       version = "" .. addon.version,
       dependencies = addon.dependencies,
+      remote = addon.remote,
       description = addon.description,
       author = addon.author or (addon:is_core(system_bottle) and "lite-xl") or nil,
       mod_version = addon.mod_version,
@@ -1515,6 +1503,7 @@ local function lpm_addon_list(type, id)
         print("Type:          " .. addon.type)
         print("Orgnization:   " .. addon.organization)
         print("Repository:    " .. (addon.repository or "orphan"))
+        print("Remote:        " .. (addon.remote or ""))
         print("Description:   " .. (addon.description or ""))
         print("Mod-Version:   " .. (addon.mod_version or "unknown"))
         print("Dependencies:  " .. json.encode(addon.dependencies))
@@ -1781,14 +1770,14 @@ in any circumstance unless explicitly supplied.
       if bytes < 1*1024*1024*1024 then return string.format("%6.1f MB", bytes / (1024*1024))  end
       return string.format("%6.2f GB", bytes / (1024*1024*1024)) 
     end
-    write_progress_bar = function(total_read, total_objects, indexed_obejcts, received_objects, local_objects, local_deltas, indexed_deltas)
+    write_progress_bar = function(total_read, total_objects_or_content_length, indexed_objects, received_objects, local_objects, local_deltas, indexed_deltas)
       if type(total_read) == "boolean" then
         io.stdout:write("\n")
         io.stdout:flush()
         return
       end
       if not start_time or total_read < last_read then start_time = os.time() end
-      local status_line = string.format("%s [%s/s]: %s", format_bytes(total_read), format_bytes(total_read / math.max(os.time() - start_time, 1)), progress_bar_label)
+      local status_line = string.format("%s [%s/s][%03d%%]: %s", format_bytes(total_read), format_bytes(total_read / math.max(os.time() - start_time, 1)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100), progress_bar_label)
       io.stdout:write(string.rep("\b", #status_line))
       io.stdout:write(status_line)
       io.stdout:flush()
@@ -1927,7 +1916,7 @@ in any circumstance unless explicitly supplied.
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
   end, error_handler)
-  
+
   if ARGS[2] ~= '-' then
     engage_locks(function()
       run_command(ARGS)
