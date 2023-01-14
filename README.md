@@ -117,7 +117,7 @@ CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER\ -DCMAKE_FIND_ROO
 
 ## Tests
 
-To run the test suite, simply use lua to run `lua t/run.lua`. use `FAST=1 t/run.lua` to avoid the costs of tearing down and building up suites each time.
+To run the test suite, you can use `lpm` to execute the test by doing `./lpm test t/run.lua`. use `FAST=1 ./lpm test t/run.lua` to avoid the costs of tearing down and building up suites each time.
 
 ## Bugs
 

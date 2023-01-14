@@ -1443,8 +1443,8 @@ local function lpm_addon_list(type, id)
     io.stdout:write(json.encode(result) .. "\n")
   elseif #result.addons > 0 then
     if not VERBOSE then
-      print(string.format("%" .. max_id .."s | %10s | %10s | %s", "ID", "Version", "ModVer", "Status"))
-      print(string.format("%" .. max_id .."s | %10s | %10s | %s", string.rep("-", max_id), "-------", "------", "-----------"))
+      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", "ID", "Version", "Type", "ModVer", "Status"))
+      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", string.rep("-", max_id), "-------", "----", "------", "-----------"))
     end
     for i, addon in ipairs(common.sort(result.addons, function(a,b) return a.id < b.id end)) do
       if VERBOSE then
@@ -1463,7 +1463,7 @@ local function lpm_addon_list(type, id)
         print("Tags:          " .. common.join(", ", addon.tags))
         print("Path:          " .. (addon.path or ""))
       elseif addon.status ~= "incompatible" then
-        print(string.format("%" .. max_id .."s | %10s | %10s | %s", addon.id, addon.version, addon.mod_version, addon.status))
+        print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", addon.id, addon.version, addon.type, addon.mod_version or "n/a", addon.status))
       end
     end
   end
