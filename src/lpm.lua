@@ -358,6 +358,7 @@ local function is_commit_hash(hash)
 end
 
 
+
 local common = {}
 function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
 function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v)) end return t end
@@ -454,6 +455,24 @@ function common.chdir(dir, callback)
 end
 
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+
+
+local status = 0
+local function error_handler(err)
+  local s, e = err and err:find(":%d+")
+  local message = e and err:sub(e + 3) or err
+  if JSON then
+    if VERBOSE then 
+      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback() }) .. "\n")
+    else
+      io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
+    end
+  else
+    if err then io.stderr:write((not VERBOSE and message or err) .. "\n") end
+    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
+  end
+  status = -1
+end
 
 local function engage_locks(func, err)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -561,12 +580,19 @@ function Addon.new(repository, metadata)
     version = "1.0",
     dependencies = {},
     conflicts = {},
-    local_path = repository and not metadata.remote and (repository.local_path .. PATHSEP .. (repository.commit or repository.branch) .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")) or nil,
     name = metadata.id
   }, metadata), Addon)
   self.type = type
   -- Directory.
   self.organization = metadata.organization or (((self.files and #self.files > 0) or self.remote or (not self.path and not self.url)) and "complex" or "singleton")
+  if not self.local_path and repository then
+    if metadata.remote then
+      local local_path = (Repository.url(metadata.remote).local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or ""))
+      self.local_path = system.stat(local_path) and (Repository.url(metadata.remote).local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")) or nil
+    else
+      self.local_path = (repository.local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")) or nil
+    end
+  end
   return self
 end
 
@@ -578,7 +604,7 @@ function Addon.is_path_different(path1, path2)
   local stat1, stat2 = system.stat(path1), system.stat(path2)
   if not stat1 or not stat2 or stat1.type ~= stat2.type or stat1.size ~= stat2.size then return true end
   if stat1.type == "dir" then
-    for i, file in ipairs(system.ls(path1)) do if Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end end
+    for i, file in ipairs(system.ls(path1)) do if not common.basename(file):find("^%.") and Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end end
     return false
   else
     return system.hash(path1, "file") ~= system.hash(path2, "file")
@@ -605,8 +631,9 @@ function Addon:is_installed(bottle)
   if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
-  if #common.grep({ bottle:get_addon(self.id, nil, {  }) }, function(addon) return not addon.repository end) > 0 then return false end
-  return not Addon.is_addon_different(self.local_path, install_path)
+  local installed_addons = common.grep({ bottle:get_addon(self.id, nil, {  }) }, function(addon) return not addon.repository end)
+  if #installed_addons > 0 then return false end
+  return self.local_path and not Addon.is_addon_different(self.local_path, install_path)
 end
 function Addon:is_upgradable(bottle)
   if self:is_installed(bottle) then
@@ -698,11 +725,8 @@ function Addon:install(bottle, installing)
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     elseif self.remote then
       log_progress_action("Fetching repository " .. self.remote .. " into " .. install_path)
-      common.mkdirp(temporary_install_path)
-      local _, _, url, branch = self.remote:find("^(.*):(.*)$")
-      system.init(temporary_install_path, url)
-      system.fetch(temporary_install_path, write_progress_bar)
-      common.reset(temporary_install_path, branch, "hard")
+      local repo = Repository.url(self.remote):fetch()
+      common.copy(repo.local_path, temporary_install_path)
       common.rmrf(temporary_install_path .. PATHSEP .. ".git")
       common.rmrf(temporary_install_path .. PATHSEP .. ".gitignore")
     elseif self.path then
@@ -782,20 +806,21 @@ function Repository.new(hash)
     remote = hash.remote,
     branch = hash.branch,
     addons = nil,
+    repo_path = CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. system.hash(hash.remote),
     lite_xls = {},
-    local_path = CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. system.hash(hash.remote),
     last_retrieval = nil 
   }, Repository)
-  if system.stat(self.local_path) and not self.commit and not self.branch then
+  if system.stat(self.repo_path) and not self.commit and not self.branch then
     -- In the case where we don't have a branch, and don't have a commit, check for the presence of `master` and `main`.
-    if system.stat(self.local_path .. PATHSEP .. "master") then
+    if system.stat(self.repo_path .. PATHSEP .. "master") then
       self.branch = "master"
-    elseif system.stat(self.local_path .. PATHSEP .. "main") then
+    elseif system.stat(self.repo_path .. PATHSEP .. "main") then
       self.branch = "main"
     else
-      error("can't find branch for " .. self.remote)
+      error("can't find branch for " .. self.remote .. " in " .. self.repo_path)
     end
   end
+  self.local_path = self.repo_path .. PATHSEP .. (self.commit or self.branch)
   return self
 end
 
@@ -813,8 +838,8 @@ end
 
 function Repository:parse_manifest(already_pulling)
   if self.manifest then return self.manifest, self.remotes end
-  if system.stat(self.local_path) and system.stat(self.local_path .. PATHSEP .. (self.commit or self.branch)) then
-    self.manifest_path = self.local_path .. PATHSEP .. (self.commit or self.branch) .. PATHSEP .. "manifest.json"
+  if system.stat(self.local_path)  then
+    self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then 
       log_action("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
       self:generate_manifest() 
@@ -859,7 +884,7 @@ end
 -- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons 
 function Repository:generate_manifest()
   if not self.commit and not self.branch then error("requires an instantiation") end
-  local path = self.local_path .. PATHSEP .. (self.commit or self.branch)
+  local path = self.local_path
   local addons, addon_map = {}, {}
   for _, folder in ipairs({ "plugins", "colors", "libraries" }) do
     local addon_dir = system.stat(path .. PATHSEP .. folder) and PATHSEP .. folder .. PATHSEP or PATHSEP
@@ -879,7 +904,7 @@ function Repository:generate_manifest()
               addon_map[id].remote = path
               pcall(function()
                 local repo = Repository.url(path):add()
-                addon_map[id].remote = path .. ":" .. system.revparse(repo.local_path .. PATHSEP .. (repo.branch))
+                addon_map[id].remote = path .. ":" .. system.revparse(repo.local_path)
               end)
             end
           else
@@ -916,34 +941,56 @@ function Repository:generate_manifest()
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ addons = addons }))
 end
 
+-- useds to fetch things from a generic place
+function Repository:fetch()
+  local path
+  local status, err = pcall(function()
+    if not self.branch and not self.commit then 
+      path = self.repo_path .. PATHSEP .. "master"
+      common.mkdirp(path)
+      log_progress_action("Fetching " .. self.remote .. ":master/main...")
+      system.init(path, self.remote)
+      system.fetch(path, write_progress_bar)
+      if not pcall(system.reset, path, "refs/remotes/origin/master", "hard") then
+        if pcall(system.reset, path, "refs/remotes/origin/main", "hard") then
+          common.rename(path, self.repo_path .. PATHSEP .. "main")
+          path = self.repo_path .. PATHSEP .. "main"
+          self.branch = "main"
+        else
+          error("can't find master or main.")
+        end
+      else
+        self.branch = "master"
+      end
+      self.local_path = path
+    else
+      path = self.local_path
+      local exists = system.stat(path)
+      if not exists then
+        common.mkdirp(path)
+        system.init(path, self.remote)
+      end
+      if not exists or self.branch then
+        log_progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
+        system.fetch(path, write_progress_bar)
+        common.reset(path, self.commit or self.branch, "hard")
+      end
+      self.manifest = nil
+    end
+  end)
+  if not status then
+    if path then
+      common.rmrf(path)
+      if #system.ls(common.dirname(path)) == 0 then common.rmrf(common.dirname(path)) end
+    end
+    error(err)
+  end
+  return self
+end
+
 function Repository:add(pull_remotes)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
-  if not self.branch and not self.commit then 
-    local path = self.local_path .. PATHSEP .. "master"
-    common.mkdirp(path)
-    log_progress_action("Fetching " .. self.remote .. ":master/main...")
-    system.init(path, self.remote)
-    system.fetch(path, write_progress_bar)
-    if not pcall(system.reset, path, "refs/remotes/origin/master", "hard") then
-      if pcall(system.reset, path, "refs/remotes/origin/main", "hard") then
-        common.rename(path, self.local_path .. PATHSEP .. "main")
-        self.branch = "main"
-      else
-        error("can't find master or main.")
-      end
-    else
-      self.branch = "master"
-    end
-  else
-    local path = self.local_path .. PATHSEP .. (self.commit or self.branch)
-    common.mkdirp(path)
-    log_progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
-    system.init(path, self.remote)
-    system.fetch(path, write_progress_bar)
-    common.reset(path, self.commit or self.branch, "hard")
-    self.manifest = nil
-  end
-  local manifest, remotes = self:parse_manifest()
+  local manifest, remotes = self:fetch():parse_manifest()
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do 
       if not common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
@@ -959,8 +1006,7 @@ end
 function Repository:update(pull_remotes)
   local manifest, remotes = self:parse_manifest()
   if self.branch then
-    local path = self.local_path .. PATHSEP .. self.branch
-    system.fetch(path)
+    system.fetch(self.local_path)
     common.reset(path, self.branch, "hard")
     log_action("Updated " .. self:url())
     self.manifest = nil
@@ -978,8 +1024,8 @@ end
 
 
 function Repository:remove()
-  common.rmrf(self.local_path .. PATHSEP .. (self.commit or self.branch))
-  if #system.ls(self.local_path) == 0 then common.rmrf(self.local_path) end
+  common.rmrf(self.local_path)
+  if #system.ls(self.repo_path) == 0 then common.rmrf(self.repo_path) end
 end
 
 
@@ -1124,24 +1170,29 @@ end
 function Bottle:all_addons()
   if self.all_addons_cache then return self.all_addons_cache end
   local t, hash = get_repository_addons()
-  local addon_paths = {
-    (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. "plugins",
-    self.lite_xl.datadir_path .. PATHSEP .. "plugins"
-  }
-  for i, addon_path in ipairs(common.grep(addon_paths, function(e) return system.stat(e) end)) do
-    for j, v in ipairs(system.ls(addon_path)) do
-      local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
-      local path = addon_path .. PATHSEP .. v
-      local matching = hash[id] and common.grep(hash[id], function(e) return e.local_path and not Addon.is_addon_different(e.local_path, path) end)[1]
-      if i == 2 or not hash[id] or not matching then
-        table.insert(t, Addon.new(nil, {
-          id = id,
-          type = i == 2 and (hash[id] and "bundled" or "core"),
-          organization = (v:find("%.lua$") and "singleton" or "complex"),
-          mod_version = self.lite_xl.mod_version,
-          path = "plugins" .. PATHSEP .. v,
-          description = (hash[id] and hash[id][1].description or nil)
-        }))
+  for _, addon_type in ipairs({ "plugins", "libraries" }) do
+    local addon_paths = {
+      (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. addon_type,
+      self.lite_xl.datadir_path .. PATHSEP .. addon_type
+    }
+    for i, addon_path in ipairs(common.grep(addon_paths, function(e) return system.stat(e) end)) do
+      for j, v in ipairs(system.ls(addon_path)) do
+        local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
+        local path = addon_path .. PATHSEP .. v
+        local matching = hash[id] and common.grep(hash[id], function(e) 
+          return e.local_path and not Addon.is_addon_different(e.local_path, path) 
+        end)[1]
+        if i == 2 or not hash[id] or not matching then
+          table.insert(t, Addon.new(nil, {
+            id = id,
+            type = (addon_type == "plugins" and (i == 2 and (hash[id] and "bundled" or "core") or "plugin") or "library"),
+            organization = (v:find("%.lua$") and "singleton" or "complex"),
+            local_path = path,
+            mod_version = self.lite_xl.mod_version,
+            path = addon_type .. PATHSEP .. v,
+            description = (hash[id] and hash[id][1].description or nil)
+          }))
+        end
       end
     end
   end
@@ -1174,7 +1225,6 @@ function Bottle:get_addon(id, version, filter)
   return table.unpack(common.sort(common.uniq(candidates), function (a,b) return a.version < b.version end))
 end
 
-
 local function get_repository(url)
   if not url then error("requires a repository url") end
   local r = Repository.url(url)
@@ -1197,7 +1247,7 @@ local function lpm_repo_init()
   DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
   if not system.stat(CACHEDIR .. PATHSEP .. "repos") then
     for i, repository in ipairs(DEFAULT_REPOS) do
-      if not system.stat(repository.local_path) or not system.stat(repository.local_path .. PATHSEP .. (repository.commit or repository.branch)) then 
+      if not system.stat(repository.local_path) then 
         table.insert(repositories, repository:add(true))
       end
     end
@@ -1385,7 +1435,7 @@ local function lpm_install(type, ...)
       local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
       local addons = common.grep(potential_addons, function(e) return not e:is_installed(system_bottle) end)
       if #addons == 0 and #potential_addons == 0 then error("can't find addon " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-      if #addons == 0 then error("addon " .. id .. " already installed") end
+      if #addons == 0 then error("addon " .. id .. "  already installed") end
       for j,v in ipairs(addons) do v:install(system_bottle) end
     end
   end
@@ -1406,13 +1456,13 @@ local function lpm_addon_reinstall(type, ...) for i, id in ipairs({ ... }) do pc
 
 local function lpm_repo_list() 
   if JSON then
-    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path .. PATHSEP .. (repo.commit or repo.branch), remotes = common.map(repo.remotes or {}, function(r) return r:url() end)  } end) }) .. "\n")
+    io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path, remotes = common.map(repo.remotes or {}, function(r) return r:url() end)  } end) }) .. "\n")
   else
     for i, repository in ipairs(repositories) do
       local _, remotes = repository:parse_manifest()
       if i ~= 0 then print("---------------------------") end
       print("Remote :  " .. repository:url())
-      print("Path   :  " .. repository.local_path .. PATHSEP .. (repository.commit or repository.branch))
+      print("Path   :  " .. repository.local_path)
       print("Remotes:  " .. json.encode(common.map(repository.remotes or {}, function(r) return r:url() end)))
     end
   end
@@ -1526,22 +1576,6 @@ local function parse_arguments(arguments, options)
   return args
 end
 
-local status = 0
-local function error_handler(err)
-  local s, e = err and err:find(":%d+")
-  local message = e and err:sub(e + 3) or err
-  if JSON then
-    if VERBOSE then 
-      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback() }) .. "\n")
-    else
-      io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
-    end
-  else
-    if err then io.stderr:write((not VERBOSE and message or err) .. "\n") end
-    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
-  end
-  status = -1
-end
 
 local function run_command(ARGS)
   if not ARGS[2]:find("%S") then return
@@ -1910,7 +1944,6 @@ in any circumstance unless explicitly supplied.
       actions, warnings = {}, {}
     end
   end
-
 end, error_handler)
 
 
