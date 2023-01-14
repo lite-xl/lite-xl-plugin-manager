@@ -124,5 +124,5 @@ To run the test suite, you can use `lpm` to execute the test by doing `./lpm tes
 If you find a bug, please create an issue with the following information:
 
 * Your operating system.
-* The commit or version of LPM you're using.
+* The commit or version of LPM you're using (`lpm --version` for releases).
 * The exact steps to reproduce in LPM invocations, if possible from a fresh LPM install (targeting an empty folder with `--userdir`).
