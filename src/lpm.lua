@@ -456,24 +456,6 @@ end
 
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
-
-local status = 0
-local function error_handler(err)
-  local s, e = err and err:find(":%d+")
-  local message = e and err:sub(e + 3) or err
-  if JSON then
-    if VERBOSE then 
-      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback() }) .. "\n")
-    else
-      io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
-    end
-  else
-    if err then io.stderr:write((not VERBOSE and message or err) .. "\n") end
-    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
-  end
-  status = -1
-end
-
 local function engage_locks(func, err)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   local lockfile = USERDIR .. PATHSEP .. ".lock"
@@ -507,6 +489,23 @@ local function prompt(message)
   if ASSUME_YES then io.stderr:write("Y\n") return true end
   local response = io.stdin:read("*line")
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
+end
+
+local status = 0
+local function error_handler(err)
+  local s, e = err and err:find(":%d+")
+  local message = e and err:sub(e + 3) or err
+  if JSON then
+    if VERBOSE then 
+      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback() }) .. "\n")
+    else
+      io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
+    end
+  else
+    if err then io.stderr:write((not VERBOSE and message or err) .. "\n") end
+    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
+  end
+  status = -1
 end
 
 
@@ -1179,6 +1178,12 @@ function Bottle:all_addons()
       for j, v in ipairs(system.ls(addon_path)) do
         local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
         local path = addon_path .. PATHSEP .. v
+        -- in the case where we have an existing plugin that targets a stub, then fetch that repository
+        local fetchable = hash[id] and common.grep(hash[id], function(e) return not e.local_path and e:is_stub() end)[1]
+        if fetchable then
+          local repo = Repository.url(fetchable.remote):fetch()
+          fetchable.local_path = repo.local_path .. PATHSEP .. (fetchable.path and (PATHSEP .. fetchable.path:gsub("^/", "")) or "")
+        end
         local matching = hash[id] and common.grep(hash[id], function(e) 
           return e.local_path and not Addon.is_addon_different(e.local_path, path) 
         end)[1]
@@ -1435,8 +1440,11 @@ local function lpm_install(type, ...)
       local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
       local addons = common.grep(potential_addons, function(e) return not e:is_installed(system_bottle) end)
       if #addons == 0 and #potential_addons == 0 then error("can't find addon " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-      if #addons == 0 then error("addon " .. id .. "  already installed") end
-      for j,v in ipairs(addons) do v:install(system_bottle) end
+      if #addons == 0 then 
+        log_warning("addon " .. id .. " already installed") 
+      else
+        for j,v in ipairs(addons) do v:install(system_bottle) end
+      end
     end
   end
 end
