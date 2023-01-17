@@ -62,8 +62,7 @@ jobs:
         run: |
           ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-darwin'"' && tar -czvf lpm-$FULL_VERSION-x86_64-darwin.tar.gz lpm
           cp lpm lpm.x86_64-darwin
-          # For some reason, it seems like I get unsupported architecture from including network headers.
-          CC=clang CFLAGS="-arch arm64" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-aarch64-darwin'"' && tar -czvf lpm-$FULL_VERSION-aarch64-darwin.tar.gz lpm
+          ./build.sh clean && CC=clang CFLAGS="-arch arm64" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-aarch64-darwin'"' && tar -czvf lpm-$FULL_VERSION-aarch64-darwin.tar.gz lpm
           cp lpm lpm.aarch64-darwin
           gh release upload continuous *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
