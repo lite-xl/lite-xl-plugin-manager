@@ -33,7 +33,7 @@ function PluginView:new()
   PluginView.super.new(self)
   self.scrollable = true
   self.show_incompatible_plugins = false
-  self.plugin_table_columns = { "Name", "Version", "Modversion", "Status", "Tags", "Author", "Description" }
+  self.plugin_table_columns = { "ID", "Name", "Version", "Type", "Modversion", "Status", "Tags", "Author", "Description" }
   self.hovered_plugin = nil
   self.hovered_plugin_idx = nil
   self.selected_plugin = nil
@@ -48,7 +48,7 @@ function PluginView:new()
 end
 
 local function get_plugin_text(plugin)
-  return plugin.name, plugin.version, plugin.mod_version, plugin.status, join(", ", plugin.tags), plugin.author or "unknown", plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
+  return plugin.id, (plugin.name or plugin.id), plugin.version, plugin.type, plugin.mod_version, plugin.status, join(", ", plugin.tags), plugin.author or "unknown", plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
 end
 
 
@@ -112,7 +112,7 @@ end
 
 
 function PluginView:get_plugins()
-  return self.show_incompatible_plugins and self.plugin_manager.plugins or self.plugin_manager.valid_plugins
+  return self.show_incompatible_plugins and self.plugin_manager.addons or self.plugin_manager.valid_addons
 end
 
 

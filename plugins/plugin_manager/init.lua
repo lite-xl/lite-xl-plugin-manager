@@ -126,20 +126,20 @@ end
 
 function PluginManager:refresh()
   local prom = Promise.new()
-  run({ "plugin", "list" }):done(function(plugins)
-    self.plugins = json.decode(plugins)["plugins"]
-    table.sort(self.plugins, function(a,b) return a.name < b.name end)
-    self.valid_plugins = {}
-    for i, plugin in ipairs(self.plugins) do
-      if plugin.status ~= "incompatible" then
-        table.insert(self.valid_plugins, plugin)
-        if plugin.name == "plugin_manager" and plugin.status == "installed" then
-          plugin.status = "special"
+  run({ "list" }):done(function(addons)
+    self.addons = json.decode(addons)["addons"]
+    table.sort(self.addons, function(a,b) return a.id < b.id end)
+    self.valid_addons = {}
+    for i, addon in ipairs(self.addons) do
+      if addon.status ~= "incompatible" then
+        table.insert(self.valid_addons, addon)
+        if addon.id == "plugin_manager" and addon.status == "installed" then
+          addon.status = "special"
         end
       end
     end
     self.last_refresh = os.time()
-    prom:resolve(plugins)
+    prom:resolve(addons)
     run({ "repo", "list" }):done(function(repositories)
       self.repositories = json.decode(repositories)["repositories"]
     end)
@@ -148,13 +148,13 @@ function PluginManager:refresh()
 end
 
 
-function PluginManager:get_plugins()
+function PluginManager:get_addons()
   local prom = Promise.new()
-  if self.plugins then 
-    prom:resolve(self.plugins) 
+  if self.addons then 
+    prom:resolve(self.addons) 
   else
     self:refresh():done(function()
-      prom:resolve(self.plugins)
+      prom:resolve(self.addons)
     end)
   end
   return prom
@@ -162,7 +162,7 @@ end
 
 local function run_stateful_plugin_command(plugin_manager, cmd, arg)
   local promise = Promise.new()
-  run({ "plugin", cmd, arg }):done(function(result)
+  run({ cmd, arg }):done(function(result)
     if config.plugins.plugin_manager.restart_on_change then
       command.perform("core:restart")
     else
@@ -173,14 +173,14 @@ local function run_stateful_plugin_command(plugin_manager, cmd, arg)
 end
 
 
-function PluginManager:install(plugin) return run_stateful_plugin_command(self, "install", plugin.name .. (plugin.version and (":" .. plugin.version) or "")) end
-function PluginManager:uninstall(plugin) return run_stateful_plugin_command(self, "uninstall", plugin.name) end
-function PluginManager:reinstall(plugin) return run_stateful_plugin_command(self, "reinstall", plugin.name) end
+function PluginManager:install(addon) return run_stateful_plugin_command(self, "install", addon.id .. (addon.version and (":" .. addon.version) or "")) end
+function PluginManager:uninstall(addon) return run_stateful_plugin_command(self, "uninstall", addon.id) end
+function PluginManager:reinstall(addon) return run_stateful_plugin_command(self, "reinstall", addon.id) end
 
 
-function PluginManager:get_plugin(name_and_version)
+function PluginManager:get_addon(name_and_version)
   local promise = Promise.new()
-  PluginManager:get_plugins():done(function()
+  PluginManager:get_addons():done(function()
     local s = name_and_version:find(":")
     local name, version = name_and_version, nil
     if s then
@@ -188,9 +188,9 @@ function PluginManager:get_plugin(name_and_version)
       version = name_and_version:sub(s+1)
     end
     local match = false
-    for i, plugin in ipairs(PluginManager.plugins) do
-      if not plugin.mod_version or tostring(plugin.mod_version) == tostring(MOD_VERSION) and (plugin.version == version or version == nil) then
-        promise:resolve(plugin)
+    for i, addon in ipairs(PluginManager.addons) do
+      if not addon.mod_version or tostring(addon.mod_version) == tostring(MOD_VERSION) and (addon.version == version or version == nil) then
+        promise:resolve(addon)
         match = true
         break
       end
@@ -205,13 +205,13 @@ PluginManager.view = require "plugins.plugin_manager.plugin_view"
 
 command.add(nil, {
   ["plugin-manager:install"] = function() 
-    PluginManager:get_plugins()
+    PluginManager:get_addons()
     core.command_view:enter("Enter plugin name", 
       function(name)  
-        PluginManager:get_plugin(name):done(function(plugin)
+        PluginManager:get_addon(name):done(function(addon)
           core.log("Attempting to install plugin " .. name .. "...")
-          PluginManager:install(plugin):done(function()
-            core.log("Successfully installed plugin " .. plugin.name .. ".")
+          PluginManager:install(addon):done(function()
+            core.log("Successfully installed plugin " .. addon.id .. ".")
           end) 
         end):fail(function()
           core.error("Unknown plugin " .. name .. ".")
@@ -219,10 +219,10 @@ command.add(nil, {
       end, 
       function(text) 
         local items = {}
-        if not PluginManager.plugins then return end
-        for i, plugin in ipairs(PluginManager.plugins) do
-          if not plugin.mod_version or tostring(plugin.mod_version) == tostring(MOD_VERSION) and plugin.status == "available" then
-            table.insert(items, plugin.name .. ":" .. plugin.version)
+        if not PluginManager.addons then return end
+        for i, addon in ipairs(PluginManager.addons) do
+          if not addon.mod_version or tostring(addon.mod_version) == tostring(MOD_VERSION) and addon.status == "available" then
+            table.insert(items, addon.id .. ":" .. addon.version)
           end
         end
         return common.fuzzy_match(items, text)
@@ -230,13 +230,13 @@ command.add(nil, {
     )
   end,
   ["plugin-manager:uninstall"] = function() 
-    PluginManager:get_plugins()
+    PluginManager:get_addons()
     core.command_view:enter("Enter plugin name",
       function(name)  
-        PluginManager:get_plugin(name):done(function(plugin)
-          core.log("Attempting to uninstall plugin " .. plugn.name .. "...")
-          PluginManager:install(plugin):done(function()
-            core.log("Successfully uninstalled plugin " .. plugin.name .. ".")
+        PluginManager:get_addon(name):done(function(addon)
+          core.log("Attempting to uninstall plugin " .. addon.id .. "...")
+          PluginManager:install(addon):done(function()
+            core.log("Successfully uninstalled plugin " .. addon.id .. ".")
           end) 
         end):fail(function()
           core.error("Unknown plugin " .. name .. ".")
@@ -244,10 +244,10 @@ command.add(nil, {
       end, 
       function(text) 
         local items = {}
-        if not PluginManager.plugins then return end
-        for i, plugin in ipairs(PluginManager.plugins) do
-          if plugin.status == "installed" then
-            table.insert(items, plugin.name .. ":" .. plugin.version)
+        if not PluginManager.addons then return end
+        for i, addon in ipairs(PluginManager.addons) do
+          if addon.status == "installed" then
+            table.insert(items, addon.id .. ":" .. addon.version)
           end
         end
         return common.fuzzy_match(items, text)

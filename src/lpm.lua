@@ -1478,11 +1478,11 @@ end
 
 local function lpm_addon_list(type, id) 
   local max_id = 4
-  local result = { addons = { } }
+  local result = { [(type or "addon") .. "s"] = { } }
   for j,addon in ipairs(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end)) do
     max_id = math.max(max_id, #addon.id)
     local repo = addon.repository
-    table.insert(result.addons, {
+    table.insert(result[(type or "addon") .. "s"], {
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
       version = "" .. addon.version,
@@ -1705,7 +1705,7 @@ It has the following commands:
                                            path can be specifeid.
   lpm lite-xl list                         Lists all installed versions of
                                            lite-xl.
-  lpm run <version> [...addons]           Sets up a "bottle" to run the specified
+  lpm run <version> [...addons]            Sets up a "bottle" to run the specified
                                            lite version, with the specified addons
                                            and then opens it.
   lpm describe [bottle]                    Describes the bottle specified in the form

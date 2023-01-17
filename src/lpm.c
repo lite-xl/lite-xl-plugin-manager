@@ -969,6 +969,7 @@ int lpm_flock(lua_State* L) {
     UnlockFile(file, 0, 0, 1, 0);
     CloseHandle(file);
   #else
+    flock(fd, LOCK_UN);
     close(fd);
   #endif
   if (err)
