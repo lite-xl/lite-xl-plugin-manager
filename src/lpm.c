@@ -4,7 +4,6 @@
   #include <windows.h>
   #include <fileapi.h>
 #else
-  #include <netinet/in.h>
   #include <netdb.h>
   #include <sys/socket.h>
   #include <arpa/inet.h>
