@@ -586,7 +586,7 @@ function Addon.new(repository, metadata)
   }, metadata), Addon)
   self.type = type
   -- Directory.
-  self.organization = metadata.organization or (((self.files and #self.files > 0) or self.remote or (not self.path and not self.url)) and "complex" or "singleton")
+  self.organization = metadata.organization or (((self.files and #self.files > 0) or self.remote or (not self.path and not self.url) or (self.path and not self.path:find("%.lua$"))) and "complex" or "singleton")
   if not self.local_path and repository then
     if metadata.remote then
       local local_path = (Repository.url(metadata.remote).local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or ""))

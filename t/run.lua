@@ -45,6 +45,9 @@ local tests = {
     assert_exists(userdir .. "/plugins/plugin_manager/init.lua")
     actions = lpm("uninstall plugin_manager")["actions"]
     assert_not_exists(userdir .. "/plugins/plugin_manager")
+    lpm("install editorconfig")
+    assert_exists(userdir .. "/plugins/editorconfig")
+    assert_exists(userdir .. "/plugins/editorconfig/init.lua")
   end,
   ["03_upgrade_complex"] = function()
     local actions = lpm("install plugin_manager")
@@ -81,7 +84,12 @@ local tests = {
     local actions = lpm("install encodings")
     assert_exists(userdir .. "/plugins/encodings.lua")
     local stat = system.stat(userdir .. "/plugins/encodings.lua")
+    assert(stat)
     assert(stat.type == "file")
+    assert_exists(userdir .. "/libraries/encoding")
+    stat = system.stat(userdir .. "/libraries/encoding")
+    assert(stat)
+    assert(stat.type == "dir")
   end,
   ["07_manifest"] = function()
    local results = json.decode(io.open("manifest.json", "rb"):read("*all"))
