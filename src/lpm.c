@@ -1009,6 +1009,10 @@ static const luaL_Reg system_lib[] = {
     #define ARCH_PROCESSOR "x86_64"
   #elif __i386__
     #define ARCH_PROCESSOR "x86"
+  #elif __aarch64__
+    #define ARCH_PROCESSOR "aarch64"
+  #elif __arm__
+    #define ARCH_PROCESSOR "arm"
   #else
     #error "Please define -DARCH_PROCESSOR."
   #endif
