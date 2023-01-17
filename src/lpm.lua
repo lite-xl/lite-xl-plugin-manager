@@ -740,7 +740,7 @@ function Addon:install(bottle, installing)
     elseif self.remote then
       log_progress_action("Fetching repository " .. self.remote .. " into " .. install_path)
       local repo = Repository.url(self.remote):fetch()
-      common.copy(repo.local_path, temporary_install_path)
+      common.copy(repo.local_path .. (self.path and (PATHSEP .. self.path) or ""), temporary_install_path)
       common.rmrf(temporary_install_path .. PATHSEP .. ".git")
       common.rmrf(temporary_install_path .. PATHSEP .. ".gitignore")
     elseif self.path then

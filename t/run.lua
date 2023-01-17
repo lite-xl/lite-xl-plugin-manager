@@ -78,6 +78,10 @@ local tests = {
         break
       end
     end
+    local actions = lpm("install encodings")
+    assert_exists(userdir .. "/plugins/encodings.lua")
+    local stat = system.stat(userdir .. "/plugins/encodings.lua")
+    assert(stat.type == "file")
   end,
   ["07_manifest"] = function()
    local results = json.decode(io.open("manifest.json", "rb"):read("*all"))
