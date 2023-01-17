@@ -74,6 +74,7 @@ local tests = {
         assert(plugins[1].status == "available")
         local actions = lpm("install lsp")
         assert_exists(userdir .. "/plugins/lsp/init.lua")
+        assert_exists(userdir .. "/libraries/widget/init.lua")
         break
       end
     end
@@ -85,14 +86,19 @@ local tests = {
   end,
   ["08_install_many"] = function()
     lpm("install encoding gitblame gitstatus language_ts lsp minimap")
+  end,
+  ["09_misc_commands"] = function()
+    lpm("update")
+    lpm("upgrade")
   end
 }
 
 local last_command_result, last_command
 lpm = function(cmd)
-  last_command = "./lpm --quiet --json --userdir=" .. userdir .. " " .. cmd
+  last_command = "./lpm --quiet --json --assume-yes --userdir=" .. userdir .. " " .. cmd
   local pipe = io.popen(last_command, "r")
-  last_command_result = json.decode(pipe:read("*all"))
+  local result = pipe:read("*all")
+  last_command_result = result ~= "" and json.decode(result) or nil
   local success = pipe:close()
   if not success then error("error calling lpm", 2) end
   return last_command_result

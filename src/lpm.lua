@@ -485,8 +485,11 @@ local function log_progress_action(message)
   end
 end
 local function prompt(message)
-  io.stderr:write(message .. " [Y/n]: ")
-  if ASSUME_YES then io.stderr:write("Y\n") return true end
+  if not ASSUME_YES or not JSON then
+    io.stderr:write(message .. " [Y/n]: ")
+    if ASSUME_YES then io.stderr:write("Y\n") end
+  end
+  if ASSUME_YES then return true end
   local response = io.stdin:read("*line")
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
 end
@@ -597,6 +600,17 @@ end
 
 function Addon:is_stub() return self.remote end
 
+function Addon:unstub()
+  if not self:is_stub() then return end
+  local repo = Repository.url(self.remote):fetch()
+  local manifest = repo:parse_manifest()
+  local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == self.id end)[1]
+  if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
+  local addon = Addon.new(repo, remote_entry)
+  -- merge in attribtues that are probably more accurate than the stub
+  for k,v in pairs(addon) do self[k] = v end
+end
+
 -- Determines whether two addons located at different paths are actually different based on their contents.
 -- If path1 is a directory, will still return true if it's a subset of path2 (accounting for binary downloads).
 function Addon.is_path_different(path1, path2) 
@@ -619,7 +633,7 @@ end
 
 function Addon:get_install_path(bottle)
   local folder = self.type == "color" and "colors" or (self.type == "library" and "libraries" or "plugins")
-  local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.name)
+  local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.id)
   if self.organization == "singleton" then path = path .. ".lua" end
   return path
 end
@@ -680,6 +694,7 @@ end
 
 function Addon:install(bottle, installing)
   if self:is_installed(bottle) then error("addon " .. self.id .. " is already installed") return end
+  if self:is_stub() then self:unstub() end
   local install_path = self:get_install_path(bottle)
   local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#USERDIR + 2)
   local status, err = pcall(function()
@@ -988,7 +1003,7 @@ function Repository:update(pull_remotes)
   local manifest, remotes = self:parse_manifest()
   if self.branch then
     system.fetch(self.local_path)
-    common.reset(path, self.branch, "hard")
+    common.reset(self.local_path, self.branch, "hard")
     log_action("Updated " .. self:url())
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
@@ -1161,16 +1176,8 @@ function Bottle:all_addons()
         local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
         local path = addon_path .. PATHSEP .. v
         -- in the case where we have an existing plugin that targets a stub, then fetch that repository
-        local fetchable = hash[id] and common.grep(hash[id], function(e) return not e.local_path and e:is_stub() end)[1]
-        if fetchable then
-          local repo = Repository.url(fetchable.remote):fetch()
-          local manifest = repo:parse_manifest()
-          local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == id end)
-          if not remote_entry then error("can't find " .. fetchable.type .. " on " .. fetchable.remote) end
-          local addon = Addon.new(repo, remote_entry)
-          -- merge in attribtues that are probably more accurate than the stub
-          for k,v in pairs(addon) do fetchable[k] = v end
-        end
+        local fetchable = hash[id] and common.grep(hash[id], function(e) return e:is_stub() end)[1]
+        if fetchable then fetchable:unstub() end
         local matching = hash[id] and common.grep(hash[id], function(e) 
           return e.local_path and not Addon.is_addon_different(e.local_path, path) 
         end)[1]
@@ -1426,9 +1433,9 @@ local function lpm_install(type, ...)
     else
       local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
       local addons = common.grep(potential_addons, function(e) return not e:is_installed(system_bottle) end)
-      if #addons == 0 and #potential_addons == 0 then error("can't find addon " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+      if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       if #addons == 0 then 
-        log_warning("addon " .. id .. " already installed") 
+        log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed") 
       else
         for j,v in ipairs(addons) do v:install(system_bottle) end
       end
@@ -1527,7 +1534,7 @@ end
 
 local function lpm_addon_upgrade()
   for i,addon in ipairs(system_bottle:installed_addons()) do
-    local upgrade = common.sort(system_bottle:get_addon(addon.id, ">" .. addon.version), function(a, b) return compare_version(b.version, a.version) end)[1]
+    local upgrade = common.sort({ system_bottle:get_addon(addon.id, ">" .. addon.version) }, function(a, b) return compare_version(b.version, a.version) end)[1]
     if upgrade then upgrade:install(system_bottle) end
   end
 end
