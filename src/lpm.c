@@ -1005,13 +1005,13 @@ static const luaL_Reg system_lib[] = {
 
 
 #ifndef ARCH_PROCESSOR
-  #if __x86_64__ || _WIN64 || __MINGW64__
+  #if defined(__x86_64__) || defined(_M_AMD64) || defined(__MINGW64__)
     #define ARCH_PROCESSOR "x86_64"
-  #elif __i386__
+  #elif defined(__i386__) || defined(_M_IX86) || defined(__MINGW32__)
     #define ARCH_PROCESSOR "x86"
-  #elif __aarch64__
+  #elif defined(__aarch64__) || defined(_M_ARM64) || defined (_M_ARM64EC)
     #define ARCH_PROCESSOR "aarch64"
-  #elif __arm__
+  #elif defined(__arm__) || defined(_M_ARM)
     #define ARCH_PROCESSOR "arm"
   #else
     #error "Please define -DARCH_PROCESSOR."
