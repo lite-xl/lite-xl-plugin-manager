@@ -877,7 +877,7 @@ static int lpm_get(lua_State* L) {
         lua_pushvalue(L, callback_function);
         lua_pushinteger(L, total_downloaded);
         lua_pushinteger(L, content_length);
-        lua_call(L, 1, 0);
+        lua_call(L, 2, 0);
       }
       fwrite(buffer, sizeof(char), length, file);
       remaining -= length;

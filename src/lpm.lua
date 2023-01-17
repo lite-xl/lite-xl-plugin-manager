@@ -525,7 +525,7 @@ function common.get(source, target, checksum, callback, depth)
     return res
   end
   if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
-  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. checksum
+  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. (checksum ~= "SKIP" and checksum or system.hash(source))
   if not system.stat(cache_path) then
     local res, headers = system.get(protocol, hostname, port, rest, cache_path, callback)
     if headers.location then return common.get(headers.location, target, checksum, callback, (depth or 0) + 1) end
