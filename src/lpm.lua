@@ -603,7 +603,7 @@ function Addon:is_stub() return self.remote end
 function Addon:unstub()
   if not self:is_stub() then return end
   local repo = Repository.url(self.remote):fetch()
-  local manifest = repo:parse_manifest()
+  local manifest = repo:parse_manifest(self.id)
   local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == self.id end)[1]
   if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
   local addon = Addon.new(repo, remote_entry)
@@ -850,13 +850,13 @@ function Repository.url(url)
   return Repository.new({ remote = remote, branch = branch_or_commit })
 end
 
-function Repository:parse_manifest(already_pulling)
+function Repository:parse_manifest(repo_id)
   if self.manifest then return self.manifest, self.remotes end
   if system.stat(self.local_path)  then
     self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then 
       log_action("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
-      self:generate_manifest() 
+      self:generate_manifest(repo_id) 
     end
     local status, err = pcall(function()
       self.manifest = json.decode(common.read(self.manifest_path))
@@ -878,12 +878,11 @@ end
 
 -- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
 -- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons 
-function Repository:generate_manifest()
+function Repository:generate_manifest(repo_id)
   if not self.commit and not self.branch then error("requires an instantiation") end
   local path = self.local_path
   local addons, addon_map = {}, {}
   for _, folder in ipairs({ "plugins", "colors", "libraries" }) do
-    local addon_dir = system.stat(path .. PATHSEP .. folder) and PATHSEP .. folder .. PATHSEP or PATHSEP
     if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
       for line in io.lines(path .. PATHSEP .. "README.md") do
         local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
@@ -909,22 +908,29 @@ function Repository:generate_manifest()
         end
       end
     end
-    for i, file in ipairs(system.ls(path .. addon_dir)) do
-      if file:find("%.lua$") then
-        local name = common.basename(file):gsub("%.lua$", "")
-        local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
-        local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = addon_dir .. file, type = type }
-        for line in io.lines(path .. addon_dir .. file) do
-          local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
-          if mod_version then addon.mod_version = mod_version end
-          local _, _, required_addon = line:find("require [\"']plugins.([%w_]+)")
-          if required_addon then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
+    if folder == "plugins" or system.stat(path .. PATHSEP .. folder) then
+      local addon_dir = system.stat(path .. PATHSEP .. folder) and PATHSEP .. folder .. PATHSEP or PATHSEP
+      local files = folder == "plugins" and system.stat(path .. PATHSEP .. "init.lua") and { "init.lua" } or system.ls(path .. addon_dir)
+      for i, file in ipairs(files) do
+        if file:find("%.lua$") then
+          local name = common.basename(file):gsub("%.lua$", "")
+          if repo_id and name == "init" then name = repo_id end
+          if name ~= "init" then
+            local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
+            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = addon_dir .. file, type = type }
+            for line in io.lines(path .. addon_dir .. file) do
+              local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
+              if mod_version then addon.mod_version = mod_version end
+              local _, _, required_addon = line:find("require [\"']plugins.([%w_]+)")
+              if required_addon then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
+            end
+            if addon_map[addon.id] then 
+              addon = common.merge(addon, addon_map[addon.id])
+              addon_map[addon.id].addon = addon 
+            end
+            table.insert(addons, addon)
+          end
         end
-        if addon_map[addon.id] then 
-          addon = common.merge(addon, addon_map[addon.id])
-          addon_map[addon.id].addon = addon 
-        end
-        table.insert(addons, addon)
       end
     end
   end
@@ -1242,10 +1248,10 @@ end
 
 
 local DEFAULT_REPOS
-local function lpm_repo_init()
+local function lpm_repo_init(repos)
   DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
   if not system.stat(CACHEDIR .. PATHSEP .. "repos") then
-    for i, repository in ipairs(DEFAULT_REPOS) do
+    for i, repository in ipairs(repos or DEFAULT_REPOS) do
       if not system.stat(repository.local_path) then 
         table.insert(repositories, repository:add(true))
       end
@@ -1643,15 +1649,26 @@ It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, for from the lite-xl `addon_manager` addon.
 
-LPM will always use https://github.com/lite-xl/lite-xl-plugins as its base
+LPM will always use https://github.com/lite-xl/lite-xl-plugin-manager as its base
 repository, if none are present, and the cache directory does't exist,
 but others can be added, and this base one can be removed.
 
 It has the following commands:
 
-  lpm init                                 Implicitly called before all commands
+  lpm init [repo 1] [repo 2] [...]         Implicitly called before all commands
                                            if necessary, but can be called
-                                           independently to save time later.
+                                           independently to save time later, or
+                                           to set things up differently.
+                                           
+                                           Adds the built in repository to your
+                                           repository list, and all `remotes`.
+
+                                           If repo 1 ... is specified, uses that
+                                           list of repositories as the base instead.
+
+                                           If "none" is specified, initializes
+                                           an empty repository list.
+                                           
   lpm repo list                            List all extant repos.
   lpm [repo] add <repository remote>       Add a source repository.
     [...<repository remote>] 
@@ -1887,7 +1904,7 @@ in any circumstance unless explicitly supplied.
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   engage_locks(function()
-    lpm_repo_init()
+    lpm_repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
     repositories, lite_xls = {}, {}
     if system.stat(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") then
       for url in io.lines(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") do
