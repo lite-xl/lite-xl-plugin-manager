@@ -391,13 +391,13 @@ function common.normalize_path(path) if not path or not path:find("^~") then ret
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
   if not info then return end
-  if info.type == "file" or info.symlink then 
-    local status, err = os.remove(root) 
-    if not status then 
+  if info.type == "file" or info.symlink then
+    local status, err = os.remove(root)
+    if not status then
       if not err:find("denied") then error("can't remove " .. root .. ": " .. err) end
       system.chmod(root, 448) -- chmod so that we can write, for windows.
       status, err = os.remove(root)
-      if not status then error("can't remove " .. root .. ": " .. err) end 
+      if not status then error("can't remove " .. root .. ": " .. err) end
     end
   else
     for i,v in ipairs(system.ls(root)) do common.rmrf(root .. PATHSEP .. v) end
@@ -499,7 +499,7 @@ local function error_handler(err)
   local s, e = err and err:find(":%d+")
   local message = e and err:sub(e + 3) or err
   if JSON then
-    if VERBOSE then 
+    if VERBOSE then
       io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback() }) .. "\n")
     else
       io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
@@ -519,8 +519,8 @@ function common.get(source, target, checksum, callback, depth)
   log_progress_action("Downloading " .. source:sub(1, 100) .. "...")
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
-  if not checksum then 
-    local res, headers = system.get(protocol, hostname, port, rest, target, callback) 
+  if not checksum then
+    local res, headers = system.get(protocol, hostname, port, rest, target, callback)
     if headers.location then return common.get(headers.location, target, checksum, callback, (depth or 0) + 1) end
     return res
   end
@@ -613,7 +613,7 @@ end
 
 -- Determines whether two addons located at different paths are actually different based on their contents.
 -- If path1 is a directory, will still return true if it's a subset of path2 (accounting for binary downloads).
-function Addon.is_path_different(path1, path2) 
+function Addon.is_path_different(path1, path2)
   local stat1, stat2 = system.stat(path1), system.stat(path2)
   if not stat1 or not stat2 or stat1.type ~= stat2.type or stat1.size ~= stat2.size then return true end
   if stat1.type == "dir" then
@@ -640,7 +640,7 @@ end
 
 function Addon:is_core(bottle) return self.type == "core" end
 function Addon:is_bundled(bottle) return self.type == "bundled" end
-function Addon:is_installed(bottle) 
+function Addon:is_installed(bottle)
   if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
@@ -659,13 +659,13 @@ function Addon:is_upgradable(bottle)
   end
   return false
 end
-function Addon:is_incompatible(addon) 
-  return (self.dependencies[addon.id] and not match_version(addon.version, self.dependencies[addon.id] and self.dependencies[addon.id].version)) or 
-    (self.conflicts[addon.id] and match_version(addon.version, self.conflicts[addon.id] and self.conflicts[addon.id].version)) 
+function Addon:is_incompatible(addon)
+  return (self.dependencies[addon.id] and not match_version(addon.version, self.dependencies[addon.id] and self.dependencies[addon.id].version)) or
+    (self.conflicts[addon.id] and match_version(addon.version, self.conflicts[addon.id] and self.conflicts[addon.id].version))
 end
 
 function Addon:get_path(bottle)
-  return self:is_installed(bottle) and self:get_install_path(bottle) or self.local_path 
+  return self:is_installed(bottle) and self:get_install_path(bottle) or self.local_path
 end
 
 function Addon:get_compatibilities(bottle)
@@ -705,9 +705,9 @@ function Addon:install(bottle, installing)
       if incompatible[addon] then error("can't install " .. self.id .. ": incompatible with " .. incompatible[addon][1].id .. ":" .. incompatible[addon][1].version) end
     end
     for addon, v in pairs(self.dependencies) do
-      if not compatible[addon] then 
-        if not v.optional then 
-          error("can't find dependency " .. addon .. (v.version and (":" .. v.version) or "")) 
+      if not compatible[addon] then
+        if not v.optional then
+          error("can't find dependency " .. addon .. (v.version and (":" .. v.version) or ""))
         else
           log_warning("can't find optional dependency " .. addon .. (v.version and (":" .. v.version) or ""))
         end
@@ -724,14 +724,14 @@ function Addon:install(bottle, installing)
       end
     end
     common.mkdirp(common.dirname(temporary_install_path))
-    if self:is_upgradable(bottle) then 
+    if self:is_upgradable(bottle) then
       log_action("Upgrading " .. self.organization .. " " .. self.type .. " located at " .. self.local_path .. " to " .. install_path)
       common.rmrf(install_path)
     else
       log_action("Installing " .. self.organization .. " " .. self.type .. " located at " .. (self.local_path or self.remote) .. " to " .. install_path)
     end
 
-    if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end  
+    if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
     if self.url then
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, path, self.checksum, write_progress_bar)
@@ -760,9 +760,9 @@ function Addon:install(bottle, installing)
           local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
           common.get(file.url, temporary_path, file.checksum, write_progress_bar)
           local basename = common.basename(path)
-          if basename:find("%.zip$") or basename:find("%.tar%.gz$") then 
+          if basename:find("%.zip$") or basename:find("%.tar%.gz$") then
             log_action("Extracting file " .. basename .. " in " .. install_path)
-            system.extract(temporary_path, temporary_install_path) 
+            system.extract(temporary_path, temporary_install_path)
           else
             if file.arch then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
           end
@@ -776,9 +776,9 @@ function Addon:install(bottle, installing)
     error(err)
   else
     if POST and self.post then
-      common.chdir(temporary_install_path, function() 
+      common.chdir(temporary_install_path, function()
         if type(self.post) == "table" and not self.post[ARCH] then error("can't find post command for arch " .. ARCH) end
-        local code = os.system(type(self.post) == "table" and self.post[ARCH] or self.post) ~= 0 
+        local code = os.system(type(self.post) == "table" and self.post[ARCH] or self.post) ~= 0
         if code ~= 0 then error("post step failed with error code " .. code) end
       end)
     end
@@ -800,7 +800,7 @@ function Addon:uninstall(bottle)
   log_action("Uninstalling " .. self.type .. " located at " .. install_path)
   local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) end)
   if #incompatible_addons == 0 or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?") then
-    for i,addon in ipairs(incompatible_addons) do 
+    for i,addon in ipairs(incompatible_addons) do
       if not addon:uninstall(bottle) then return false end
     end
     common.rmrf(install_path)
@@ -815,14 +815,14 @@ function Repository.new(hash)
   if not hash.remote then error("requires a remote") end
   if not hash.remote:find("^%w+:") and system.stat(hash.remote .. "/.git") then hash.remote = "file://" .. system.stat(hash.remote).abs_path end
   if not hash.remote:find("^https?:") and not hash.remote:find("^file:") then error("only repositories with http and file transports are supported (" .. hash.remote .. ")") end
-  local self = setmetatable({ 
+  local self = setmetatable({
     commit = hash.commit,
     remote = hash.remote,
     branch = hash.branch,
     addons = nil,
     repo_path = CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. system.hash(hash.remote),
     lite_xls = {},
-    last_retrieval = nil 
+    last_retrieval = nil
   }, Repository)
   if system.stat(self.repo_path) and not self.commit and not self.branch then
     -- In the case where we don't have a branch, and don't have a commit, check for the presence of `master` and `main`.
@@ -839,7 +839,7 @@ function Repository.new(hash)
 end
 
 function Repository.url(url)
-  if type(url) == "table" then return url.remote .. ":" .. (url.branch or url.commit) end 
+  if type(url) == "table" then return url.remote .. ":" .. (url.branch or url.commit) end
   local e = url:reverse():find(":")
   local s = e and (#url - e + 1)
   local remote, branch_or_commit = url:sub(1, s and (s-1) or #url), s and url:sub(s+1)
@@ -854,9 +854,9 @@ function Repository:parse_manifest(repo_id)
   if self.manifest then return self.manifest, self.remotes end
   if system.stat(self.local_path)  then
     self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
-    if not system.stat(self.manifest_path) then 
+    if not system.stat(self.manifest_path) then
       log_action("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
-      self:generate_manifest(repo_id) 
+      self:generate_manifest(repo_id)
     end
     local status, err = pcall(function()
       self.manifest = json.decode(common.read(self.manifest_path))
@@ -877,12 +877,12 @@ end
 
 
 -- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
--- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons 
+-- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons
 -- Ignore any requries that are in CORE_PLUGINS.
-local CORE_PLUGINS = { 
+local CORE_PLUGINS = {
   autocomplete = true, autoreload = true, contextmenu = true, detectindent = true, drawwhitespace = true, language_c = true, language_cpp = true, language_css = true, language_dart = true,
   language_html = true, language_js = true, language_lua = true, language_md = true, language_python = true, language_xml = true, lineguide = true, linewrapping = true, macro = true,
-  projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true 
+  projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true
 }
 function Repository:generate_manifest(repo_id)
   if not self.commit and not self.branch then error("requires an instantiation") end
@@ -910,7 +910,7 @@ function Repository:generate_manifest(repo_id)
             end
           else
             addon_map[id].path = path:gsub("%?.*$", "")
-          end 
+          end
         end
       end
     end
@@ -931,9 +931,9 @@ function Repository:generate_manifest(repo_id)
               local _, _, required_addon = line:find("require [\"']plugins.([%w_]+)")
               if required_addon and not CORE_PLUGINS[required_addon] then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
             end
-            if addon_map[addon.id] then 
+            if addon_map[addon.id] then
               addon = common.merge(addon, addon_map[addon.id])
-              addon_map[addon.id].addon = addon 
+              addon_map[addon.id].addon = addon
             end
             table.insert(addons, addon)
           end
@@ -942,7 +942,7 @@ function Repository:generate_manifest(repo_id)
     end
   end
   for k, v in pairs(addon_map) do
-    if not v.addon then 
+    if not v.addon then
       table.insert(addons, common.merge({ mod_version = 3, version = "0.1" }, v))
     end
   end
@@ -954,7 +954,7 @@ end
 function Repository:fetch()
   local path
   local status, err = pcall(function()
-    if not self.branch and not self.commit then 
+    if not self.branch and not self.commit then
       path = self.repo_path .. PATHSEP .. "master"
       common.mkdirp(path)
       log_progress_action("Fetching " .. self.remote .. ":master/main...")
@@ -1001,7 +1001,7 @@ function Repository:add(pull_remotes)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
   local manifest, remotes = self:fetch():parse_manifest()
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
-    for i, remote in ipairs(remotes) do 
+    for i, remote in ipairs(remotes) do
       if not common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
         remote:add(pull_remotes == "recursive" and "recursive" or false)
         table.insert(repositories, remote)
@@ -1022,9 +1022,9 @@ function Repository:update(pull_remotes)
     manifest, remotes = self:parse_manifest()
   end
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
-    for i, remote in ipairs(remotes) do 
+    for i, remote in ipairs(remotes) do
       if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
-        remote:add(pull_remotes == "recursive" and "recursive" or false) 
+        remote:add(pull_remotes == "recursive" and "recursive" or false)
         table.insert(repositories, remote)
       end
     end
@@ -1088,9 +1088,9 @@ function LiteXL:install()
         common.get(file.url, path, file.checksum, write_progress_bar)
         log_action("Downloaded file " .. file.url .. " to " .. path)
         if file.checksum ~= "SKIP" and system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
-        if archive then 
+        if archive then
           log_action("Extracting file " .. basename .. " in " .. self.local_path)
-          system.extract(path, self.local_path) 
+          system.extract(path, self.local_path)
         end
       end
     end
@@ -1111,7 +1111,7 @@ function Bottle.new(lite_xl, addons, is_system)
     addons = addons,
     is_system = is_system
   }, Bottle)
-  if not is_system then 
+  if not is_system then
     table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
     self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return p.id .. ":" .. p.version end)))
     self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
@@ -1148,9 +1148,9 @@ local function get_repository_addons()
   local t, hash = { }, { }
   for i,p in ipairs(common.flat_map(repositories, function(r) return r.addons end)) do
     local id = p.id .. ":" .. p.version
-    if not hash[id] then 
-      table.insert(t, p) 
-      hash[id] = p 
+    if not hash[id] then
+      table.insert(t, p)
+      hash[id] = p
       if not hash[p.id] then hash[p.id] = {} end
       table.insert(hash[p.id], p)
     elseif hash[id].remote and not p.remote then
@@ -1191,8 +1191,8 @@ function Bottle:all_addons()
         -- in the case where we have an existing plugin that targets a stub, then fetch that repository
         local fetchable = hash[id] and common.grep(hash[id], function(e) return e:is_stub() end)[1]
         if fetchable then fetchable:unstub() end
-        local matching = hash[id] and common.grep(hash[id], function(e) 
-          return e.local_path and not Addon.is_addon_different(e.local_path, path) 
+        local matching = hash[id] and common.grep(hash[id], function(e)
+          return e.local_path and not Addon.is_addon_different(e.local_path, path)
         end)[1]
         if i == 2 or not hash[id] or not matching then
           table.insert(t, Addon.new(nil, {
@@ -1221,7 +1221,7 @@ function Bottle:get_addon(id, version, filter)
   local wildcard = id:find("%*$")
   filter = filter or {}
   for i,addon in ipairs(self:all_addons()) do
-    if not version and addon.provides then 
+    if not version and addon.provides then
       for k, provides in ipairs(addon.provides) do
         if provides == id then
           table.insert(candidates, addon)
@@ -1233,7 +1233,7 @@ function Bottle:get_addon(id, version, filter)
         table.insert(candidates, addon)
       end
     end
-  end  
+  end
   return table.unpack(common.sort(common.uniq(candidates), function (a,b) return a.version < b.version end))
 end
 
@@ -1259,7 +1259,7 @@ local function lpm_repo_init(repos)
   DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
   if not system.stat(CACHEDIR .. PATHSEP .. "repos") then
     for i, repository in ipairs(repos or DEFAULT_REPOS) do
-      if not system.stat(repository.local_path) then 
+      if not system.stat(repository.local_path) then
         table.insert(repositories, repository:add(true))
       end
     end
@@ -1301,10 +1301,10 @@ local function lpm_repo_update(...)
   if #t == 0 then table.insert(t, false) end
   for i, url in ipairs(t) do
     local repo = url and get_repository(url)
-    for i,v in ipairs(repositories) do 
-      if not repo or v == repo then 
-        v:update(AUTO_PULL_REMOTES and "recursive" or false) 
-      end 
+    for i,v in ipairs(repositories) do
+      if not repo or v == repo then
+        v:update(AUTO_PULL_REMOTES and "recursive" or false)
+      end
     end
   end
 end
@@ -1351,7 +1351,7 @@ local function lpm_lite_xl_switch(version, target)
   local stat = system.stat(target)
   if stat and stat.symlink then os.remove(target) end
   system.symlink(lite_xl.binary_path, target)
-  if not common.path('lite-xl') then 
+  if not common.path('lite-xl') then
     os.remove(target)
     error(target .. " is not on your $PATH; please supply a target that can be found on your $PATH, called `lite-xl`.")
   end
@@ -1374,7 +1374,9 @@ local function lpm_lite_xl_list()
       is_system = lite_xl:is_system(),
       is_installed = lite_xl:is_installed(),
       status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
-      local_path = lite_xl:is_installed() and lite_xl.local_path
+      local_path = lite_xl:is_installed() and lite_xl.local_path or nil,
+      datadir_path = lite_xl:is_installed() and lite_xl.datadir_path or nil,
+      binary_path = lite_xl:is_installed() and lite_xl.binary_path or nil
     })
     max_version = math.max(max_version, #lite_xl.version)
   end
@@ -1423,7 +1425,7 @@ local function lpm_lite_xl_run(version, ...)
   local arguments = { ... }
   local i = 1
   while i < #arguments and arguments[i] ~= "--" do
-    local str = arguments[i] 
+    local str = arguments[i]
     local id, version = common.split(":", str)
     local addon = system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version })
     if not addon then error("can't find addon " .. str) end
@@ -1447,8 +1449,8 @@ local function lpm_install(type, ...)
       local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
       local addons = common.grep(potential_addons, function(e) return not e:is_installed(system_bottle) end)
       if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-      if #addons == 0 then 
-        log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed") 
+      if #addons == 0 then
+        log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
       else
         for j,v in ipairs(addons) do v:install(system_bottle) end
       end
@@ -1469,7 +1471,7 @@ end
 
 local function lpm_addon_reinstall(type, ...) for i, id in ipairs({ ... }) do pcall(lpm_addon_uninstall, type, id) end lpm_install(type, ...) end
 
-local function lpm_repo_list() 
+local function lpm_repo_list()
   if JSON then
     io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path, remotes = common.map(repo.remotes or {}, function(r) return r:url() end)  } end) }) .. "\n")
   else
@@ -1483,7 +1485,7 @@ local function lpm_repo_list()
   end
 end
 
-local function lpm_addon_list(type, id) 
+local function lpm_addon_list(type, id)
   local max_id = 4
   local result = { [(type or "addon") .. "s"] = { } }
   for j,addon in ipairs(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end)) do
@@ -1632,8 +1634,8 @@ end
 
 
 xpcall(function()
-  local ARGS = parse_arguments(ARGV, { 
-    json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag", 
+  local ARGS = parse_arguments(ARGV, {
+    json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
     ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag"
@@ -1644,7 +1646,7 @@ xpcall(function()
   end
   if ARGS["help"] or #ARGS == 1 or ARGS[2] == "help" then
     io.stderr:write([[
-Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory] 
+Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
@@ -1666,7 +1668,7 @@ It has the following commands:
                                            if necessary, but can be called
                                            independently to save time later, or
                                            to set things up differently.
-                                           
+
                                            Adds the built in repository to your
                                            repository list, and all `remotes`.
 
@@ -1675,26 +1677,26 @@ It has the following commands:
 
                                            If "none" is specified, initializes
                                            an empty repository list.
-                                           
+
   lpm repo list                            List all extant repos.
   lpm [repo] add <repository remote>       Add a source repository.
-    [...<repository remote>] 
+    [...<repository remote>]
   lpm [repo] rm <repository remote>        Remove a source repository.
     [...<repository remote>]
   lpm [repo] update [<repository remote>]  Update all/the specified repos.
-    [...<repository remote>]        
+    [...<repository remote>]
   lpm [plugin|library|color] install       Install specific addons.
     <addon id>[:<version>]                 If installed, upgrades.
-    [...<addon id>:<version>]                     
+    [...<addon id>:<version>]
   lpm [plugin|library|color] uninstall     Uninstall the specific addon.
     <addon id> [...<addon id>]
   lpm [plugin|library|color] reinstall     Uninstall and installs the specific addon.
-   <addon id> [...<addon id>]        
-    
+   <addon id> [...<addon id>]
+
   lpm [plugin|library|color] list          List all/associated addons.
    <remote> [...<remote>]
-        
-  lpm upgrade                              Upgrades all installed addons 
+
+  lpm upgrade                              Upgrades all installed addons
                                            to new version if applicable.
   lpm [lite-xl] install <version>          Installs lite-xl. Infers the
     [binary] [datadir]                     paths on your system if not
@@ -1718,11 +1720,11 @@ It has the following commands:
   lpm describe [bottle]                    Describes the bottle specified in the form
                                            of a list of commands, that allow someone
                                            else to run your configuration.
-  lpm table <manifest path> [readme path]  Formats a markdown table of all specified 
+  lpm table <manifest path> [readme path]  Formats a markdown table of all specified
                                            addons. Dumps to stdout normally, but if
                                            supplied a readme, will remove all tables
                                            from the readme, and append the new one.
-          
+
   lpm purge                                Completely purge all state for LPM.
   lpm -                                    Read these commands from stdin in
                                            an interactive print-eval loop.
@@ -1758,12 +1760,12 @@ Flags have the following effects:
 There also several flags which are classified as "risky", and are never enabled
 in any circumstance unless explicitly supplied.
 
-  --force                  Ignores checksum inconsistencies. 
+  --force                  Ignores checksum inconsistencies.
   --post                   Run post-install build steps. Must be explicitly enabled.
                            Official repositories must function without this
                            flag being needed; generally they must provide
                            binaries if there is a native compilation step.
-  --remotes                Automatically adds any specified remotes in the 
+  --remotes                Automatically adds any specified remotes in the
                            repository to the end of the resolution list.
   --ssl-certs=noverify     Ignores SSL certificate validation. Opens you up to
                            man-in-the-middle attacks.
@@ -1771,7 +1773,7 @@ in any circumstance unless explicitly supplied.
     )
     return 0
   end
-  
+
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
@@ -1799,7 +1801,7 @@ in any circumstance unless explicitly supplied.
       if bytes < 1024 then return string.format("%6d  B", math.floor(bytes)) end
       if bytes < 1*1024*1024 then return string.format("%6.1f kB", bytes / 1024) end
       if bytes < 1*1024*1024*1024 then return string.format("%6.1f MB", bytes / (1024*1024))  end
-      return string.format("%6.2f GB", bytes / (1024*1024*1024)) 
+      return string.format("%6.2f GB", bytes / (1024*1024*1024))
     end
     write_progress_bar = function(total_read, total_objects_or_content_length, indexed_objects, received_objects, local_objects, local_deltas, indexed_deltas)
       if type(total_read) == "boolean" then
@@ -1807,8 +1809,8 @@ in any circumstance unless explicitly supplied.
         io.stdout:flush()
         return
       end
-      if not start_time or total_read < last_read then start_time = os.time() end
-      local status_line = string.format("%s [%s/s][%03d%%]: %s", format_bytes(total_read), format_bytes(total_read / math.max(os.time() - start_time, 1)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100), progress_bar_label)
+      if not start_time or total_read < last_read then start_time = system.time() end
+      local status_line = string.format("%s [%s/s][%03d%%]: %s", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100), progress_bar_label)
       io.stdout:write(string.rep("\b", #status_line))
       io.stdout:write(status_line)
       io.stdout:flush()
@@ -1819,7 +1821,7 @@ in any circumstance unless explicitly supplied.
   repositories = {}
   if ARGS[2] == "purge" then return lpm_purge() end
   local ssl_certs = ARGS["ssl-certs"] or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
-  if ssl_certs then 
+  if ssl_certs then
     if ssl_certs == "noverify" then
       system.certs("noverify")
     else
@@ -1848,11 +1850,11 @@ in any circumstance unless explicitly supplied.
     else
       local has_certs = false
       for i, path in ipairs(paths) do
-        local stat = system.stat(path) 
-        if stat then 
+        local stat = system.stat(path)
+        if stat then
           has_certs = true
-          system.certs(stat.type, path) 
-          break 
+          system.certs(stat.type, path)
+          break
         end
       end
       if not has_certs then error("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs") end
@@ -1879,7 +1881,7 @@ in any circumstance unless explicitly supplied.
     local info = json.decode(common.read(ARGS[3]))
     local addons = info["addons"] or info["plugins"]
     table.sort(addons, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
-    local ids = common.map(addons, function(addon) 
+    local ids = common.map(addons, function(addon)
       if addon.path and addon.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path) end
       if addon.path then return string.format("[`%s`](%s)", addon.name or addon.id, addon.path) end
       if addon.url then return string.format("[`%s`](%s)", addon.name or addon.id, addon.url) end
@@ -1925,6 +1927,7 @@ in any circumstance unless explicitly supplied.
       end
     end
     local lite_xl_binary = BINARY or common.path("lite-xl")
+    if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
     if lite_xl_binary then
       local stat = system.stat(lite_xl_binary)
       if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
@@ -1932,16 +1935,18 @@ in any circumstance unless explicitly supplied.
       local directory = common.dirname(lite_xl_binary)
       local hash = system.hash(lite_xl_binary, "file")
       local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
-      if not system_lite_xl then 
+      if not system_lite_xl then
         system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
         if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.binary_path .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
-        system_lite_xl = LiteXL.new(nil, { datadir_path = DATADIR, binary_path = BINARY, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
+        local lite_xl_datadirs = { DATADIR, directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
+        local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
+        system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = lite_xl_binary, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
         table.insert(lite_xls, system_lite_xl)
         lpm_lite_xl_save()
       else
         table.insert(system_lite_xl.tags, "system")
       end
-      system_bottle = Bottle.new(system_lite_xl, nil, true) 
+      system_bottle = Bottle.new(system_lite_xl, nil, true)
     else
       system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } }), nil, true)
     end
