@@ -32,6 +32,8 @@ local tests = {
     lpm("install bracketmatch")
     plugins = lpm("list bracketmatch")["addons"]
     assert(#plugins == 1)
+    lpm("install console")
+    assert_exists(userdir .. "/plugins/console.lua")
   end,
   ["02_install_complex"] = function()
     local plugins = lpm("list plugin_manager")["addons"]
@@ -47,7 +49,6 @@ local tests = {
     assert_not_exists(userdir .. "/plugins/plugin_manager")
     lpm("install editorconfig")
     assert_exists(userdir .. "/plugins/editorconfig")
-    assert_exists(userdir .. "/plugins/editorconfig/init.lua")
   end,
   ["03_upgrade_complex"] = function()
     local actions = lpm("install plugin_manager")
@@ -126,6 +127,7 @@ local function run_tests(tests, arg)
   end
   table.sort(names)
   local max_name = 0
+  os.execute("rm -rf " .. tmpdir .. "/lpmtest && mkdir -p " .. tmpdir .. "/lpmtest");
   for i,k in ipairs(names) do max_name = math.max(max_name, #k) end  
   for i,k in ipairs(names) do
     local v = tests[k]

@@ -586,7 +586,7 @@ function Addon.new(repository, metadata)
   }, metadata), Addon)
   self.type = type
   -- Directory.
-  self.organization = metadata.organization or (((self.files and #self.files > 0) or self.remote or (not self.path and not self.url) or (self.path and not self.path:find("%.lua$"))) and "complex" or "singleton")
+  self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.path and not self.url) or (self.path and not self.path:find("%.lua$"))) and "complex" or "singleton")
   if not self.local_path and repository then
     if metadata.remote then
       local local_path = (Repository.url(metadata.remote).local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or ""))
@@ -633,7 +633,7 @@ end
 
 function Addon:get_install_path(bottle)
   local folder = self.type == "color" and "colors" or (self.type == "library" and "libraries" or "plugins")
-  local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. (self.path and common.basename(self.path):gsub("%.lua$", "") or self.id)
+  local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. self.id
   if self.organization == "singleton" then path = path .. ".lua" end
   return path
 end
@@ -909,7 +909,7 @@ function Repository:generate_manifest(repo_id)
       end
     end
     if folder == "plugins" or system.stat(path .. PATHSEP .. folder) then
-      local addon_dir = system.stat(path .. PATHSEP .. folder) and PATHSEP .. folder .. PATHSEP or PATHSEP
+      local addon_dir = system.stat(path .. PATHSEP .. folder) and PATHSEP .. folder or ""
       local files = folder == "plugins" and system.stat(path .. PATHSEP .. "init.lua") and { "init.lua" } or system.ls(path .. addon_dir)
       for i, file in ipairs(files) do
         if file:find("%.lua$") then
@@ -918,7 +918,7 @@ function Repository:generate_manifest(repo_id)
           if name ~= "init" then
             local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
             local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = addon_dir .. file, type = type }
-            for line in io.lines(path .. addon_dir .. file) do
+            for line in io.lines(path .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
               local _, _, required_addon = line:find("require [\"']plugins.([%w_]+)")
