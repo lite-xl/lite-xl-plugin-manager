@@ -49,6 +49,7 @@ local tests = {
     assert_not_exists(userdir .. "/plugins/plugin_manager")
     lpm("install editorconfig")
     assert_exists(userdir .. "/plugins/editorconfig")
+    assert_exists(userdir .. "/plugins/editorconfig/init.lua")
   end,
   ["03_upgrade_complex"] = function()
     local actions = lpm("install plugin_manager")
