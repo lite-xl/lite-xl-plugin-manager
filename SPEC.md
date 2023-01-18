@@ -13,47 +13,51 @@ the form of a git remote url, i.e. `<url>:<ref>`. An example would be:
 
 `https://github.com/adamharrison/lite-xl-plugin-manager.git:latest`
 
-## Plugins
+## Addons
 
-Plugins are the primary objects specified in this specification. A plugin 
-consists of a series of metadata, the path to the plugin in this repository,
+Addons are the primary objects specified in this specification. An addon 
+consists of a series of metadata, the path to the addon in this repository,
 or its location on a remote repository, or a publically accessible URL,and a 
 set of files to be downloaded with the plugin (usually releases, but can be 
 data files, or fonts, or anything else). 
 
-Plugins can specify optionally specify a type, which determines where they're
-installed. Currently two types are supported:
+Addons can specify optionally specify a type, which determines where they're
+installed. Currently three types are supported:
 
 * `library`
 * `plugin`
+* `color`
 
-Plugins are classified into two categories. `singleton` plugins, and `complex`
-plugins. Plugins are listed a `singleton` if and only if they consist of exactly
-one file, have an empty or absent `files` specification, and do not specify
-a `remote`. Singleton plugins consist of exactly one `.lua` file, named after
-the plugin. Complex plugins are contained within a folder, and have an
-`init.lua` or `init.so` file that loads other components within it.
+Addons are further classified into two organizational categories. 
+`singleton` addons, and `complex` addons. Addons are listed a `singleton` 
+if and only if they consist of exactly one file, have an empty or absent 
+`files` specification, and do not specify a `remote`. Singleton addons 
+consist of exactly one `.lua` file, named after the addon. Complex addons
+are contained within a folder, and have an `init.lua` or `init.so` file that
+loads other components within it.
 
-The vast majority of plugins are `singleton` plugins.
+The vast majority of addons are `singleton` `plugin`s.
 
 ### Metadata
 
-* `id`: The semantic id of the plugin, a string only containing `[a-z0-9\-_]`.
-* `type`: An optional string that specifies the plugin type. Valid values are `"plugin"` 
-  and `"library"`. Defaults to `"plugin"`.
-* `name`: The optional name of the plugin.
-* `version`: The plugin's semantic version. A string that can contains `[0-9\.]`.
-* `description`: An english-language description of the plugin.
-* `mod_version`: The mod_version this plugin is compatible with. 
+* `id`: The semantic id of the addon, a string only containing `[a-z0-9\-_]`.
+* `type`: An optional string that specifies the addon type. Valid values are `"plugin"` 
+  `"library"`, or `color`. Defaults to `"plugin"`.
+* `name`: The optional name of the addon.
+* `version`: The addon's semantic version. A string that can contains `[0-9\.]`.
+* `description`: An english-language description of the addon.
+* `mod_version`: The mod_version this addon is compatible with. 
   A string that can contains `[0-9\.]`. If `type` is `library`, this field is optional.
 * `provides`: An optional array of strings that are a shorthand of functionality
- this plugin provides. Can be used as a dependency.
+ this addon provides. Can be used as a dependency.
+* `remote`: Optional. Specifies an https git link wheree this addon is located. If present,
+ denotes a **stub**.
 * `dependencies`: Optionally a hash of dependencies required, or optional 
-  for this plugin.
-* `conflicts`: An optional hash of plugins which conflict with this one, in the same
+  for this addon.
+* `conflicts`: An optional hash of addons which conflict with this one, in the same
   format as `dependencies`.
-* `tags`:  Optional freeform tags that may describe attributes of the plugin.
-* `path`: Optional path to the plugin. If omitted, will only pull the files in
+* `tags`:  Optional freeform tags that may describe attributes of the addon.
+* `path`: Optional path to the addon. If omitted, will only pull the files in
   `files`. To pull the whole repository, use `"."`.
 * `post`: Optionally a string which represents a command to run. If presented
   with a dictionary, takes `ARCH` keys, and runs a different command per `ARCH`.
@@ -64,19 +68,22 @@ Any extra keys should be placed in `extra`.
 
 ### Dependencies
 
-Depedencies are specified in an object, with the key being the name of the 
-plugin depended upon, or a `provides` alias.
+Depedencies are specified in an object, with the key being the `id` of the 
+addon depended upon, or a `provides` alias.
 
 Dependency values are an object which contain the following keys:
 
 * `version`: A version specifier. (see below).
 * `optional`: A boolean that determines whether the dependency is optional.
 
-### Remote Repository
+### Stubs
 
-If a plugin likes, it can specify a particular repository, pinned at a specific
-commit to be used as a source for its data. In that case, the package manager
-must download the repository, and interpret the manifest file found there.
+If a addon likes, it can specify a particular `remote`; a publically acessible
+git repository, accessed via HTTPS, pinned at a specific commit to be used as a 
+source for its data. In that case, the package manager must download the repository, 
+and interpret the manifest file found there to determine the addon's metadata.
+
+This is known as a stub. 
 
 ### Files
 
@@ -89,10 +96,10 @@ can also optionally contain the `arch` and `path` keys.
   accessible manifest, should specify a checksum.
 * `arch` is the lite-xl/clang architecture tuple that the file is relevant for.
   if omitted, file is to be assumed to be valid for all arhcitectures.
-* `path` is the location to install this file inside the plugin's directory.
+* `path` is the location to install this file inside the addon's directory.
 
 If a file is an archive, of either `.zip` or `.tar.gz`, it will automatically
-be extracted inside the plugin's directory.
+be extracted inside the addon's directory.
 
 ## Lite-XLs
 
@@ -105,7 +112,7 @@ repository. Lite-XLs has the following metadata, as well as a `files` array.
 
 ### Files
 
-The files array is identical to that of the `files` array under `plugins`.
+The files array is identical to that of the `files` array under `addons`.
 Conventionally, there should be a single file per architecture that is a 
 `.tar.gz` or `.zip` containing all necessary files for `lite-xl` to run.
 
@@ -119,7 +126,7 @@ that any version greater than `0.1` can be used.
 
 ```yaml
 {
-  "plugins": [ # The plugins array contains a list of all plugins registered on this repository.
+  "addons": [ # The addons array contains a list of all addons registered on this repository.
     {
       "id": "plugin_manager", # Unique name, used to reference the plugin.
       "version": "0.1", # Semantic version.
@@ -188,7 +195,7 @@ that any version greater than `0.1` can be used.
     {
       "version": "2.1-simplified", # The version, followed by a release suffix defining the release flavour. The only releases that are permitted to not have suffixes are official relases.
       "mod_version": 3, # The mod_version this release corresponds to.
-      "files": [ # Identical to `files` under `plugins`, although these are usually simply archives to be extracted.
+      "files": [ # Identical to `files` under `addons`, although these are usually simply archives to be extracted.
         {
           "arch": "x86_64-linux",
           "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1/lite-xl-2.1.0-simplified-x86_64-linux.tar.gz",
@@ -224,3 +231,4 @@ that any version greater than `0.1` can be used.
   ]
 }
 ```
+
