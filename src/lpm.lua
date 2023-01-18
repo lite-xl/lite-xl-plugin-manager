@@ -913,11 +913,12 @@ function Repository:generate_manifest(repo_id)
       local files = folder == "plugins" and system.stat(path .. PATHSEP .. "init.lua") and { "init.lua" } or system.ls(path .. addon_dir)
       for i, file in ipairs(files) do
         if file:find("%.lua$") then
-          local name = common.basename(file):gsub("%.lua$", "")
+          local filename = common.basename(file):gsub("%.lua$", "")
+          local name = filename
           if repo_id and name == "init" then name = repo_id end
           if name ~= "init" then
             local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
-            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = addon_dir .. file, type = type }
+            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = (filename ~= "init" and (addon_dir .. file) or nil), type = type }
             for line in io.lines(path .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end

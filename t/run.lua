@@ -33,7 +33,7 @@ local tests = {
     plugins = lpm("list bracketmatch")["addons"]
     assert(#plugins == 1)
     lpm("install console")
-    assert_exists(userdir .. "/plugins/console.lua")
+    assert_exists(userdir .. "/plugins/console/init.lua")
   end,
   ["02_install_complex"] = function()
     local plugins = lpm("list plugin_manager")["addons"]
