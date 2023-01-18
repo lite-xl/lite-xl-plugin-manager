@@ -299,8 +299,19 @@ static git_commit* git_retrieve_commit(git_repository* repository, const char* c
   return commit;
 }
 
+// We move this out of main, because this is a significantly expensive function,
+// and we don't need to call it every time we run lpm.
+static int git_initialized = 0;
+static void git_init() {
+  if (!git_initialized) {
+    git_libgit2_init();
+    git_initialized = 1;
+  }
+}
+
 
 static int lpm_reset(lua_State* L) {
+  git_init();
   git_repository* repository = luaL_checkgitrepo(L, 1);
   const char* commit_name = luaL_checkstring(L, 2);
   const char* type = luaL_checkstring(L, 3);
@@ -323,6 +334,7 @@ static int lpm_reset(lua_State* L) {
 }
 
 static int lpm_revparse(lua_State* L) {
+  git_init();
   git_repository* repository = luaL_checkgitrepo(L, 1);
   git_oid commit_id;
   int got_commit = git_get_id(&commit_id, repository, "HEAD");
@@ -340,6 +352,7 @@ static int lpm_revparse(lua_State* L) {
 }
 
 static int lpm_init(lua_State* L) {
+  git_init();
   const char* path = luaL_checkstring(L, 1);
   const char* url = luaL_checkstring(L, 2);
   git_repository* repository;
@@ -383,6 +396,7 @@ static int lpm_git_transfer_progress_cb(const git_transfer_progress *stats, void
 }
 
 static int lpm_fetch(lua_State* L) {
+  git_init();
   git_repository* repository = luaL_checkgitrepo(L, 1);
   git_remote* remote;
   if (git_remote_lookup(&remote, repository, "origin")) {
@@ -977,17 +991,21 @@ int lpm_flock(lua_State* L) {
   return 0;
 }
 
-int lpm_time(lua_State* L) {
-  #if _WIN32 // Fuck I hate windows jesus chrsit.
+double get_time() {
+   #if _WIN32 // Fuck I hate windows jesus chrsit.
     LARGE_INTEGER LoggedTime, Freqency;
     QueryPerformanceFrequency(&Frequency); 
     QueryPerformanceCounter(&LoggedTime);
-    lua_pushnumber(L, LoggedTime.QuadPart / (double)Frequency.QuadPart);
+    return LoggedTime.QuadPart / (double)Frequency.QuadPart;
   #else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    lua_pushnumber(L, ts.tv_sec + ts.tv_nsec * 100000000.0);
+    return ts.tv_sec + ts.tv_nsec / 1000000000.0;
   #endif
+} 
+
+int lpm_time(lua_State* L) {
+  lua_pushnumber(L, get_time());
   return 1;
 }
 
@@ -1055,7 +1073,6 @@ static const luaL_Reg system_lib[] = {
 #endif
 
 int main(int argc, char* argv[]) {
-  git_libgit2_init();
   lua_State* L = luaL_newstate();
   luaL_openlibs(L);
   luaL_newlib(L, system_lib); 
@@ -1088,6 +1105,7 @@ int main(int argc, char* argv[]) {
   }
   int status = lua_tointeger(L, -1);
   lua_close(L);
-  git_libgit2_shutdown();
+  if (git_initialized)
+    git_libgit2_shutdown();
   return status;
 }
