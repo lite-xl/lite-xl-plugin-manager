@@ -146,7 +146,7 @@ static int lpm_ls(lua_State *L) {
   lua_pushstring(L, path[0] == 0 || strchr("\\/", path[strlen(path) - 1]) != NULL ? "*" : "\\*");
   lua_concat(L, 2);
   path = lua_tostring(L, -1);
-    
+
   WIN32_FIND_DATAW fd;
   HANDLE find_handle = FindFirstFileExW(lua_toutf16(L, path), FindExInfoBasic, &fd, FindExSearchNameMatch, NULL, 0);
   if (find_handle == INVALID_HANDLE_VALUE)
@@ -208,7 +208,7 @@ static int lpm_mkdir(lua_State *L) {
 #else
   int err = mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
 #endif
-  if (err < 0) 
+  if (err < 0)
     return luaL_error(L, "can't mkdir %s: %s", path, strerror(errno));
   return 0;
 }
@@ -588,7 +588,7 @@ static int lpm_extract(lua_State* L) {
       return lua_error(L);
     }
     zip_int64_t entries = zip_get_num_entries(archive, 0);
-    for (zip_int64_t i = 0; i < entries; ++i) {    
+    for (zip_int64_t i = 0; i < entries; ++i) {
       zip_file_t* zip_file = zip_fopen_index(archive, i, 0);
       const char* zip_name = zip_get_name(archive, i, ZIP_FL_ENC_GUESS);
       if (!zip_file) {
@@ -610,7 +610,7 @@ static int lpm_extract(lua_State* L) {
           zip_close(archive);
           return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
         }
-        
+
         mode_t m = S_IRUSR | S_IRGRP | S_IROTH;
         zip_uint8_t os;
         zip_uint32_t attr;
@@ -621,7 +621,7 @@ static int lpm_extract(lua_State* L) {
           if (attr & FA_DIREC)
               m = (S_IFDIR | (m & ~S_IFMT)) | S_IXUSR | S_IXGRP | S_IXOTH;
         } else {
-          m = (attr >> 16) & ~0222; 
+          m = (attr >> 16) & ~0222;
         }
         if (chmod(target, m)) {
           zip_fclose(zip_file);
@@ -639,7 +639,7 @@ static int lpm_extract(lua_State* L) {
           }
           if (length == 0) break;
           fwrite(buffer, sizeof(char), length, file);
-        }  
+        }
         fclose(file);
       }
       zip_fclose(zip_file);
@@ -826,9 +826,9 @@ static int lpm_get(lua_State* L) {
       return luaL_error(L, "can't connect to host %s [%s] on port %d", hostname, ip, port);
     }
   }
-  
+
   const char* rest = luaL_checkstring(L, 4);
-  char buffer[4096]; 
+  char buffer[4096];
   int buffer_length = snprintf(buffer, sizeof(buffer), "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", rest, hostname);
   buffer_length = lpm_socket_write(s, buffer, buffer_length, ssl_ctx);
   if (buffer_length < 0) {
@@ -861,7 +861,7 @@ static int lpm_get(lua_State* L) {
         lua_pushlstring(L, location, len);
         lua_setfield(L, -2, "location");
       } else
-        snprintf(err, sizeof(err), "received invalid %d-response from %s%s: %d", code, hostname, rest, code); 
+        snprintf(err, sizeof(err), "received invalid %d-response from %s%s: %d", code, hostname, rest, code);
       goto cleanup;
     } else {
       snprintf(err, sizeof(err), "received non 200-response from %s%s: %d", hostname, rest, code); goto cleanup;
@@ -873,7 +873,7 @@ static int lpm_get(lua_State* L) {
     content_length = atoi(content_length_value);
   const char* path = luaL_optstring(L, 5, NULL);
   int callback_function = lua_type(L, 6) == LUA_TFUNCTION ? 6 : 0;
-  
+
   int body_length = buffer_length - (header_end - buffer);
   int total_downloaded = body_length;
   int remaining = content_length - body_length;
@@ -933,7 +933,7 @@ static int lpm_get(lua_State* L) {
       mbedtls_ssl_free(ssl_ctx);
     if (net_ctx)
       mbedtls_net_free(net_ctx);
-    if (s != -2) 
+    if (s != -2)
       close(s);
     if (err[0])
       return luaL_error(L, "%s", err);
@@ -967,7 +967,7 @@ int lpm_flock(lua_State* L) {
       CloseHandle(file);
       return luaL_error(L, "can't flock %s: %d", path, GetLastError());
     }
-  #else 
+  #else
     int fd = open(path, 0);
     if (fd == -1)
       return luaL_error(L, "can't flock %s: %s", path, strerror(errno));
@@ -993,8 +993,8 @@ int lpm_flock(lua_State* L) {
 
 double get_time() {
    #if _WIN32 // Fuck I hate windows jesus chrsit.
-    LARGE_INTEGER LoggedTime, Freqency;
-    QueryPerformanceFrequency(&Frequency); 
+    LARGE_INTEGER LoggedTime, Frequency;
+    QueryPerformanceFrequency(&Frequency);
     QueryPerformanceCounter(&LoggedTime);
     return LoggedTime.QuadPart / (double)Frequency.QuadPart;
   #else
@@ -1002,7 +1002,7 @@ double get_time() {
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec + ts.tv_nsec / 1000000000.0;
   #endif
-} 
+}
 
 int lpm_time(lua_State* L) {
   lua_pushnumber(L, get_time());
@@ -1075,7 +1075,7 @@ static const luaL_Reg system_lib[] = {
 int main(int argc, char* argv[]) {
   lua_State* L = luaL_newstate();
   luaL_openlibs(L);
-  luaL_newlib(L, system_lib); 
+  luaL_newlib(L, system_lib);
   lua_setglobal(L, "system");
   lua_newtable(L);
   for (int i = 0; i < argc; ++i) {
@@ -1087,7 +1087,7 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "VERSION");
   lua_pushliteral(L, ARCH_PLATFORM);
   lua_setglobal(L, "PLATFORM");
-  #if _WIN32 
+  #if _WIN32
     lua_pushliteral(L, "\\");
   #else
     lua_pushliteral(L, "/");
