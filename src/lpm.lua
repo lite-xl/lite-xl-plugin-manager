@@ -878,6 +878,12 @@ end
 
 -- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
 -- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons 
+-- Ignore any requries that are in CORE_PLUGINS.
+local CORE_PLUGINS = { 
+  autocomplete = true, autoreload = true, contextmenu = true, detectindent = true, drawwhitespace = true, language_c = true, language_cpp = true, language_css = true, language_dart = true,
+  language_html = true, language_js = true, language_lua = true, language_md = true, language_python = true, language_xml = true, lineguide = true, linewrapping = true, macro = true,
+  projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true 
+}
 function Repository:generate_manifest(repo_id)
   if not self.commit and not self.branch then error("requires an instantiation") end
   local path = self.local_path
@@ -923,7 +929,7 @@ function Repository:generate_manifest(repo_id)
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
               local _, _, required_addon = line:find("require [\"']plugins.([%w_]+)")
-              if required_addon then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
+              if required_addon and not CORE_PLUGINS[required_addon] then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
             end
             if addon_map[addon.id] then 
               addon = common.merge(addon, addon_map[addon.id])

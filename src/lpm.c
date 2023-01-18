@@ -977,6 +977,20 @@ int lpm_flock(lua_State* L) {
   return 0;
 }
 
+int lpm_time(lua_State* L) {
+  #if _WIN32 // Fuck I hate windows jesus chrsit.
+    LARGE_INTEGER LoggedTime, Freqency;
+    QueryPerformanceFrequency(&Frequency); 
+    QueryPerformanceCounter(&LoggedTime);
+    lua_pushnumber(L, LoggedTime.QuadPart / (double)Frequency.QuadPart);
+  #else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    lua_pushnumber(L, ts.tv_sec + ts.tv_nsec * 100000000.0);
+  #endif
+  return 1;
+}
+
 static const luaL_Reg system_lib[] = {
   { "ls",        lpm_ls    },    // Returns an array of files.
   { "stat",      lpm_stat  },    // Returns info about a single file.
@@ -996,6 +1010,7 @@ static const luaL_Reg system_lib[] = {
   { "chdir",     lpm_chdir },    // Changes directory. Only use for --post actions.
   { "pwd",       lpm_pwd },      // Gets existing directory. Only use for --post actions.
   { "flock",     lpm_flock },    // Locks a file.
+  { "time",      lpm_time },     // Get high-precision system time.
   { NULL,        NULL }
 };
 
