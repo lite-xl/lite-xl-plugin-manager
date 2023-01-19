@@ -1487,11 +1487,12 @@ end
 
 local function lpm_addon_list(type, id)
   local max_id = 4
-  local result = { [(type or "addon") .. "s"] = { } }
+  local plural = (type or "addon") .. "s"
+  local result = { [plural] = { } }
   for j,addon in ipairs(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end)) do
     max_id = math.max(max_id, #addon.id)
     local repo = addon.repository
-    table.insert(result[(type or "addon") .. "s"], {
+    table.insert(result[plural], {
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
       version = "" .. addon.version,
@@ -1509,12 +1510,12 @@ local function lpm_addon_list(type, id)
   end
   if JSON then
     io.stdout:write(json.encode(result) .. "\n")
-  elseif #result.addons > 0 then
+  elseif #result[plural] > 0 then
     if not VERBOSE then
       print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", "ID", "Version", "Type", "ModVer", "Status"))
       print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", string.rep("-", max_id), "-------", "----", "------", "-----------"))
     end
-    for i, addon in ipairs(common.sort(result.addons, function(a,b) return a.id < b.id end)) do
+    for i, addon in ipairs(common.sort(result[plural], function(a,b) return a.id < b.id end)) do
       if VERBOSE then
         if i ~= 0 then print("---------------------------") end
         print("ID:            " .. addon.id)
@@ -1869,8 +1870,8 @@ in any circumstance unless explicitly supplied.
     os.exit(0)
   end
   if ARGS[2] == "download" then
-    local file = common.get(ARGS[3]);
-    print(file)
+    local file = common.get(ARGS[3], ARGS[4]);
+    if file then print(file) end
     os.exit(0)
   end
   if ARGS[2] == "extract" then
