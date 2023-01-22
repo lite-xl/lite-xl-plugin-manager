@@ -454,7 +454,7 @@ function common.chdir(dir, callback)
   if not status then error(err) end
 end
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -535,6 +535,7 @@ function common.get(source, target, checksum, callback, depth)
 end
 
 
+
 local function compare_version(a, b) -- compares semver
   if not a or not b then return false end
   local _, _, majora, minora, revisiona = tostring(a):find("(%d+)%.?(%d*)%.?(%d*)")
@@ -580,6 +581,7 @@ function Addon.new(repository, metadata)
     path = nil,
     remote = nil,
     version = "1.0",
+    location = "user",
     dependencies = {},
     conflicts = {},
     name = metadata.id
@@ -638,8 +640,8 @@ function Addon:get_install_path(bottle)
   return path
 end
 
-function Addon:is_core(bottle) return self.type == "core" end
-function Addon:is_bundled(bottle) return self.type == "bundled" end
+function Addon:is_core(bottle) return self.location == "core" end
+function Addon:is_bundled(bottle) return self.location == "bundled" end
 function Addon:is_installed(bottle)
   if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
   local install_path = self:get_install_path(bottle)
@@ -1197,7 +1199,8 @@ function Bottle:all_addons()
         if i == 2 or not hash[id] or not matching then
           table.insert(t, Addon.new(nil, {
             id = id,
-            type = (addon_type == "plugins" and (i == 2 and (hash[id] and "bundled" or "core") or "plugin") or "library"),
+            type = (addon_type == "plugins" and "plugin") or "library",
+            location = (i == 2 and (hash[id] and "bundled" or "core")) or "user",
             organization = (v:find("%.lua$") and "singleton" or "complex"),
             local_path = path,
             mod_version = self.lite_xl.mod_version,
@@ -1214,6 +1217,30 @@ end
 
 function Bottle:installed_addons()
   return common.grep(self:all_addons(), function(p) return p:is_installed(self) end)
+end
+
+local function filter_match(field, filter)
+  if not field and not filter then return true end
+  if not field and filter then return false end
+  local filters = type(filter) == "table" and filter or { filter }
+  for i,v in ipairs(filters) do
+    local inverted = filter:find("^!")
+    local actual_filter = inverted and filter:sub(2) or filter
+    local matches = field:find("^" .. actual_filter .. "$")
+    if not matches and not inverted then return false end
+    if matches and inverted then return false end
+  end
+  return true
+end
+
+local function addon_matches_filter(addon, filters)
+  return filter_match(addon.author, filters["author"]) and
+    filter_match(addon.tags, filters["tag"]) and
+    filter_match(addon.status, filters["status"]) and
+    filter_match(addon.stub, filters["stub"]) and
+    filter_match(addon.dependencies, filters["dependency"]) and
+    filter_match(addon.type, filters["type"]) and
+    filter_match(addon.name or addon.id, filters["name"])
 end
 
 function Bottle:get_addon(id, version, filter)
@@ -1485,14 +1512,14 @@ local function lpm_repo_list()
   end
 end
 
-local function lpm_addon_list(type, id)
+local function lpm_addon_list(type, id, filters)
   local max_id = 4
   local plural = (type or "addon") .. "s"
   local result = { [plural] = { } }
   for j,addon in ipairs(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end)) do
     max_id = math.max(max_id, #addon.id)
     local repo = addon.repository
-    table.insert(result[plural], {
+    local hash = {
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
       version = "" .. addon.version,
@@ -1506,7 +1533,8 @@ local function lpm_addon_list(type, id)
       organization = addon.organization,
       repository = repo and repo:url(),
       path = addon:get_path(system_bottle)
-    })
+    }
+    if addon_matches_filter(hash, filters) then table.insert(result[plural], hash) end
   end
   if JSON then
     io.stdout:write(json.encode(result) .. "\n")
@@ -1610,13 +1638,13 @@ local function run_command(ARGS)
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[3], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "reinstall" then lpm_addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "describe" then lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "list" then return lpm_addon_list(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "list" then return lpm_addon_list(nil, ARGS[3], ARGS)
   elseif ARGS[2] == "lite-xl" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm_lite_xl_install(table.unpack(common.slice(ARGS, 4)))
@@ -1639,7 +1667,10 @@ xpcall(function()
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
-    ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag"
+    ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag",
+    -- filtration flags
+    author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
+    type = "string", name = "string"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -1712,9 +1743,10 @@ It has the following commands:
   lpm [lite-xl] switch <version> [<path>]  Sets the active version of lite-xl
                                            to be the specified version. Auto-detects
                                            current install of lite-xl; if none found
-                                           path can be specifeid.
-  lpm lite-xl list                         Lists all installed versions of
-                                           lite-xl.
+                                           path can be specified.
+  lpm lite-xl list [name pattern]          Lists all installed versions of
+     [...filters]                          lite-xl. Can specify the flags listed
+                                           in the filtering seciton.
   lpm run <version> [...addons]            Sets up a "bottle" to run the specified
                                            lite version, with the specified addons
                                            and then opens it.
@@ -1731,6 +1763,7 @@ It has the following commands:
                                            an interactive print-eval loop.
   lpm help                                 Displays this help text.
 
+
 Flags have the following effects:
 
   --json                   Performs all communication in JSON.
@@ -1744,7 +1777,7 @@ Flags have the following effects:
   --verbose                Spits out more information, including intermediate
                            steps to install and whatnot.
   --quiet                  Outputs nothing but explicit responses.
-  --mod-version            Sets the mod version of lite-xl to install addons.
+  --mod-version=version    Sets the mod version of lite-xl to install addons.
   --version                Returns version information.
   --help                   Displays this help text.
   --ssl-certs              Sets the SSL certificate store. Can be a directory,
@@ -1758,6 +1791,20 @@ Flags have the following effects:
                            particular information relating to SSL connections,
                            and other network activity.
 
+The following flags are useful when listing plugins, or generating the plugin
+table. Putting a ! infront of the string will invert the filter. Multiple
+filters of the same type can be specified to create an OR relationship.
+
+  --author=author          Only display addons by the specified author.
+  --tag=tag                Only display addons with the specified tag.
+  --stub=git/file/false    Only display the specified stubs.
+  --dependency=dep         Only display addons that have a dependency on the
+                           specified addon.
+  --status=status          Only display addons that have the specified status.
+  --type=type              Only display addons on the specified type.
+  --name=name              Only display addons that have a name which matches the
+                           specified filter.
+
 There also several flags which are classified as "risky", and are never enabled
 in any circumstance unless explicitly supplied.
 
@@ -1770,6 +1817,18 @@ in any circumstance unless explicitly supplied.
                            repository to the end of the resolution list.
   --ssl-certs=noverify     Ignores SSL certificate validation. Opens you up to
                            man-in-the-middle attacks.
+
+There exist also other debug commands that are potentially useful, but are
+not commonly used publically.
+
+  lpm test [test file]               Runs the specified test suite.
+  lpm table <manifest> [...filters]  Generates markdown table for the given
+                                     manifest. Used by repositories to build
+                                     READMEs.
+  lpm download <url> [target]        Downloads the specified URL to stdout,
+                                     or to the specified target file.
+  lpm extract <file.[tar.gz|zip]>    Extracts the specified archive at
+    [target]                         target, or the current working directory.
 ]]
     )
     return 0
@@ -1880,7 +1939,8 @@ in any circumstance unless explicitly supplied.
   end
   if ARGS[2] == "table" then
     local info = json.decode(common.read(ARGS[3]))
-    local addons = info["addons"] or info["plugins"]
+    local addons = common.grep(info["addons"] or info["plugins"], function(addon) return addon_matches_filter(addon, ARGS) end)
+    if #addons == 0 then return end
     table.sort(addons, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
     local ids = common.map(addons, function(addon)
       if addon.path and addon.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path) end
