@@ -302,9 +302,13 @@ static git_commit* git_retrieve_commit(git_repository* repository, const char* c
 // We move this out of main, because this is a significantly expensive function,
 // and we don't need to call it every time we run lpm.
 static int git_initialized = 0;
+static int git_cert_type = 0;
+static char git_cert_path[MAX_PATH];
 static void git_init() {
   if (!git_initialized) {
     git_libgit2_init();
+    if (git_cert_type)
+      git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, git_cert_type == 2 ? git_cert_path : NULL, git_cert_type == 1 ? git_cert_path : NULL);
     git_initialized = 1;
   }
 }
@@ -495,6 +499,7 @@ static int lpm_certs(lua_State* L) {
   if (print_trace) {
     mbedtls_debug_set_threshold(5);
     mbedtls_ssl_conf_dbg(&ssl_config, lpm_tls_debug, NULL);
+    git_init();
     git_trace_set(GIT_TRACE_TRACE, lpm_libgit2_debug);
   }
   #endif
@@ -505,7 +510,10 @@ static int lpm_certs(lua_State* L) {
   } else {
     const char* path = luaL_checkstring(L, 2);
     if (strcmp(type, "dir") == 0) {
-      git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
+      git_cert_type = 1;
+      if (git_initialized)
+        git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
+      strncpy(git_cert_path, path, MAX_PATH);
     } else {
       if (strcmp(type, "system") == 0) {
         #if _WIN32
@@ -540,7 +548,10 @@ static int lpm_certs(lua_State* L) {
           return luaL_error(L, "can't use system certificates except on windows or mac");
         #endif
       }
-      git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
+      git_cert_type = 2;
+      if (git_initialized)
+        git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
+      strncpy(git_cert_path, path, MAX_PATH);
       if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
         return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s", path);
       mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
