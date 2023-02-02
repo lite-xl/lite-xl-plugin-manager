@@ -454,7 +454,7 @@ function common.chdir(dir, callback)
   if not status then error(err) end
 end
 
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -859,7 +859,7 @@ function Repository:parse_manifest(repo_id)
   if system.stat(self.local_path)  then
     self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then
-      log_action("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
+      log_warning("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
       self:generate_manifest(repo_id)
     end
     local status, err = pcall(function()
@@ -1672,7 +1672,7 @@ xpcall(function()
     ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
-    type = "string", name = "string"
+    type = "string", name = "string", progress = "flag"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
@@ -1792,6 +1792,8 @@ Flags have the following effects:
   --trace                  Dumps to STDERR useful debugging information, in
                            particular information relating to SSL connections,
                            and other network activity.
+  --progress               For JSON mode, lines of progress as JSON objects.
+                           By default, JSON does not emit progress lines.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -1841,6 +1843,7 @@ not commonly used publically.
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
   POST = ARGS["post"]
+  PROGRESS = ARGS["progress"]
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]
@@ -1857,7 +1860,7 @@ not commonly used publically.
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
   if ARGS["trace"] then system.trace(true) end
 
-  if not QUIET then
+  if (not JSON and not QUIET) or (JSON and PROGRESS) then
     local start_time, last_read
     local function format_bytes(bytes)
       if bytes < 1024 then return string.format("%6d  B", math.floor(bytes)) end
@@ -1865,18 +1868,35 @@ not commonly used publically.
       if bytes < 1*1024*1024*1024 then return string.format("%6.1f MB", bytes / (1024*1024))  end
       return string.format("%6.2f GB", bytes / (1024*1024*1024))
     end
-    write_progress_bar = function(total_read, total_objects_or_content_length, indexed_objects, received_objects, local_objects, local_deltas, indexed_deltas)
-      if type(total_read) == "boolean" then
-        io.stdout:write("\n")
-        io.stdout:flush()
-        return
+    if JSON then
+
+      write_progress_bar = function(total_read, total_objects_or_content_length, indexed_objects, received_objects, local_objects, local_deltas, indexed_deltas)
+        if type(total_read) == "boolean" then
+          io.stdout:write(json.encode({ progress = { percent = 1, label = progress_bar_label } }) .. "\n")
+          io.stdout:flush()
+          return
+        end
+        if not last_read then last_read = system.time() end
+        if not last_read or system.time() - last_read > 0.1 then
+          io.stdout:write(json.encode({ progress = { percent = (received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0), label = progress_bar_label } }) .. "\n")
+          io.stdout:flush()
+          last_read = system.time()
+        end
       end
-      if not start_time or total_read < last_read then start_time = system.time() end
-      local status_line = string.format("%s [%s/s][%03d%%]: %s", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100), progress_bar_label)
-      io.stdout:write(string.rep("\b", #status_line))
-      io.stdout:write(status_line)
-      io.stdout:flush()
-      last_read = total_read
+    else
+      write_progress_bar = function(total_read, total_objects_or_content_length, indexed_objects, received_objects, local_objects, local_deltas, indexed_deltas)
+        if type(total_read) == "boolean" then
+          io.stdout:write("\n")
+          io.stdout:flush()
+          return
+        end
+        if not start_time or total_read < last_read then start_time = system.time() end
+        local status_line = string.format("%s [%s/s][%03d%%]: %s", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100), progress_bar_label)
+        io.stdout:write("\r")
+        io.stdout:write(status_line)
+        io.stdout:flush()
+        last_read = total_read
+      end
     end
   end
 
