@@ -32,6 +32,7 @@ PluginView.menu:register(nil, {
 function PluginView:new()
   PluginView.super.new(self)
   self.scrollable = true
+  self.progress = nil
   self.show_incompatible_plugins = false
   self.plugin_table_columns = { "ID", "Name", "Version", "Type", "Modversion", "Status", "Tags", "Author", "Description" }
   self.hovered_plugin = nil
@@ -40,7 +41,11 @@ function PluginView:new()
   self.selected_plugin_idx = nil
   self.initialized = false
   self.plugin_manager = require "plugins.plugin_manager"
-  self.plugin_manager:refresh():done(function()
+  self.plugin_manager:refresh(function(progress)
+    self.progress = progress
+    core.redraw = true
+    print("PROG", self.progress)
+  end):done(function()
     self.initialized = true
     self:refresh()
   end)
@@ -104,7 +109,7 @@ function PluginView:refresh()
   end
   for i, plugin in ipairs(self:get_plugins()) do
     local t = { get_plugin_text(plugin) }
-    for j = 1, #self.widths do  
+    for j = 1, #self.widths do
       self.widths[j] = math.max(style.font:get_width(t[j] or ""), self.widths[j])
     end
   end
@@ -131,13 +136,22 @@ end
 
 function PluginView:draw()
   self:draw_background(style.background)
-  if not self.initialized then 
-    common.draw_text(style.big_font, style.dim, "Loading...", "center", self.position.x, self.position.y, self.size.x, self.size.y)
-    return 
-  end
-  
   local th = style.font:get_height()
   local lh = th + style.padding.y
+
+  if not self.initialized then
+    common.draw_text(style.big_font, style.dim, "Loading...", "center", self.position.x, self.position.y, self.size.x, self.size.y)
+    local width = self.size.x / 2
+    local offset_y = self.size.y / 2
+    if self.progress then
+      common.draw_text(style.font, style.dim, self.progress.label, "center", self.position.x, self.position.y + offset_y + lh, self.size.x, lh)
+      renderer.draw_rect(self.position.x + (self.size.x / 2) - (width / 2), self.position.y + self.size.y / 2 + (lh * 2), width, lh, style.line_highlight)
+      renderer.draw_rect(self.position.x + (self.size.x / 2) - (width / 2), self.position.y + self.size.y / 2 + (lh * 2), width * self.progress.percent, lh, style.caret)
+      -- common.draw_text(style.font, style.dim, string.format("[%03d%%] %s", math.floor(self.progress.percent * 100), self.progress.label), "center", self.position.x, self.position.y + (lh * 2), self.size.x, self.size.y)
+    end
+    return
+  end
+
 
   local ox, oy = self:get_content_offset()
   core.push_clip_rect(self.position.x, self.position.y, self.size.x, self.size.y)
@@ -150,7 +164,7 @@ function PluginView:draw()
   for i, plugin in ipairs(self:get_plugins()) do
     local x, y = ox, oy
     if y + lh >= self.position.y and y <= self.position.y + self.size.y then
-      if plugin == self.selected_plugin then 
+      if plugin == self.selected_plugin then
         renderer.draw_rect(x, y, self.size.x, lh, style.dim)
       elseif plugin == self.hovered_plugin then
         renderer.draw_rect(x, y, self.size.x, lh, style.line_highlight)
@@ -158,7 +172,7 @@ function PluginView:draw()
       x = x + style.padding.x
       for j, v in ipairs({ get_plugin_text(plugin) }) do
         local color = (plugin.status == "installed" or plugin.status == "bundled" or plugin.status == "orphan") and style.good or
-          (plugin.status == "core" and style.warn or 
+          (plugin.status == "core" and style.warn or
           (plugin.status == "special" and style.modified or style.text)
         )
         if self.loading then color = mul(color, style.dim) end
@@ -198,8 +212,8 @@ function PluginView:reinstall(plugin)
 end
 
 command.add(PluginView, {
-  ["plugin-manager:select"] = function(x, y) 
-    plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx 
+  ["plugin-manager:select"] = function(x, y)
+    plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx
   end,
   ["plugin-manager:select-prev"] = function()
     local plugins = plugin_view:get_plugins()
@@ -211,8 +225,8 @@ command.add(PluginView, {
     if plugin_view.selected_plugin_idx < #plugins then plugin_view.selected_plugin_idx = plugin_view.selected_plugin_idx + 1 end
     plugin_view.selected_plugin = plugins[plugin_view.selected_plugin_idx]
   end,
-  ["plugin-manager:select"] = function(x, y) 
-    plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx 
+  ["plugin-manager:select"] = function(x, y)
+    plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx
   end,
 })
 command.add(function()
@@ -239,7 +253,7 @@ end, {
 command.add(function()
   return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin
 end, {
-  ["plugin-manager:view-source-hovered"] = function() 
+  ["plugin-manager:view-source-hovered"] = function()
     local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
     local opened = false
     for i, path in ipairs({ plugin_view.hovered_plugin.path, plugin_view.hovered_plugin.path .. PATHSEP .. "init.lua" }) do

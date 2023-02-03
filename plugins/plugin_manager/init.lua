@@ -32,7 +32,7 @@ config.plugins.plugin_manager = common.merge({
 package.path = package.path .. ";" .. USERDIR .. "/libraries/?.lua" .. ";" .. USERDIR .. "/libraries/?/init.lua" .. ";" .. DATADIR .. "/libraries/?.lua" .. ";" .. DATADIR .. "/libraries/?/init.lua"
 
 if not config.plugins.plugin_manager.lpm_binary_path then
-  local paths = { 
+  local paths = {
     DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
     USERDIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
     DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. "lpm" .. binary_extension,
@@ -46,9 +46,9 @@ if not config.plugins.plugin_manager.lpm_binary_path then
     s = e + 1
   end
   for i, path in ipairs(paths) do
-    if system.get_file_info(path) then 
-      config.plugins.plugin_manager.lpm_binary_path = path 
-      break 
+    if system.get_file_info(path) then
+      config.plugins.plugin_manager.lpm_binary_path = path
+      break
     end
   end
 end
@@ -67,16 +67,27 @@ local function join(joiner, t) local s = "" for i,v in ipairs(t) do if i > 1 the
 
 local running_processes = {}
 
-local function run(cmd)
+local function extract_progress(chunk)
+  local newline = chunk:find("\n")
+  if not newline then return nil, chunk end
+  if #chunk == newline then
+    if chunk:find("^{\"progress\"") then return chunk, "" end
+    return nil, chunk
+  end
+  return chunk:sub(1, newline - 1), chunk:sub(newline + 1)
+end
+
+local function run(cmd, progress)
   table.insert(cmd, 1, config.plugins.plugin_manager.lpm_binary_path)
   table.insert(cmd, "--json")
-  table.insert(cmd, "--mod-version=" .. MOD_VERSION)
+  table.insert(cmd, "--mod-version=" .. MOD_VERSION_MAJOR)
   table.insert(cmd, "--quiet")
+  table.insert(cmd, "--progress")
   table.insert(cmd, "--userdir=" .. USERDIR)
   table.insert(cmd, "--datadir=" .. DATADIR)
   table.insert(cmd, "--binary=" .. EXEFILE)
   table.insert(cmd, "--assume-yes")
-  if config.plugins.plugin_manager.ssl_certs then table.insert(cmd, "--ssl_certs") table.insert(cmd, config.plugins.plugin_manager.ssl_certs) end 
+  if config.plugins.plugin_manager.ssl_certs then table.insert(cmd, "--ssl_certs") table.insert(cmd, config.plugins.plugin_manager.ssl_certs) end
   if config.plugins.plugin_manager.force then table.insert(cmd, "--force") end
   local proc = process.start(cmd)
   if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") io.stdout:flush() end
@@ -84,7 +95,7 @@ local function run(cmd)
   table.insert(running_processes, { proc, promise, "" })
   if #running_processes == 1 then
     core.add_thread(function()
-      while #running_processes > 0 do 
+      while #running_processes > 0 do
         local still_running_processes = {}
         local has_chunk = false
         local i = 1
@@ -95,8 +106,15 @@ local function run(cmd)
             local chunk = v[1]:read_stdout(2048)
             if config.plugins.plugin_manager.debug and chunk ~= nil then io.stdout:write(chunk) io.stdout:flush() end
             if chunk and v[1]:running() and #chunk == 0 then break end
-            if chunk ~= nil and #chunk > 0 then 
-              v[3] = v[3] .. chunk 
+            if chunk ~= nil and #chunk > 0 then
+              v[3] = v[3] .. chunk
+              local progress_line
+              progress_line, v[3] = extract_progress(v[3])
+              if progress and progress_line then
+                print(chunk)
+                progress_line = json.decode(progress_line)
+                progress(progress_line.progress)
+              end
               has_chunk = true
             else
               still_running = false
@@ -116,7 +134,7 @@ local function run(cmd)
           i = i + 1
         end
         running_processes = still_running_processes
-        coroutine.yield(has_chunk and 0.001 or 0.1)
+        coroutine.yield(has_chunk and 0.001 or 0.05)
       end
     end)
   end
@@ -124,9 +142,9 @@ local function run(cmd)
 end
 
 
-function PluginManager:refresh()
+function PluginManager:refresh(progress)
   local prom = Promise.new()
-  run({ "list" }):done(function(addons)
+  run({ "list" }, progress):done(function(addons)
     self.addons = json.decode(addons)["addons"]
     table.sort(self.addons, function(a,b) return a.id < b.id end)
     self.valid_addons = {}
@@ -144,14 +162,14 @@ function PluginManager:refresh()
       self.repositories = json.decode(repositories)["repositories"]
     end)
   end)
-  return prom 
+  return prom
 end
 
 
 function PluginManager:get_addons()
   local prom = Promise.new()
-  if self.addons then 
-    prom:resolve(self.addons) 
+  if self.addons then
+    prom:resolve(self.addons)
   else
     self:refresh():done(function()
       prom:resolve(self.addons)
@@ -189,7 +207,7 @@ function PluginManager:get_addon(name_and_version)
     end
     local match = false
     for i, addon in ipairs(PluginManager.addons) do
-      if not addon.mod_version or tostring(addon.mod_version) == tostring(MOD_VERSION) and (addon.version == version or version == nil) then
+      if not addon.mod_version or tostring(addon.mod_version) == tostring(MOD_VERSION_MAJOR) and (addon.version == version or version == nil) then
         promise:resolve(addon)
         match = true
         break
@@ -204,20 +222,20 @@ PluginManager.promise = Promise
 PluginManager.view = require "plugins.plugin_manager.plugin_view"
 
 command.add(nil, {
-  ["plugin-manager:install"] = function() 
+  ["plugin-manager:install"] = function()
     PluginManager:get_addons()
-    core.command_view:enter("Enter plugin name", 
-      function(name)  
+    core.command_view:enter("Enter plugin name",
+      function(name)
         PluginManager:get_addon(name):done(function(addon)
           core.log("Attempting to install plugin " .. name .. "...")
           PluginManager:install(addon):done(function()
             core.log("Successfully installed plugin " .. addon.id .. ".")
-          end) 
+          end)
         end):fail(function()
           core.error("Unknown plugin " .. name .. ".")
         end)
-      end, 
-      function(text) 
+      end,
+      function(text)
         local items = {}
         if not PluginManager.addons then return end
         for i, addon in ipairs(PluginManager.addons) do
@@ -229,20 +247,20 @@ command.add(nil, {
       end
     )
   end,
-  ["plugin-manager:uninstall"] = function() 
+  ["plugin-manager:uninstall"] = function()
     PluginManager:get_addons()
     core.command_view:enter("Enter plugin name",
-      function(name)  
+      function(name)
         PluginManager:get_addon(name):done(function(addon)
           core.log("Attempting to uninstall plugin " .. addon.id .. "...")
           PluginManager:install(addon):done(function()
             core.log("Successfully uninstalled plugin " .. addon.id .. ".")
-          end) 
+          end)
         end):fail(function()
           core.error("Unknown plugin " .. name .. ".")
         end)
-      end, 
-      function(text) 
+      end,
+      function(text)
         local items = {}
         if not PluginManager.addons then return end
         for i, addon in ipairs(PluginManager.addons) do
@@ -256,7 +274,7 @@ command.add(nil, {
   end,
   ["plugin-manager:add-repository"] = function()
     core.command_view:enter("Enter repository url",
-      function(url)  
+      function(url)
         PluginManager:add(url):done(function()
           core.log("Successfully added repository " .. url .. ".")
         end)
@@ -266,19 +284,19 @@ command.add(nil, {
   ["plugin-manager:remove-repository"] = function()
     PluginManager:get_plugins()
     core.command_view:enter("Enter repository url",
-      function(url)  
+      function(url)
         PluginManager:remove(url):done(function()
           core.log("Successfully removed repository " .. url .. ".")
         end)
-      end, 
-      function(text)  
+      end,
+      function(text)
         local items = {}
         if PluginManager.repositories then
           for i,v in ipairs(PluginManager.repositories) do
             table.insert(items, v.remote .. ":" .. (v.commit or v.branch))
           end
         end
-        return common.fuzzy_match(items, text) 
+        return common.fuzzy_match(items, text)
       end
     )
   end,

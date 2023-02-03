@@ -1877,7 +1877,7 @@ not commonly used publically.
           return
         end
         if not last_read then last_read = system.time() end
-        if not last_read or system.time() - last_read > 0.1 then
+        if not last_read or system.time() - last_read > 0.05 then
           io.stdout:write(json.encode({ progress = { percent = (received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0), label = progress_bar_label } }) .. "\n")
           io.stdout:flush()
           last_read = system.time()
