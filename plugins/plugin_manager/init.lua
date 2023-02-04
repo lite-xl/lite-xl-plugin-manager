@@ -111,7 +111,6 @@ local function run(cmd, progress)
               local progress_line
               progress_line, v[3] = extract_progress(v[3])
               if progress and progress_line then
-                print(chunk)
                 progress_line = json.decode(progress_line)
                 progress(progress_line.progress)
               end
@@ -178,22 +177,22 @@ function PluginManager:get_addons()
   return prom
 end
 
-local function run_stateful_plugin_command(plugin_manager, cmd, arg)
+local function run_stateful_plugin_command(plugin_manager, cmd, arg, progress)
   local promise = Promise.new()
-  run({ cmd, arg }):done(function(result)
+  run({ cmd, arg }, progress):done(function(result)
     if config.plugins.plugin_manager.restart_on_change then
       command.perform("core:restart")
     else
-      plugin_manager:refresh():forward(promise)
+      plugin_manager:refresh(progress):forward(promise)
     end
   end)
   return promise
 end
 
 
-function PluginManager:install(addon) return run_stateful_plugin_command(self, "install", addon.id .. (addon.version and (":" .. addon.version) or "")) end
-function PluginManager:uninstall(addon) return run_stateful_plugin_command(self, "uninstall", addon.id) end
-function PluginManager:reinstall(addon) return run_stateful_plugin_command(self, "reinstall", addon.id) end
+function PluginManager:install(addon, progress) return run_stateful_plugin_command(self, "install", addon.id .. (addon.version and (":" .. addon.version) or ""), progress) end
+function PluginManager:uninstall(addon, progress) return run_stateful_plugin_command(self, "uninstall", addon.id, progress) end
+function PluginManager:reinstall(addon, progress) return run_stateful_plugin_command(self, "reinstall", addon.id, progress) end
 
 
 function PluginManager:get_addon(name_and_version)

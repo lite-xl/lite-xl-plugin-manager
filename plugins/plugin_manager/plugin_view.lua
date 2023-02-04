@@ -40,12 +40,13 @@ function PluginView:new()
   self.selected_plugin = nil
   self.selected_plugin_idx = nil
   self.initialized = false
+  self.offset_y = 0
   self.plugin_manager = require "plugins.plugin_manager"
-  self.plugin_manager:refresh(function(progress)
+  self.progress_callback = function(progress)
     self.progress = progress
     core.redraw = true
-    print("PROG", self.progress)
-  end):done(function()
+  end
+  self.plugin_manager:refresh(self.progress_callback):done(function()
     self.initialized = true
     self:refresh()
   end)
@@ -95,7 +96,7 @@ function PluginView:on_mouse_moved(x, y, dx, dy)
   if self.initialized then
     local th = style.font:get_height()
     local lh = th + style.padding.y
-    local offset = math.floor((y - self.position.y + self.scroll.y) / lh)
+    local offset = math.floor((y - self.position.y + self.scroll.y) / lh) - self.offset_y
     self.hovered_plugin = offset > 0 and self:get_plugins()[offset]
     self.hovered_plugin_idx = offset > 0 and offset
   end
@@ -113,6 +114,12 @@ function PluginView:refresh()
       self.widths[j] = math.max(style.font:get_width(t[j] or ""), self.widths[j])
     end
   end
+  local max = 0
+  if self.widths then
+    for i, v in ipairs(self.widths) do max = max + v end
+  end
+  self.max_width = max + style.padding.x * #self.widths
+  core.redraw = true
 end
 
 
@@ -133,6 +140,14 @@ local function mul(color1, color2)
   return { color1[1] * color2[1] / 255, color1[2] * color2[2] / 255, color1[3] * color2[3] / 255, color1[4] * color2[4] / 255 }
 end
 
+function PluginView:get_h_scrollable_size()
+  return self.max_width or 0
+end
+
+local function draw_loading_bar(x, y, width, height, percent)
+  renderer.draw_rect(x, y, width, height, style.line_highlight)
+  renderer.draw_rect(x, y, width * percent, height, style.caret)
+end
 
 function PluginView:draw()
   self:draw_background(style.background)
@@ -145,16 +160,15 @@ function PluginView:draw()
     local offset_y = self.size.y / 2
     if self.progress then
       common.draw_text(style.font, style.dim, self.progress.label, "center", self.position.x, self.position.y + offset_y + lh, self.size.x, lh)
-      renderer.draw_rect(self.position.x + (self.size.x / 2) - (width / 2), self.position.y + self.size.y / 2 + (lh * 2), width, lh, style.line_highlight)
-      renderer.draw_rect(self.position.x + (self.size.x / 2) - (width / 2), self.position.y + self.size.y / 2 + (lh * 2), width * self.progress.percent, lh, style.caret)
-      -- common.draw_text(style.font, style.dim, string.format("[%03d%%] %s", math.floor(self.progress.percent * 100), self.progress.label), "center", self.position.x, self.position.y + (lh * 2), self.size.x, self.size.y)
+      draw_loading_bar(self.position.x + (self.size.x / 2) - (width / 2), self.position.y + self.size.y / 2 + (lh * 2), width, lh, self.progress.percent)
     end
     return
   end
 
 
   local ox, oy = self:get_content_offset()
-  core.push_clip_rect(self.position.x, self.position.y, self.size.x, self.size.y)
+  oy = oy + (lh + style.padding.y) * self.offset_y
+  core.push_clip_rect(self.position.x, self.position.y + (lh + style.padding.y) * self.offset_y, self.size.x, self.size.y)
   local x, y = ox + style.padding.x, oy
   for i, v in ipairs(self.plugin_table_columns) do
     common.draw_text(style.font, style.accent, v, "left", x, y, self.widths[i], lh)
@@ -165,9 +179,9 @@ function PluginView:draw()
     local x, y = ox, oy
     if y + lh >= self.position.y and y <= self.position.y + self.size.y then
       if plugin == self.selected_plugin then
-        renderer.draw_rect(x, y, self.size.x, lh, style.dim)
+        renderer.draw_rect(x, y, self.max_width or self.size.x, lh, style.dim)
       elseif plugin == self.hovered_plugin then
-        renderer.draw_rect(x, y, self.size.x, lh, style.line_highlight)
+        renderer.draw_rect(x, y, self.max_width or self.size.x, lh, style.line_highlight)
       end
       x = x + style.padding.x
       for j, v in ipairs({ get_plugin_text(plugin) }) do
@@ -182,13 +196,18 @@ function PluginView:draw()
     end
     oy = oy + lh
   end
+
+  if self.loading and self.progress then
+    draw_loading_bar(self.position.x, self.position.y, self.size.x, 2, self.progress.percent)
+  end
+
   core.pop_clip_rect()
   PluginView.super.draw_scrollbar(self)
 end
 
 function PluginView:install(plugin)
   self.loading = true
-  self.plugin_manager:install(plugin):done(function()
+  self.plugin_manager:install(plugin, self.progress_callback):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -196,7 +215,7 @@ end
 
 function PluginView:uninstall(plugin)
   self.loading = true
-  self.plugin_manager:uninstall(plugin):done(function()
+  self.plugin_manager:uninstall(plugin, self.progress_callback):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -205,7 +224,7 @@ end
 
 function PluginView:reinstall(plugin)
   self.loading = true
-  self.plugin_manager:reinstall(plugin):done(function()
+  self.plugin_manager:reinstall(plugin, self.progress_callback):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -228,6 +247,41 @@ command.add(PluginView, {
   ["plugin-manager:select"] = function(x, y)
     plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx
   end,
+  ["plugin-manager:find"] = function()
+    local plugin_names = {}
+    local plugins = plugin_view:get_plugins()
+    for i,v in ipairs(plugins) do
+      table.insert(plugin_names, v.id)
+    end
+    table.sort(plugin_names)
+    core.command_view:enter("Find Plugin", {
+      submit = function(value)
+        for i,v in ipairs(plugin_names) do
+          if v == value then
+            plugin_view.selected_plugin_idx = i
+            plugin_view.selected_plugin = plugin_view:get_plugins()[i]
+            local lh = style.font:get_height() + style.padding.y
+            plugin_view.scroll.to.y = math.max(i * lh - plugin_view.size.y / 2, 0)
+          end
+        end
+      end,
+      suggest = function(value)
+        return common.fuzzy_match(plugin_names, value)
+      end
+    })
+  end,
+  ["plugin-manager:scroll-page-up"] = function()
+    plugin_view.scroll.to.y = math.max(plugin_view.scroll.y - plugin_view.size.y, 0)
+  end,
+  ["plugin-manager:scroll-page-down"] = function()
+    plugin_view.scroll.to.y = math.min(plugin_view.scroll.y + plugin_view.size.y, plugin_view:get_scrollable_size())
+  end,
+  ["plugin-manager:scroll-page-top"] = function()
+    plugin_view.scroll.to.y = 0
+  end,
+  ["plugin-manager:scroll-page-bottom"] = function()
+    plugin_view.scroll.to.y = plugin_view:get_scrollable_size()
+  end
 })
 command.add(function()
   return core.active_view and core.active_view:is(PluginView) and plugin_view.selected_plugin and plugin_view.selected_plugin.status == "available"
@@ -271,7 +325,12 @@ end, {
 keymap.add {
   ["up"]          = "plugin-manager:select-prev",
   ["down"]        = "plugin-manager:select-next",
+  ["pagedown"]    = "plugin-manager:scroll-page-down",
+  ["pageup"]      = "plugin-manager:scroll-page-up",
+  ["home"]        = "plugin-manager:scroll-page-top",
+  ["end"]         = "plugin-manager:scroll-page-bottom",
   ["lclick"]      = "plugin-manager:select",
+  ["ctrl+f"]      = "plugin-manager:find",
   ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
   ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
 }
