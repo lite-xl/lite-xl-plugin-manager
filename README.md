@@ -1,6 +1,6 @@
 # Lite XL Plugin Manager (lpm)
 
-![Plugin Manager Screen](https://i.imgur.com/EHlD2vh.png)
+![image](https://user-images.githubusercontent.com/1034518/216748882-3ae8c8d4-a767-4d97-acc4-c1cde7e3e331.png)
 
 A standalone binary that provides an easy way of installing, and uninstalling
 plugins from lite-xl, as well as different version of lite-xl.
