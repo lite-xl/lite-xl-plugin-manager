@@ -80,7 +80,7 @@ end
 local function run(cmd, progress)
   table.insert(cmd, 1, config.plugins.plugin_manager.lpm_binary_path)
   table.insert(cmd, "--json")
-  table.insert(cmd, "--mod-version=" .. MOD_VERSION_MAJOR)
+  table.insert(cmd, "--mod-version=" .. (rawget(_G, "MOD_VERSION") or MOD_VERSION_STRING)) -- #workaround hack for new system.
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--progress")
   table.insert(cmd, "--userdir=" .. USERDIR)

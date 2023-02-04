@@ -454,6 +454,7 @@ function common.chdir(dir, callback)
   if not status then error(err) end
 end
 
+local LATEST_MOD_VERSION = "3.0.0"
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err)
@@ -542,11 +543,11 @@ local function compare_version(a, b) -- compares semver
   local _, _, majorb, minorb, revisionb = tostring(b):find("(%d+)%.?(%d*)%.?(%d*)")
   if majora == nil then error("can't parse version " .. a) end
   if majorb == nil then error("can't parse version " .. b) end
-  majora, minora, revisiona = majora or 0, minora or 0, revisiona or 0
-  majorb, minorb, revisionb = majorb or 0, minorb or 0, revisionb or 0
-  if majora ~= majorb then return tonumber(majora) < tonumber(majorb) and -1 or 1 end
-  if minora ~= minorb then return tonumber(minora) < tonumber(minorb) and -1 or 1 end
-  if revisiona ~= revisionb then return tonumber(revisiona) < tonumber(revisionb) and -1 or 1 end
+  majora, minora, revisiona = tonumber(majora) or 0, tonumber(minora) or 0, tonumber(revisiona) or 0
+  majorb, minorb, revisionb = tonumber(majorb) or 0, tonumber(minorb) or 0, tonumber(revisionb) or 0
+  if majora ~= majorb then return majora < majorb and -3 or 3 end
+  if minora ~= minorb then return minora < minorb and -2 or 2 end
+  if revisiona ~= revisionb then return revisiona < revisionb and -1 or 1 end
   return 0
 end
 
@@ -558,6 +559,11 @@ local function match_version(version, pattern)
   if pattern:find("^>") then return compare_version(version, pattern:sub(2)) == 1 end
   if pattern:find("^=") then return compare_version(version, pattern:sub(2)) == 0 end
   return version == pattern
+end
+
+local function compatible_modversion(lite_xl_modversion, addon_modversion)
+  local result = compare_version(lite_xl_modversion, addon_modversion)
+  return result >= 0 and result < 3
 end
 
 
@@ -928,7 +934,7 @@ function Repository:generate_manifest(repo_id)
           if repo_id and name == "init" then name = repo_id end
           if name ~= "init" then
             local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
-            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = 3, version = "0.1", path = (filename ~= "init" and (addon_dir .. file) or nil), type = type }
+            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. file) or nil), type = type }
             for line in io.lines(path .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
@@ -947,7 +953,7 @@ function Repository:generate_manifest(repo_id)
   end
   for k, v in pairs(addon_map) do
     if not v.addon then
-      table.insert(addons, common.merge({ mod_version = 3, version = "0.1" }, v))
+      table.insert(addons, common.merge({ mod_version = LATEST_MOD_VERSION, version = "0.1" }, v))
     end
   end
   table.sort(addons, function(a,b) return a.id:lower() < b.id:lower() end)
@@ -1059,7 +1065,7 @@ end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
-function LiteXL:is_compatible(addon) return not addon.mod_version or compare_version(self.mod_version, addon.mod_version) == 0 end
+function LiteXL:is_compatible(addon) return not addon.mod_version or compatible_modversion(self.mod_version, addon.mod_version) end
 function LiteXL:is_installed()  return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
@@ -1258,7 +1264,7 @@ function Bottle:get_addon(id, version, filter)
       end
     end
     if (addon.id == id or (wildcard and addon.id:find("^" .. id:sub(1, #id - 1)))) and match_version(addon.version, version) then
-      if (not filter.mod_version or not addon.mod_version or tonumber(addon.mod_version) == tonumber(filter.mod_version)) then
+      if (not filter.mod_version or not addon.mod_version or compatible_modversion(filter.mod_version, addon.mod_version)) then
         table.insert(candidates, addon)
       end
     end
@@ -1354,7 +1360,7 @@ local function lpm_lite_xl_add(version, path)
   if not path then error("requires a path") end
   if not system.stat(path .. PATHSEP .. "lite-xl") then error("can't find " .. path .. PATHSEP .. "lite-xl") end
   if not system.stat(path .. PATHSEP .. "data") then error("can't find " .. path .. PATHSEP .. "data") end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or 3 }))
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
   lpm_lite_xl_save()
 end
 
@@ -2023,7 +2029,7 @@ not commonly used publically.
         if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.binary_path .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
         local lite_xl_datadirs = { DATADIR, directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
         local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
-        system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = lite_xl_binary, mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } })
+        system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = lite_xl_binary, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
         table.insert(lite_xls, system_lite_xl)
         lpm_lite_xl_save()
       else
@@ -2031,7 +2037,7 @@ not commonly used publically.
       end
       system_bottle = Bottle.new(system_lite_xl, nil, true)
     else
-      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or 3, version = "system", tags = { "system", "local" } }), nil, true)
+      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } }), nil, true)
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
   end, error_handler)

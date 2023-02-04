@@ -34,13 +34,13 @@ function PluginView:new()
   self.scrollable = true
   self.progress = nil
   self.show_incompatible_plugins = false
-  self.plugin_table_columns = { "ID", "Name", "Version", "Type", "Modversion", "Status", "Tags", "Author", "Description" }
+  self.plugin_table_columns = { "Name", "Version", "Type", "Status", "Tags", "Author", "Description" }
   self.hovered_plugin = nil
   self.hovered_plugin_idx = nil
   self.selected_plugin = nil
   self.selected_plugin_idx = nil
   self.initialized = false
-  self.offset_y = 0
+  self.offset_y = 1
   self.plugin_manager = require "plugins.plugin_manager"
   self.progress_callback = function(progress)
     self.progress = progress
@@ -54,7 +54,7 @@ function PluginView:new()
 end
 
 local function get_plugin_text(plugin)
-  return plugin.id, (plugin.name or plugin.id), plugin.version, plugin.type, plugin.mod_version, plugin.status, join(", ", plugin.tags), plugin.author or "unknown", plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
+  return (plugin.name or plugin.id), (plugin.status == "core" and VERSION or plugin.version), plugin.type, plugin.status, join(", ", plugin.tags), plugin.author or "unknown", plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
 end
 
 
@@ -96,7 +96,7 @@ function PluginView:on_mouse_moved(x, y, dx, dy)
   if self.initialized then
     local th = style.font:get_height()
     local lh = th + style.padding.y
-    local offset = math.floor((y - self.position.y + self.scroll.y) / lh) - self.offset_y
+    local offset = math.floor((y - self.position.y + self.scroll.y) / lh)
     self.hovered_plugin = offset > 0 and self:get_plugins()[offset]
     self.hovered_plugin_idx = offset > 0 and offset
   end
@@ -167,14 +167,15 @@ function PluginView:draw()
 
 
   local ox, oy = self:get_content_offset()
-  oy = oy + (lh + style.padding.y) * self.offset_y
-  core.push_clip_rect(self.position.x, self.position.y + (lh + style.padding.y) * self.offset_y, self.size.x, self.size.y)
+  oy = oy + lh * self.offset_y
+
   local x, y = ox + style.padding.x, oy
   for i, v in ipairs(self.plugin_table_columns) do
-    common.draw_text(style.font, style.accent, v, "left", x, y, self.widths[i], lh)
+    common.draw_text(style.font, style.accent, v, "left", x, self.position.y, self.widths[i], lh)
     x = x + self.widths[i] + style.padding.x
   end
-  oy = oy + lh
+
+  core.push_clip_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, self.size.y)
   for i, plugin in ipairs(self:get_plugins()) do
     local x, y = ox, oy
     if y + lh >= self.position.y and y <= self.position.y + self.size.y then
