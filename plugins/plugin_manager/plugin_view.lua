@@ -23,12 +23,6 @@ end
 local plugin_view = nil
 PluginView.menu = ContextMenu()
 
-PluginView.menu:register(nil, {
-  { text = "Install", command = "plugin-manager:install-hovered" },
-  { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
-  { text = "View Source", command = "plugin-manager:view-source-hovered" }
-})
-
 function PluginView:new()
   PluginView.super.new(self)
   self.scrollable = true
@@ -46,10 +40,7 @@ function PluginView:new()
     self.progress = progress
     core.redraw = true
   end
-  self.plugin_manager:refresh(self.progress_callback):done(function()
-    self.initialized = true
-    self:refresh()
-  end)
+  self:refresh()
   plugin_view = self
 end
 
@@ -104,22 +95,27 @@ end
 
 
 function PluginView:refresh()
-  self.widths = {}
-  for i,v in ipairs(self.plugin_table_columns) do
-    table.insert(self.widths, style.font:get_width(v))
-  end
-  for i, plugin in ipairs(self:get_plugins()) do
-    local t = { get_plugin_text(plugin) }
-    for j = 1, #self.widths do
-      self.widths[j] = math.max(style.font:get_width(t[j] or ""), self.widths[j])
+  self.loading = true
+  return self.plugin_manager:refresh(self.progress_callback):done(function()
+    self.loading = false
+    self.initialized = true
+    self.widths = {}
+    for i,v in ipairs(self.plugin_table_columns) do
+      table.insert(self.widths, style.font:get_width(v))
     end
-  end
-  local max = 0
-  if self.widths then
-    for i, v in ipairs(self.widths) do max = max + v end
-  end
-  self.max_width = max + style.padding.x * #self.widths
-  core.redraw = true
+    for i, plugin in ipairs(self:get_plugins()) do
+      local t = { get_plugin_text(plugin) }
+      for j = 1, #self.widths do
+        self.widths[j] = math.max(style.font:get_width(t[j] or ""), self.widths[j])
+      end
+    end
+    local max = 0
+    if self.widths then
+      for i, v in ipairs(self.widths) do max = max + v end
+    end
+    self.max_width = max + style.padding.x * #self.widths
+    core.redraw = true
+  end)
 end
 
 
@@ -154,7 +150,7 @@ function PluginView:draw()
   local th = style.font:get_height()
   local lh = th + style.padding.y
 
-  if not self.initialized then
+  if not self.initialized or not self.widths then
     common.draw_text(style.big_font, style.dim, "Loading...", "center", self.position.x, self.position.y, self.size.x, self.size.y)
     local width = self.size.x / 2
     local offset_y = self.size.y / 2
@@ -231,6 +227,15 @@ function PluginView:reinstall(plugin)
   end)
 end
 
+
+function PluginView:upgrade()
+  self.loading = true
+  return self.plugin_manager:upgrade(self.progress_callback):done(function()
+    self.loading = false
+    self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
+  end)
+end
+
 command.add(PluginView, {
   ["plugin-manager:select"] = function(x, y)
     plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx
@@ -282,6 +287,12 @@ command.add(PluginView, {
   end,
   ["plugin-manager:scroll-page-bottom"] = function()
     plugin_view.scroll.to.y = plugin_view:get_scrollable_size()
+  end,
+  ["plugin-manager:refresh-all"] = function() -- Separate command from `refresh`, because we want to only have the keycombo be valid on the plugin view screen.
+    plugin_view:refresh():done(function() core.log("Successfully refreshed plugin listing.") end)
+  end,
+  ["plugin-manager:upgrade-all"] = function()
+    plugin_view:upgrade():done(function() core.log("Successfully upgraded installed plugins.") end)
   end
 })
 command.add(function()
@@ -332,9 +343,20 @@ keymap.add {
   ["end"]         = "plugin-manager:scroll-page-bottom",
   ["lclick"]      = "plugin-manager:select",
   ["ctrl+f"]      = "plugin-manager:find",
+  ["ctrl+r"]      = "plugin-manager:refresh-all",
+  ["ctrl+u"]      = "plugin-manager:upgrade-all",
   ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
   ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
 }
 
+
+PluginView.menu:register(nil, {
+  { text = "Install", command = "plugin-manager:install-hovered" },
+  { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
+  { text = "View Source", command = "plugin-manager:view-source-hovered" },
+  ContextMenu.DIVIDER,
+  { text = "Refresh Listing", command = "plugin-manager:refresh-all" },
+  { text = "Upgrade All", command = "plugin-manager:upgrade-all" },
+})
 
 return PluginView

@@ -21,7 +21,7 @@ config.plugins.plugin_manager = common.merge({
   cachdir = USERDIR  .. PATHSEP .. "lpm",
   -- Path to the folder that holds user-specified plugins.
   userdir = USERDIR,
-  -- Path to ssl certificate directory.
+  -- Path to ssl certificate directory or bunde. Nil will auto-detect.
   ssl_certs = nil,
   -- Whether or not to force install things.
   force = false,
@@ -165,6 +165,17 @@ function PluginManager:refresh(progress)
 end
 
 
+function PluginManager:upgrade(progress)
+  local prom = Promise.new()
+  run({ "update" }, progress):done(function()
+    run({ "upgrade" }, progress):done(function()
+      prom:resolve()
+    end)
+  end)
+  return prom
+end
+
+
 function PluginManager:get_addons()
   local prom = Promise.new()
   if self.addons then
@@ -227,7 +238,7 @@ command.add(nil, {
       function(name)
         PluginManager:get_addon(name):done(function(addon)
           core.log("Attempting to install plugin " .. name .. "...")
-          PluginManager:install(addon):done(function()
+          PluginManager:install(addon, PluginManager.view.progress_callback):done(function()
             core.log("Successfully installed plugin " .. addon.id .. ".")
           end)
         end):fail(function()
@@ -252,7 +263,7 @@ command.add(nil, {
       function(name)
         PluginManager:get_addon(name):done(function(addon)
           core.log("Attempting to uninstall plugin " .. addon.id .. "...")
-          PluginManager:install(addon):done(function()
+          PluginManager:uninstall(addon, PluginManager.view.progress_callback):done(function()
             core.log("Successfully uninstalled plugin " .. addon.id .. ".")
           end)
         end):fail(function()
@@ -299,7 +310,8 @@ command.add(nil, {
       end
     )
   end,
-  ["plugin-manager:refresh"] = function() PluginManager:refresh():done(function() core.log("Successfully refreshed plugin listing.") end) end,
+  ["plugin-manager:refresh"] = function() PluginManager:refresh(PluginManager.view.progress_callback):done(function() core.log("Successfully refreshed plugin listing.") end) end,
+  ["plugin-manager:upgrade"] = function() PluginManager:upgrade(PluginManager.view.progress_callback):done(function() core.log("Successfully upgraded installed plugins.") end) end,
   ["plugin-manager:show"] = function()
     local node = core.root_view:get_active_node_default()
     node:add_view(PluginManager.view(PluginManager))
