@@ -1,9 +1,11 @@
-# Lite XL Plugin Manager
+# Lite XL Plugin Manager (lpm)
+
+![Plugin Manager Screen](https://i.imgur.com/EHlD2vh.png)
 
 A standalone binary that provides an easy way of installing, and uninstalling
 plugins from lite-xl, as well as different version of lite-xl.
 
-Can be used by a package manager plugin that works from inside the editor 
+Can be used by a package manager plugin that works from inside the editor
 and calls this binary.
 
 Releases forthcoming, should be available on Windows, Mac, Linux and FreeBSD.
@@ -11,7 +13,7 @@ Releases forthcoming, should be available on Windows, Mac, Linux and FreeBSD.
 Also contains a plugin_manager.lua plugin to integrate the binary with lite in
 the form of an easy-to-use GUI.
 
-By default in releases, `lpm` will automatically consume the `manifest.json` 
+By default in releases, `lpm` will automatically consume the `manifest.json`
 in the `latest` branch of this repository, which corresponds to the most
 recent versioned release.
 
@@ -25,7 +27,7 @@ Once 1.0 is released, changleogs will be produced, and a more stable process tha
 
 ## Specification
 
-For details about the `manifest.json` files that `lpm` consumes, 
+For details about the `manifest.json` files that `lpm` consumes,
 [see here](SPEC.md).
 
 ## Quickstart
@@ -36,7 +38,7 @@ The fastest way to get started with lpm is to simply pull a release.
 wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm && chmod +x lpm
 ```
 
-If you have a C compiler, and `git`, and want to compile from scratch, 
+If you have a C compiler, and `git`, and want to compile from scratch,
 you can do:
 
 ```
@@ -59,7 +61,7 @@ gcc src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
   -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -o lpm
 ```
 
-CI is enabled on this repository, so you can grab Windows and Linux builds from the 
+CI is enabled on this repository, so you can grab Windows and Linux builds from the
 `continuous` [release page](https://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/continuous),
 which is a nightly, or the `latest` [release page](https://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/latest),
 which holds the most recent released version.
@@ -68,7 +70,7 @@ You can get a feel for how to use `lpm` by typing `./lpm --help`.
 
 ## Supporting Libraries
 
-As seen in the `lib` folder, the following external libraries are used to 
+As seen in the `lib` folder, the following external libraries are used to
 build `lpm`:
 
 * `lua` (core program written in)
