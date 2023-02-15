@@ -1065,6 +1065,8 @@ static const luaL_Reg system_lib[] = {
 #ifndef ARCH_PLATFORM
   #if _WIN32
     #define ARCH_PLATFORM "windows"
+  #elif __ANDROID__
+    #define ARCH_PLATFORM "android"
   #elif __linux__
     #define ARCH_PLATFORM "linux"
   #elif __APPLE__

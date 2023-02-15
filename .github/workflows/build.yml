@@ -19,6 +19,14 @@ jobs:
           sudo apt-get install musl-tools musl musl-dev
           CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
+      - name: Build Android
+        env: { ANDROID_ARCH: "26" }
+        run: |
+          export CMAKE_DEFAULT_FLAGS="-DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_INCLUDE_PATH=$ANDROID_SYSROOT_NDK/sysroot/usr/include"
+          ./build.sh clean && export ARCH="arm-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi$ANDROID_ARCH-clang   CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="aarch64-android" && BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ARCH-clang      CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ARCH-clang         CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86_64-android" &&  BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ARCH-clang       CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
       - name: Run Tests
         run: |
           ./lpm test t/run.lua
@@ -38,10 +46,10 @@ jobs:
         run: |
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.zip *.tar.gz
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
-            gh release delete -y v$VERSION || true; 
-            gh release create -t v$VERSION v$VERSION lpm.x86_64-linux lpm.x86_64-windows.exe
-            gh release delete -y latest || true; 
-            gh release create -t latest latest lpm.x86_64-linux lpm.x86_64-windows.exe
+            gh release delete -y v$VERSION || true;
+            gh release create -t v$VERSION v$VERSION lpm.x86_64-linux lpm.x86_64-windows.exe lpm.*-android
+            gh release delete -y latest || true;
+            gh release create -t latest latest lpm.x86_64-linux lpm.x86_64-windows.exe lpm.*-android
           fi
 
   build_macos:
@@ -57,7 +65,7 @@ jobs:
         run: echo VERSION=`git describe --tags --abbrev=0  --match "v*" | tail -c +2` >> $GITHUB_ENV && echo FULL_VERSION=`git describe --tags --match "v*" | tail -c +2` >> $GITHUB_ENV && echo REV=$((`git describe --tags  --match "v*" | sed 's/.*-\([0-9]*\)-.*/\1/' | sed s/^v.*//` + 1)) >> $GITHUB_ENV
       - name: Clone Submodules
         run: git submodule update --init --depth=1
-      - name: Build MacOS 
+      - name: Build MacOS
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-darwin'"' && tar -czvf lpm-$FULL_VERSION-x86_64-darwin.tar.gz lpm

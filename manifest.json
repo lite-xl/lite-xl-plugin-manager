@@ -21,6 +21,26 @@
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-darwin",
           "arch": "x86_64-darwin",
           "checksum": "SKIP"
+        },
+        {
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.aarch64-android",
+          "arch": "aarch64-android",
+          "checksum": "SKIP"
+        },
+        {
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.amd-android",
+          "arch": "amd-android",
+          "checksum": "SKIP"
+        },
+        {
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86-android",
+          "arch": "x86-android",
+          "checksum": "SKIP"
+        },
+        {
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-android",
+          "arch": "x86_64-android",
+          "checksum": "SKIP"
         }
       ],
       "dependencies": {
