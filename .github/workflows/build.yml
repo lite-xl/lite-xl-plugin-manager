@@ -22,12 +22,12 @@ jobs:
       - name: Build Android
         env: { ANDROID_ABI_VERSION: "26" }
         run: |
-          export CMAKE_DEFAULT_FLAGS="-DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME -DCMAKE_ANDROID_API=$ANDROID_ABI_VERSION -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_INCLUDE_PATH=$ANDROID_SYSROOT_NDK/sysroot/usr/include"
+          export CMAKE_DEFAULT_FLAGS="-DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME -DCMAKE_ANDROID_API=$ANDROID_ABI_VERSION -DCMAKE_SYSTEM_VERSION=$ANDROID_ABI_VERSION -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_INCLUDE_PATH=$ANDROID_SYSROOT_NDK/sysroot/usr/include"
           export AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-          ./build.sh clean && export ARCH="arm-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi$ANDROID_ABI_VERSION-clang   CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="aarch64-android" && BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ABI_VERSION-clang      CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="x86-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ABI_VERSION-clang         CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="x86_64-android" &&  BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ABI_VERSION-clang       CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="arm-android" &&     CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=armeabi-v7a" CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi$ANDROID_ABI_VERSION-clang   ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="aarch64-android" && CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a"   CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ABI_VERSION-clang      ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86-android" &&     CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86"         CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ABI_VERSION-clang         ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86_64-android" &&  CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86_64"      CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ABI_VERSION-clang       ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
       - name: Run Tests
         run: |
           ./lpm test t/run.lua
