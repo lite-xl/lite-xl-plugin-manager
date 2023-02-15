@@ -54,7 +54,7 @@ jobs:
           fi
 
   build_macos:
-    needs: build_linux_windows
+    needs: build_linux_android_windows
     runs-on: macos-11
     env:
       CC: clang
