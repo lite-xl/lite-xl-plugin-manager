@@ -19,6 +19,9 @@ jobs:
           sudo apt-get install musl-tools musl musl-dev
           CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
+      - name: Run Tests
+        run: |
+          ./lpm test t/run.lua
       - name: Build Android
         env: { ANDROID_ABI_VERSION: "26" }
         run: |
@@ -28,9 +31,6 @@ jobs:
           ./build.sh clean && export ARCH="aarch64-android" && CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a"   CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ABI_VERSION-clang      ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
           ./build.sh clean && export ARCH="x86-android" &&     CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86"         CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ABI_VERSION-clang         ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
           ./build.sh clean && export ARCH="x86_64-android" &&  CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86_64"      CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ABI_VERSION-clang       ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-      - name: Run Tests
-        run: |
-          ./lpm test t/run.lua
       # - name: Package Debian/Ubuntu
       #   env: { ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
       #   run: |
