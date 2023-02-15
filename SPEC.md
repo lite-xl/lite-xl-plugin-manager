@@ -3,7 +3,7 @@
 A lite-xl manifest is a JSON file contains three different keys:
 
 * Remotes
-* Plugins
+* Addons
 * Lite-XLs
 
 ## Remotes
