@@ -11,7 +11,7 @@ A lite-xl manifest is a JSON file contains three different keys:
 A simple array of string repository identifiers. A repository identifier takes
 the form of a git remote url, i.e. `<url>:<ref>`. An example would be:
 
-`https://github.com/adamharrison/lite-xl-plugin-manager.git:latest`
+`https://github.com/lite-xl/lite-xl-plugin-manager.git:latest`
 
 ## Addons
 
@@ -64,7 +64,11 @@ The vast majority of addons are `singleton` `plugin`s.
 * `extra`: Optionally a dictionary which holds any desired extra information.
 
 Any keys not present in this official listing render the manifest non-conforming.
-Any extra keys should be placed in `extra`.
+Any extra keys should be placed in `extra`. An example of keys that can be placed
+in `extra` that some plugin managers/displays will use are:
+
+* `author`: The main author of the addon.
+* `license`: The license under which the addon is licensed.
 
 ### Dependencies
 
@@ -132,7 +136,7 @@ that any version greater than `0.1` can be used.
       "version": "0.1", # Semantic version.
       "description": "A GUI interface to the Adam's lite plugin manager.", # English description of the plugin.
       "path": "plugins/plugin_manager", # The path to the plugin in this repository.
-      "mod_version": 3, # The mod_version this plugin corresponds to.
+      "mod_version": "3", # The mod_version this plugin corresponds to.
       "provides": [ # A list of small strings that represent functionalities this plugin provides.
         "plugin-manager" 
       ],
@@ -166,7 +170,7 @@ that any version greater than `0.1` can be used.
       "tags": ["language"],
       "description": "Syntax for .gitignore, .dockerignore and some other `.*ignore` files",
       "version": "1.0",
-      "mod_version": 3,
+      "mod_version": "3",
       "remote": "https://github.com/anthonyaxenov/lite-xl-ignore-syntax:2ed993ed4376e1840b0824d7619f2d3447891d3aa234459378fcf9387c4e4680", # The remote to be used for this plugin.
       "id": "language_ignore",
       "post": {"x86-linux":"cp language_ignore.lua /tmp/somewhere-else", "x86-windows":"COPY language_ignore.lua C:\\Users\\Someone\\ignore.lua"} # Post download steps to run to fully set up the plugin. Does not run by default, requires --post.
@@ -187,14 +191,14 @@ that any version greater than `0.1` can be used.
       "url": "https://raw.githubusercontent.com/whiteh0le/lite-plugins/main/plugins/language_ksy.lua?raw=1", # URL directly to the singleton plugin file.
       "id": "language_ksy",
       "version": "1.0",
-      "mod_version": 3,
+      "mod_version": "3",
       "checksum": "08a9f8635b09a98cec9dfca8bb65f24fd7b6585c7e8308773e7ddff9a3e5a60f", # Checksum for this particular URL.
     }
   ],
   "lite-xls": [ # An array of lite-xl releases.
     {
       "version": "2.1-simplified", # The version, followed by a release suffix defining the release flavour. The only releases that are permitted to not have suffixes are official relases.
-      "mod_version": 3, # The mod_version this release corresponds to.
+      "mod_version": "3", # The mod_version this release corresponds to.
       "files": [ # Identical to `files` under `addons`, although these are usually simply archives to be extracted.
         {
           "arch": "x86_64-linux",
@@ -210,7 +214,7 @@ that any version greater than `0.1` can be used.
     },
     {
       "version": "2.1-simplified-enhanced",
-      "mod_version": 3,
+      "mod_version": "3",
       "files": [
         {
           "arch": "x86_64-linux",
