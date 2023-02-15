@@ -1,7 +1,7 @@
 name: CI
 on: { push: { branches: [master] } }
 jobs:
-  build_linux_windows:
+  build_linux_android_windows:
     runs-on: ubuntu-latest
     defaults: { run: { shell: bash } }
     steps:
@@ -20,13 +20,14 @@ jobs:
           CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static && tar -czvf lpm-$FULL_VERSION-x86_64-linux.tar.gz lpm
           cp lpm lpm.x86_64-linux
       - name: Build Android
-        env: { ANDROID_ARCH: "26" }
+        env: { ANDROID_ABI_VERSION: "26" }
         run: |
-          export CMAKE_DEFAULT_FLAGS="-DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_INCLUDE_PATH=$ANDROID_SYSROOT_NDK/sysroot/usr/include"
-          ./build.sh clean && export ARCH="arm-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi$ANDROID_ARCH-clang   CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="aarch64-android" && BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ARCH-clang      CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="x86-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ARCH-clang         CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="x86_64-android" &&  BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ARCH-clang       CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          export CMAKE_DEFAULT_FLAGS="-DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME -DCMAKE_ANDROID_API=$ANDROID_ABI_VERSION -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_INCLUDE_PATH=$ANDROID_SYSROOT_NDK/sysroot/usr/include"
+          export AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          ./build.sh clean && export ARCH="arm-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi$ANDROID_ABI_VERSION-clang   CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="aarch64-android" && BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ABI_VERSION-clang      CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86-android" &&     BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ABI_VERSION-clang         CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86_64-android" &&  BIN=lpm.$ARCH CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ABI_VERSION-clang       CFLAGS="-Dinline=" ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
       - name: Run Tests
         run: |
           ./lpm test t/run.lua
