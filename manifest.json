@@ -23,6 +23,11 @@
           "checksum": "SKIP"
         },
         {
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.aarch64-darwin",
+          "arch": "aarch64-darwin",
+          "checksum": "SKIP"
+        },
+        {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.aarch64-android",
           "arch": "aarch64-android",
           "checksum": "SKIP"
