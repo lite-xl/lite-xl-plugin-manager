@@ -33,7 +33,7 @@
           "checksum": "SKIP"
         },
         {
-          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.amd-android",
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.arm-android",
           "arch": "arm-android",
           "checksum": "SKIP"
         },
