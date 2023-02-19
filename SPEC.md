@@ -40,14 +40,16 @@ The vast majority of addons are `singleton` `plugin`s.
 
 ### Metadata
 
-* `id`: The semantic id of the addon, a string only containing `[a-z0-9\-_]`.
+Fields that are required are bolded.
+
+* **`id`**: The semantic id of the addon, a string only containing `[a-z0-9\-_]`.
+* **`version`**: The addon's semantic version. A string that can contains `[0-9\.]`.
+* **`mod_version`**: The mod_version this addon is compatible with. 
+  A string that can contain `[0-9\.]`. If `type` is `library`, this field is optional.
 * `type`: An optional string that specifies the addon type. Valid values are `"plugin"` 
   `"library"`, or `color`. Defaults to `"plugin"`.
 * `name`: The optional name of the addon.
-* `version`: The addon's semantic version. A string that can contains `[0-9\.]`.
-* `description`: An english-language description of the addon.
-* `mod_version`: The mod_version this addon is compatible with. 
-  A string that can contains `[0-9\.]`. If `type` is `library`, this field is optional.
+* `description`: An optional english-language description of the addon.
 * `provides`: An optional array of strings that are a shorthand of functionality
  this addon provides. Can be used as a dependency.
 * `remote`: Optional. Specifies an https git link wheree this addon is located. If present,
