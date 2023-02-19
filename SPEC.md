@@ -15,11 +15,11 @@ the form of a git remote url, i.e. `<url>:<ref>`. An example would be:
 
 ## Addons
 
-Addons are the primary objects specified in this specification. An addon 
+Addons are the primary objects specified in this specification. An addon
 consists of a series of metadata, the path to the addon in this repository,
-or its location on a remote repository, or a publically accessible URL,and a 
-set of files to be downloaded with the plugin (usually releases, but can be 
-data files, or fonts, or anything else). 
+or its location on a remote repository, or a publically accessible URL,and a
+set of files to be downloaded with the plugin (usually releases, but can be
+data files, or fonts, or anything else).
 
 Addons can specify optionally specify a type, which determines where they're
 installed. Currently three types are supported:
@@ -28,10 +28,10 @@ installed. Currently three types are supported:
 * `plugin`
 * `color`
 
-Addons are further classified into two organizational categories. 
-`singleton` addons, and `complex` addons. Addons are listed a `singleton` 
-if and only if they consist of exactly one file, have an empty or absent 
-`files` specification, and do not specify a `remote`. Singleton addons 
+Addons are further classified into two organizational categories.
+`singleton` addons, and `complex` addons. Addons are listed a `singleton`
+if and only if they consist of exactly one file, have an empty or absent
+`files` specification, and do not specify a `remote`. Singleton addons
 consist of exactly one `.lua` file, named after the addon. Complex addons
 are contained within a folder, and have an `init.lua` or `init.so` file that
 loads other components within it.
@@ -44,9 +44,9 @@ Fields that are required are bolded.
 
 * **`id`**: The semantic id of the addon, a string only containing `[a-z0-9\-_]`.
 * **`version`**: The addon's semantic version. A string that can contains `[0-9\.]`.
-* **`mod_version`**: The mod_version this addon is compatible with. 
+* **`mod_version`**: The mod_version this addon is compatible with.
   A string that can contain `[0-9\.]`. If `type` is `library`, this field is optional.
-* `type`: An optional string that specifies the addon type. Valid values are `"plugin"` 
+* `type`: An optional string that specifies the addon type. Valid values are `"plugin"`
   `"library"`, or `color`. Defaults to `"plugin"`.
 * `name`: The optional name of the addon.
 * `description`: An optional english-language description of the addon.
@@ -54,7 +54,7 @@ Fields that are required are bolded.
  this addon provides. Can be used as a dependency.
 * `remote`: Optional. Specifies an https git link wheree this addon is located. If present,
  denotes a **stub**.
-* `dependencies`: Optionally a hash of dependencies required, or optional 
+* `dependencies`: Optionally a hash of dependencies required, or optional
   for this addon.
 * `conflicts`: An optional hash of addons which conflict with this one, in the same
   format as `dependencies`.
@@ -75,7 +75,7 @@ in `extra` that some plugin managers/displays will use are:
 
 ### Dependencies
 
-Depedencies are specified in an object, with the key being the `id` of the 
+Depedencies are specified in an object, with the key being the `id` of the
 addon depended upon, or a `provides` alias.
 
 Dependency values are an object which contain the following keys:
@@ -86,23 +86,23 @@ Dependency values are an object which contain the following keys:
 ### Stubs
 
 If a addon likes, it can specify a particular `remote`; a publically acessible
-git repository, accessed via HTTPS, pinned at a specific commit to be used as a 
-source for its data. In that case, the package manager must download the repository, 
+git repository, accessed via HTTPS, pinned at a specific commit to be used as a
+source for its data. In that case, the package manager must download the repository,
 and interpret the manifest file found there to determine the addon's metadata.
 
-This is known as a stub. 
+This is known as a stub.
 
 ### Files
 
 Files are objects that contain at least two keys, `url`, and `checksum`. They
-can also optionally contain the `arch` and `path` keys. 
+can also optionally contain the `arch` and `path` keys.
 
 * `url` represents the URL to grab the particular file from.
-* `checksum` is the sha256hex checksum for the file. If `"SKIP"` is specified, the 
+* `checksum` is the sha256hex checksum for the file. If `"SKIP"` is specified, the
   check is skipped. This is fine for development purposes, but any publically
   accessible manifest, should specify a checksum.
 * `arch` is the lite-xl/clang architecture tuple that the file is relevant for.
-  if omitted, file is to be assumed to be valid for all arhcitectures.
+  if omitted, file is to be assumed to be valid for all arhcitectures. Can be an array.
 * `path` is the location to install this file inside the addon's directory.
 
 If a file is an archive, of either `.zip` or `.tar.gz`, it will automatically
@@ -120,7 +120,7 @@ repository. Lite-XLs has the following metadata, as well as a `files` array.
 ### Files
 
 The files array is identical to that of the `files` array under `addons`.
-Conventionally, there should be a single file per architecture that is a 
+Conventionally, there should be a single file per architecture that is a
 `.tar.gz` or `.zip` containing all necessary files for `lite-xl` to run.
 
 ## Version Specifiers
@@ -141,7 +141,7 @@ that any version greater than `0.1` can be used.
       "path": "plugins/plugin_manager", # The path to the plugin in this repository.
       "mod_version": "3", # The mod_version this plugin corresponds to.
       "provides": [ # A list of small strings that represent functionalities this plugin provides.
-        "plugin-manager" 
+        "plugin-manager"
       ],
       "files": [ # A list of files (usually binaries) this plugin requires to function.
         {

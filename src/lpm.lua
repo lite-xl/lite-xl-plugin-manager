@@ -501,13 +501,13 @@ local function error_handler(err)
   local message = e and err:sub(e + 3) or err
   if JSON then
     if VERBOSE then
-      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback() }) .. "\n")
+      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback(nil, 2) }) .. "\n")
     else
       io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
     end
   else
     if err then io.stderr:write((not VERBOSE and message or err) .. "\n") end
-    if VERBOSE then io.stderr:write(debug.traceback() .. "\n") end
+    if VERBOSE then io.stderr:write(debug.traceback(nil, 2) .. "\n") end
   end
   status = -1
 end
@@ -760,21 +760,33 @@ function Addon:install(bottle, installing)
     elseif self.organization == 'complex' then
       common.copy(self.local_path, temporary_install_path)
     end
-    for i,file in ipairs(self.files or {}) do
-      if not file.arch or file.arch == ARCH then
-        if not NO_INSTALL_OPTIONAL and (not file.optional or prompt(common.basename(file.url) .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
-          if not file.checksum then error("requires a checksum") end
-          local path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
-          local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
-          common.get(file.url, temporary_path, file.checksum, write_progress_bar)
-          local basename = common.basename(path)
-          if basename:find("%.zip$") or basename:find("%.tar%.gz$") then
-            log_action("Extracting file " .. basename .. " in " .. install_path)
-            system.extract(temporary_path, temporary_install_path)
-          else
-            if file.arch then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
+
+
+    local has_arched_files = #common.grep(self.files or {}, function(e) return e.arch end) > 0
+    for _, arch in ipairs(ARCH) do
+      local has_one_file = false
+      for _, file in ipairs(self.files or {}) do
+        local file_arch = file.arch and type(file.arch) == "string" and { file.arch } or file.arch
+        if not file.arch or #common.grep(file_arch, function(e) return e == arch end) > 0 then
+          if file.arch then has_one_file = true end
+          if not NO_INSTALL_OPTIONAL and (not file.optional or prompt(common.basename(file.url) .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
+            if not file.checksum then error("requires a checksum") end
+            local path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
+            local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
+            common.get(file.url, temporary_path, file.checksum, write_progress_bar)
+            local basename = common.basename(path)
+            if basename:find("%.zip$") or basename:find("%.tar%.gz$") then
+              log_action("Extracting file " .. basename .. " in " .. install_path)
+              system.extract(temporary_path, temporary_install_path)
+            else
+              if file.arch and file.arch ~= "*" then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
+            end
           end
         end
+      end
+
+      if has_arched_files and not has_one_file and (not self.arch or (self.arch ~= "*" and #common.grep(self.arch, function(a) return a == arch end) == 0)) then
+        error("Addon " .. self.id .. " does not support arch " .. arch)
       end
     end
   end)
@@ -785,9 +797,11 @@ function Addon:install(bottle, installing)
   else
     if POST and self.post then
       common.chdir(temporary_install_path, function()
-        if type(self.post) == "table" and not self.post[ARCH] then error("can't find post command for arch " .. ARCH) end
-        local code = os.system(type(self.post) == "table" and self.post[ARCH] or self.post) ~= 0
-        if code ~= 0 then error("post step failed with error code " .. code) end
+        for i, arch in ipairs(ARCH) do
+          if type(self.post) == "table" and not self.post[ARCH] then error("can't find post command for arch " .. ARCH) end
+          local code = os.system(type(self.post) == "table" and self.post[ARCH] or self.post) ~= 0
+          if code ~= 0 then error("post step failed with error code " .. code) end
+        end
       end)
     end
     common.rmrf(install_path)
@@ -1057,10 +1071,15 @@ function LiteXL.new(repository, metadata)
     files = {}
   }, metadata), LiteXL)
   self.hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version .. common.join("", common.map(self.files, function(f) return f.checksum end)))
-  self.local_path = self:is_local() and self.path or (CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. self.version .. PATHSEP .. self.hash)
-  self.binary_path = self.binary_path or (self.local_path .. PATHSEP .. "lite-xl")
+  self.local_path = self:is_local() and self.path or (CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. self.version .. PATHSEP .. self.hash)
+  self.binary_path = self.binary_path or { }
   self.datadir_path = self.datadir_path or (self.local_path .. PATHSEP .. "data")
   return self
+end
+
+function LiteXL:get_binary_path(arch)
+  if self.binary_path and self.binary_path[arch or _G.ARCH] then return self.binary_path[arch or _G.ARCH] end
+  return self.local_path .. PATHSEP .. "lite-xl." .. (arch or _G.ARCH)
 end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
@@ -1082,14 +1101,14 @@ function LiteXL:install()
     system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
     common.copy(datadir, self.local_path .. PATHSEP .. "data")
   elseif self.path and not self.repository then -- local repository
-    system.symlink(self.binary_path, self.path .. PATHSEP .. "lite_xl")
+    system.symlink(self:get_binary_path(), self.local_path .. PATHSEP .. "lite_xl")
   else
     if self.remote then
       system.init(self.local_path, self.remote)
       common.reset(self.local_path, self.commit or self.branch)
     end
     for i,file in ipairs(self.files or {}) do
-      if file.arch and file.arch == ARCH then
+      if file.arch and common.grep(ARCH, function(e) return e == file.arch end)[1] then
         if not file.checksum then error("requires a checksum") end
         local basename = common.basename(file.url)
         local archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
@@ -1349,10 +1368,12 @@ local function get_lite_xl(version)
 end
 
 local function lpm_lite_xl_save()
-  common.mkdirp(CACHEDIR .. PATHSEP .. ARCH .. PATHSEP .. "lite_xls")
-  common.write(CACHEDIR .. PATHSEP .. ARCH .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
-    json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
-  )
+  for i, arch in ipairs(ARCH) do
+    common.mkdirp(CACHEDIR .. PATHSEP .. arch .. PATHSEP .. "lite_xls")
+    common.write(CACHEDIR .. PATHSEP .. arch .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
+      json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() and l.arch == arch end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
+    )
+  end
 end
 
 local function lpm_lite_xl_add(version, path)
@@ -1360,7 +1381,7 @@ local function lpm_lite_xl_add(version, path)
   if not path then error("requires a path") end
   if not system.stat(path .. PATHSEP .. "lite-xl") then error("can't find " .. path .. PATHSEP .. "lite-xl") end
   if not system.stat(path .. PATHSEP .. "data") then error("can't find " .. path .. PATHSEP .. "data") end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, path = path:gsub(PATHSEP .. "$", ""), arch = ARCH[1], mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
   lpm_lite_xl_save()
 end
 
@@ -1385,7 +1406,7 @@ local function lpm_lite_xl_switch(version, target)
   if not lite_xl:is_installed() then log_action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
   local stat = system.stat(target)
   if stat and stat.symlink then os.remove(target) end
-  system.symlink(lite_xl.binary_path, target)
+  system.symlink(lite_xl:get_binary_path(), target)
   if not common.path('lite-xl') then
     os.remove(target)
     error(target .. " is not on your $PATH; please supply a target that can be found on your $PATH, called `lite-xl`.")
@@ -1411,7 +1432,7 @@ local function lpm_lite_xl_list()
       status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
       local_path = lite_xl:is_installed() and lite_xl.local_path or nil,
       datadir_path = lite_xl:is_installed() and lite_xl.datadir_path or nil,
-      binary_path = lite_xl:is_installed() and lite_xl.binary_path or nil
+      binary_path = lite_xl:is_installed() and lite_xl:get_binary_path() or nil
     })
     max_version = math.max(max_version, #lite_xl.version)
   end
@@ -1592,15 +1613,6 @@ local function lpm_addon_upgrade()
 end
 
 local function lpm_purge()
-  -- local path = common.path("lite-xl")
-  -- if path then
-  --   local lite_xl = get_lite_xl("system")
-  --   if lite_xl then
-  --     os.remove(path)
-  --     system.symlink(lite_xl:get_binary_path(), target)
-  --     log_action("Reset lite-xl symlink to system.")
-  --   end
-  -- end
   log_action("Removed " .. CACHEDIR .. ".")
   common.rmrf(CACHEDIR)
 end
@@ -1615,14 +1627,19 @@ local function parse_arguments(arguments, options)
       if not flag_type then error("unknown flag --" .. option) end
       if flag_type == "flag" then
         args[option] = true
-      elseif flag_type == "string" or flag_type == "number" then
+      elseif flag_type == "string" or flag_type == "number" or flag_type == "array" then
         if not value or value == "" then
           if i == #arguments then error("option " .. option .. " requires a " .. flag_type) end
           value = arguments[i+1]
           i = i + 1
         end
         if flag_type == "number" and tonumber(flag_type) == nil then error("option " .. option .. " should be a number") end
-        args[option] = value
+        if flag_type == "array" then
+          args[option] = args[option] or {}
+          table.insert(args[option], value)
+        else
+          args[option] = value
+        end
       end
     else
       table.insert(args, arguments[i])
@@ -1674,7 +1691,7 @@ xpcall(function()
   local ARGS = parse_arguments(ARGV, {
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
-    remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "string", ["assume-yes"] = "flag",
+    remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
@@ -1853,7 +1870,7 @@ not commonly used publically.
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]
-  ARCH = ARGS["arch"] or _G.ARCH
+  ARCH = ARGS["arch"] or { _G.ARCH }
   ASSUME_YES = ARGS["assume-yes"] or FORCE
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION")
   if MOD_VERSION == "any" then MOD_VERSION = nil end
@@ -2010,9 +2027,11 @@ not commonly used publically.
         repositories[#repositories]:parse_manifest()
       end
     end
-    if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json") then
-      for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json"))) do
-        table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, path = lite_xl.path, tags = { "local" } }))
+    for i, arch in ipairs(ARCH) do
+      if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. arch .. PATHSEP .. "locals.json") then
+        for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json"))) do
+          table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, arch = arch, path = lite_xl.path, tags = { "local" } }))
+        end
       end
     end
     local lite_xl_binary = BINARY or common.path("lite-xl")
@@ -2026,10 +2045,10 @@ not commonly used publically.
       local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
       if not system_lite_xl then
         system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
-        if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl.binary_path .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+        if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
         local lite_xl_datadirs = { DATADIR, directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
         local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
-        system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = lite_xl_binary, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
+        system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [_G.ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
         table.insert(lite_xls, system_lite_xl)
         lpm_lite_xl_save()
       else

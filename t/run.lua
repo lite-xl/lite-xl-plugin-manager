@@ -104,6 +104,12 @@ local tests = {
   ["09_misc_commands"] = function()
     lpm("update")
     lpm("upgrade")
+  end,
+  ["10_install_multiarch"] = function()
+    lpm("install plugin_manager --arch x86_64-windows --arch x86_64-linux")
+    assert_exists(userdir .. "/plugins/plugin_manager/lpm.x86_64-linux")
+    assert_exists(userdir .. "/plugins/plugin_manager/lpm.x86_64-windows.exe")
+    assert_exists(userdir .. "/plugins/plugin_manager/init.lua")
   end
 }
 
@@ -122,14 +128,14 @@ local function run_tests(tests, arg)
   local fail_count = 0
   local names = {}
   if #arg == 0 then
-    for k,v in pairs(tests) do table.insert(names, k) end  
+    for k,v in pairs(tests) do table.insert(names, k) end
   else
     names = arg
   end
   table.sort(names)
   local max_name = 0
   os.execute("rm -rf " .. tmpdir .. "/lpmtest && mkdir -p " .. tmpdir .. "/lpmtest");
-  for i,k in ipairs(names) do max_name = math.max(max_name, #k) end  
+  for i,k in ipairs(names) do max_name = math.max(max_name, #k) end
   for i,k in ipairs(names) do
     local v = tests[k]
     if fast then
@@ -144,7 +150,7 @@ local function run_tests(tests, arg)
       if last_command then
         print("Last Command: " .. last_command)
         if last_command_result then
-          print(json.encode(last_command_result)) 
+          print(json.encode(last_command_result))
         end
       end
       print()
