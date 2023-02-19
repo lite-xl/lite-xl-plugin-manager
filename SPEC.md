@@ -3,7 +3,7 @@
 A lite-xl manifest is a JSON file contains three different keys:
 
 * Remotes
-* Plugins
+* Addons
 * Lite-XLs
 
 ## Remotes
@@ -61,6 +61,7 @@ Fields that are required are bolded.
 * `tags`:  Optional freeform tags that may describe attributes of the addon.
 * `path`: Optional path to the addon. If omitted, will only pull the files in
   `files`. To pull the whole repository, use `"."`.
+* `arch`: Optionally a list of architectures this plugin supports. If not present, and no `files` that specify arches, assumes that plugin is valid for all architectures. If not present, and at least one `files` exists that specifies an architecture, only assumed to be valid for all `arch`es specified under `files`. Can be either an array of arch names, or can be `"*"` to explicitly specify all architectures.
 * `post`: Optionally a string which represents a command to run. If presented
   with a dictionary, takes `ARCH` keys, and runs a different command per `ARCH`.
 * `extra`: Optionally a dictionary which holds any desired extra information.
