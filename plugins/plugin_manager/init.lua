@@ -41,6 +41,7 @@ if not config.plugins.plugin_manager.lpm_binary_path then
   local path, s = os.getenv("PATH"), 1
   while true do
     local _, e = path:find(":", s)
+    table.insert(paths, path:sub(s, e and (e-1) or #path) .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name)
     table.insert(paths, path:sub(s, e and (e-1) or #path) .. PATHSEP .. "lpm" .. binary_extension)
     if not e then break end
     s = e + 1
@@ -173,6 +174,12 @@ function PluginManager:upgrade(progress)
     end)
   end)
   return prom
+end
+
+
+
+function PluginManager:purge(progress)
+  return run({ "purge" }, progress)
 end
 
 
@@ -312,6 +319,7 @@ command.add(nil, {
   end,
   ["plugin-manager:refresh"] = function() PluginManager:refresh(PluginManager.view.progress_callback):done(function() core.log("Successfully refreshed plugin listing.") end) end,
   ["plugin-manager:upgrade"] = function() PluginManager:upgrade(PluginManager.view.progress_callback):done(function() core.log("Successfully upgraded installed plugins.") end) end,
+  ["plugin-manager:purge"] = function() PluginManager:purge(PluginManager.view.progress_callback):done(function() core.log("Successfully purged lpm directory.") end) end,
   ["plugin-manager:show"] = function()
     local node = core.root_view:get_active_node_default()
     node:add_view(PluginManager.view(PluginManager))

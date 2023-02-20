@@ -408,10 +408,17 @@ function common.mkdirp(path)
   local stat = system.stat(path)
   if stat and stat.type == "dir" then return true end
   if stat and stat.type == "file" then error("path " .. path .. " exists") end
+  local segments = { common.split("[/\\]", path) }
   local target
-  for _, dirname in ipairs({ common.split("[/\\]", path) }) do
+  local extant_root = 0
+  for i, dirname in ipairs(segments) do -- we need to do this, incase directories earlier in the chain exist, but we don't have permission to read.
     target = target and target .. PATHSEP .. dirname or dirname
-    if target ~= "" and not target:find("^[A-Z]:$") and not system.stat(target) then system.mkdir(target) end
+    if system.stat(target) then extant_root = i end
+  end
+  target = nil
+  for i, dirname in ipairs(segments) do
+    target = target and target .. PATHSEP .. dirname or dirname
+    if i >= extant_root and target ~= "" and not target:find("^[A-Z]:$") and not system.stat(target) then system.mkdir(target) end
   end
 end
 function common.copy(src, dst, hidden)
@@ -1014,7 +1021,8 @@ function Repository:fetch()
   if not status then
     if path then
       common.rmrf(path)
-      if #system.ls(common.dirname(path)) == 0 then common.rmrf(common.dirname(path)) end
+      local dir = common.dirname(path)
+      if system.stat(dir) and #system.ls(dir) == 0 then common.rmrf(dir) end
     end
     error(err)
   end
