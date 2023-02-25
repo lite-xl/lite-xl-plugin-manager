@@ -11,7 +11,7 @@ local PluginManager = {
   last_refresh = nil,
   requires_restart = false
 }
-local binary_extension = (PLATFORM == "Windows" and ".exe" or "")
+local binary_extension = (PLATFORM == "Windows" and ".exe" or (PLATFORM == "Android" and ".so" or ""))
 config.plugins.plugin_manager = common.merge({
   lpm_binary_name = "lpm." .. ARCH .. binary_extension,
   lpm_binary_path = nil,
