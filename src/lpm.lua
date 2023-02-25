@@ -1700,7 +1700,7 @@ xpcall(function()
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
-    ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag"
+    ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
