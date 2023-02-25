@@ -18,9 +18,7 @@ jobs:
         run: |
           sudo apt-get install musl-tools musl musl-dev
           wget -q https://musl.cc/riscv64-linux-musl-cross.tgz && tar -zxvf riscv64-linux-musl-cross.tgz
-          ls -l
-          ls -l riscv64-linux-musl-cross/bin
-          ./build.sh clean && BIN=lpm.riscv64-linux CC=riscv64-linux-musl-cross/bin/riscv64-linux-musl-cc AR=riscv64-linux-musl-cross/bin/riscv64-linux-musl-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-riscv64-linux'"' -static
+          ./build.sh clean && BIN=lpm.riscv64-linux CC=`pwd`/riscv64-linux-musl-cross/bin/riscv64-linux-musl-cc AR=`pwd`/riscv64-linux-musl-cross/bin/riscv64-linux-musl-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-riscv64-linux'"' -static
           ./build.sh clean && BIN=lpm.x86_64-linux CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static
       - name: Run Tests
         run: |
