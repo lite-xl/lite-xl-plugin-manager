@@ -17,8 +17,8 @@ jobs:
       - name: Build Linux
         run: |
           sudo apt-get install musl-tools musl musl-dev gcc-12-riscv64-linux-gnu
-          ./build clean && BIN=lpm.x86_64-linux CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static
-          ./build clean && BIN=lpm.riscv64-linux CC=riscv64-linux-gnu-gcc-12 AR=riscv64-linux-gnu-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-riscv64-linux'"'
+          ./build.sh clean && BIN=lpm.x86_64-linux CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static
+          ./build.sh clean && BIN=lpm.riscv64-linux CC=riscv64-linux-gnu-gcc-12 AR=riscv64-linux-gnu-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-riscv64-linux'"'
       - name: Run Tests
         run: |
           ./lpm test t/run.lua
