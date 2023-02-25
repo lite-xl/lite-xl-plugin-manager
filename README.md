@@ -66,6 +66,8 @@ CI is enabled on this repository, so you can grab Windows and Linux builds from 
 which is a nightly, or the `latest` [release page](https://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/latest),
 which holds the most recent released version.
 
+There are also tagged releases, for specified versions.
+
 You can get a feel for how to use `lpm` by typing `./lpm --help`.
 
 ## Supporting Libraries
@@ -79,6 +81,23 @@ build `lpm`:
 * `libz` (supporting library for everything)
 * `libzip` (for unpacking .zip files)
 * `libmicrotar` (for unpacking .tar.gz files)
+
+## Supported Platforms
+
+`lpm` should work on all platforms `lite-xl` works on; but releases are offered for the following:
+
+* Windows x86_64
+* Linux x86_64
+* MacOS x86_64
+* MacOS aarch64
+* Android x86_64
+* Android x86
+* Android aarch64
+* Android armv7a
+
+Experimental support (i.e. doesn't work) exists for the following platforms:
+
+* Linux riscv64
 
 ## Use in CI
 
