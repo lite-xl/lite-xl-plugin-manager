@@ -21,7 +21,7 @@ jobs:
           ./build.sh clean && BIN=lpm.riscv64-linux CC=riscv64-linux-gnu-gcc-12 AR=riscv64-linux-gnu-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-riscv64-linux'"'
       - name: Run Tests
         run: |
-          ./lpm test t/run.lua
+          ./lpm.x86-linux test t/run.lua
       - name: Build Android
         env: { ANDROID_ABI_VERSION: "26" }
         run: |
