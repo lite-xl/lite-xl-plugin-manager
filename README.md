@@ -90,10 +90,10 @@ build `lpm`:
 * Linux x86_64
 * MacOS x86_64
 * MacOS aarch64
-* Android x86_64
-* Android x86
-* Android aarch64
-* Android armv7a
+* Android 8.0+ x86_64
+* Android 8.0+ x86
+* Android 8.0+ aarch64
+* Android 8.0+ armv7a
 
 Experimental support (i.e. doesn't work) exists for the following platforms:
 

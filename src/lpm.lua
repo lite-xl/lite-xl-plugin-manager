@@ -462,6 +462,7 @@ function common.chdir(dir, callback)
 end
 
 local LATEST_MOD_VERSION = "3.0.0"
+local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err)
@@ -602,6 +603,11 @@ function Addon.new(repository, metadata)
   self.type = type
   -- Directory.
   self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.path and not self.url) or (self.path and not self.path:find("%.lua$"))) and "complex" or "singleton")
+  if self.dependencies and #self.dependencies > 0 then
+    local t = {}
+    for i,v in ipairs(self.dependencies) do t[v] = {} end
+    self.dependencies = t
+  end
   if not self.local_path and repository then
     if metadata.remote then
       local local_path = (Repository.url(metadata.remote).local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or ""))
@@ -841,13 +847,17 @@ end
 
 function Repository.__index(self, idx) return rawget(self, idx) or Repository[idx] end
 function Repository.new(hash)
-  if not hash.remote then error("requires a remote") end
-  if not hash.remote:find("^%w+:") and system.stat(hash.remote .. "/.git") then hash.remote = "file://" .. system.stat(hash.remote).abs_path end
-  if not hash.remote:find("^https?:") and not hash.remote:find("^file:") then error("only repositories with http and file transports are supported (" .. hash.remote .. ")") end
+  if hash.remote then
+    if not hash.remote:find("^%w+:") and system.stat(hash.remote .. "/.git") then hash.remote = "file://" .. system.stat(hash.remote).abs_path end
+    if not hash.remote:find("^https?:") and not hash.remote:find("^file:") then error("only repositories with http and file transports are supported (" .. hash.remote .. ")") end
+  else
+    if not hash.repo_path then error("requires a remote, or a repo_path") end
+  end
   local self = setmetatable({
     commit = hash.commit,
     remote = hash.remote,
     branch = hash.branch,
+    live = nil,
     addons = nil,
     repo_path = CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. system.hash(hash.remote),
     lite_xls = {},
@@ -869,8 +879,13 @@ function Repository.new(hash)
   return self
 end
 
+function Repository:is_live()
+  return hash.remote == nil
+end
+
 function Repository.url(url)
-  if type(url) == "table" then return url.remote .. ":" .. (url.branch or url.commit) end
+  if type(url) == "table" then return (url.remote and (url.remote .. ":" .. (url.branch or url.commit)) or url.repo_path) end
+  if not url:find("^%a+:") then return Repository.new({ repo_path = url }) end
   local e = url:reverse():find(":")
   local s = e and (#url - e + 1)
   local remote, branch_or_commit = url:sub(1, s and (s-1) or #url), s and url:sub(s+1)
@@ -983,6 +998,7 @@ end
 
 -- useds to fetch things from a generic place
 function Repository:fetch()
+  if self:is_live() then return self end
   local path
   local status, err = pcall(function()
     if not self.branch and not self.commit then
@@ -1099,7 +1115,7 @@ function LiteXL:install()
   if self:is_installed() then log_warning("lite-xl " .. self.version .. " already installed") return end
   common.mkdirp(self.local_path)
   if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
-    local executable, datadir = common.path("lite-xl")
+    local executable, datadir = common.path("lite-xl" .. EXECUTABLE_EXTENSION)
     if not executable then error("can't find system lite-xl executable") end
     local stat = system.stat(executable)
     executable = stat.symlink and stat.symlink or executable
@@ -1303,7 +1319,7 @@ local function get_repository(url)
   if not url then error("requires a repository url") end
   local r = Repository.url(url)
   for i,v in ipairs(repositories) do
-    if v.remote == r.remote and v.branch == r.branch and v.commit == r.commit then return i, v end
+    if (v.repo_path and v.repo_path == r.repo_path) or (v.remote == r.remote and v.branch == r.branch and v.commit == r.commit) then return i, v end
   end
   return nil
 end
@@ -1379,7 +1395,7 @@ local function lpm_lite_xl_save()
   for i, arch in ipairs(ARCH) do
     common.mkdirp(CACHEDIR .. PATHSEP .. arch .. PATHSEP .. "lite_xls")
     common.write(CACHEDIR .. PATHSEP .. arch .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
-      json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() and l.arch == arch end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path } end))
+      json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() and l.arch == arch end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path } end))
     )
   end
 end
@@ -1387,9 +1403,11 @@ end
 local function lpm_lite_xl_add(version, path)
   if not version then error("requires a version") end
   if not path then error("requires a path") end
-  if not system.stat(path .. PATHSEP .. "lite-xl") then error("can't find " .. path .. PATHSEP .. "lite-xl") end
-  if not system.stat(path .. PATHSEP .. "data") then error("can't find " .. path .. PATHSEP .. "data") end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, path = path:gsub(PATHSEP .. "$", ""), arch = ARCH[1], mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
+  local binary_path  = BINARY or (path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
+  local data_path = DATADIR or (path .. PATHSEP .. "data")
+  if not system.stat(binary_path) then error("can't find " .. binary_path) end
+  if not system.stat(data_path) then error("can't find " .. data_path) end
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path =  { [ARCH[1]] = lite_xl_binary }, datadir_path = data_path path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
   lpm_lite_xl_save()
 end
 
@@ -1408,14 +1426,14 @@ end
 
 local function lpm_lite_xl_switch(version, target)
   if not version then error("requires a version") end
-  target = target or common.path("lite-xl")
+  target = target or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
   if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly as a second argument") end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
   if not lite_xl:is_installed() then log_action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
   local stat = system.stat(target)
   if stat and stat.symlink then os.remove(target) end
   system.symlink(lite_xl:get_binary_path(), target)
-  if not common.path('lite-xl') then
+  if not common.path('lite-xl' .. EXECUTABLE_EXTENSION) then
     os.remove(target)
     error(target .. " is not on your $PATH; please supply a target that can be found on your $PATH, called `lite-xl`.")
   end
@@ -1825,6 +1843,7 @@ Flags have the following effects:
                            and other network activity.
   --progress               For JSON mode, lines of progress as JSON objects.
                            By default, JSON does not emit progress lines.
+  --symlink
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2042,7 +2061,7 @@ not commonly used publically.
         end
       end
     end
-    local lite_xl_binary = BINARY or common.path("lite-xl")
+    local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
     if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
     if lite_xl_binary then
       local stat = system.stat(lite_xl_binary)
