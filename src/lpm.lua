@@ -602,8 +602,9 @@ function Addon.new(repository, metadata)
   }, metadata), Addon)
   self.type = type
   -- Directory.
-  if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. "plugins" .. PATHSEP .. self.id .. ".lua") then self.path = "plugins" .. PATHSEP .. self.id .. ".lua" end
-  if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. "plugins" .. PATHSEP .. self.id) then self.path = "plugins" .. PATHSEP .. self.id end
+  local plural_type = type == "library" and "libraries" or (type .. "s")
+  if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. plural_type  .. PATHSEP .. self.id .. ".lua") then self.path = plural_type .. PATHSEP .. self.id .. ".lua" end
+  if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. plural_type .. PATHSEP .. self.id) then self.path = plural_type .. PATHSEP .. self.id end
   self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.path and not self.url) or (self.path and not self.path:find("%.lua$"))) and "complex" or "singleton")
   if self.dependencies and #self.dependencies > 0 then
     local t = {}
@@ -793,16 +794,21 @@ function Addon:install(bottle, installing)
           if file.arch then has_one_file = true end
           if not NO_INSTALL_OPTIONAL and (not file.optional or prompt(common.basename(file.url) .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
             if not file.checksum then error("requires a checksum") end
-            local path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
+            local target_path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
             local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
-            local local_path = self.local_path .. PATHSEP .. (file.path or common.basename(file.url))
+
+            local local_path = self.repository.repo_path .. PATHSEP .. (file.path or common.basename(file.url))
+            local stripped_local_path = local_path:find("%.[^%.]+%-[^%.]+%.[^%.]*$") and local_path:gsub("%.[^%.]+%-[^%.]+", "") or local_path
 
             if SYMLINK and self.repository:is_local() and system.stat(local_path) then
-              log_action("Symlinking file " .. local_path .. " to " .. install_path)
+              log_action("Symlinking " .. local_path .. " to " .. target_path)
               system.symlink(local_path, temporary_path)
+            elseif SYMLINK and self.repository:is_local() and system.stat(stripped_local_path) then
+              log_action("Symlinking " .. stripped_local_path .. " to " .. target_path)
+              system.symlink(stripped_local_path, temporary_path)
             else
               common.get(file.url, temporary_path, file.checksum, write_progress_bar)
-              local basename = common.basename(path)
+              local basename = common.basename(target_path)
               if basename:find("%.zip$") or basename:find("%.tar%.gz$") then
                 log_action("Extracting file " .. basename .. " in " .. install_path)
                 system.extract(temporary_path, temporary_install_path)
@@ -1341,7 +1347,7 @@ local function get_repository(url)
   if not url then error("requires a repository url") end
   local r = Repository.url(url)
   for i,v in ipairs(repositories) do
-    if (v.repo_path and v.repo_path == r.repo_path) or (v.remote == r.remote and v.branch == r.branch and v.commit == r.commit) then return i, v end
+    if (v.repo_path and v.repo_path == r.repo_path) or (v.remote and v.remote == r.remote and v.branch == r.branch and v.commit == r.commit) then return i, v end
   end
   return nil
 end
