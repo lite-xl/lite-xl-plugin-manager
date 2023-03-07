@@ -503,16 +503,6 @@ local function prompt(message)
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
 end
 
-local function log_copy(src, dst, symlink)
-  if symlink then
-    log_action("Symlinking " .. src .. " to " .. dst)
-    system.symlink(src, dst)
-  else
-    log_action("Copying " .. src .. " to " .. dst)
-    common.copy(src, dst)
-  end
-end
-
 local status = 0
 local function error_handler(err)
   local s, e = err and err:find(":%d+")
@@ -612,6 +602,8 @@ function Addon.new(repository, metadata)
   }, metadata), Addon)
   self.type = type
   -- Directory.
+  if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. "plugins" .. PATHSEP .. self.id .. ".lua") then self.path = "plugins" .. PATHSEP .. self.id .. ".lua" end
+  if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. "plugins" .. PATHSEP .. self.id) then self.path = "plugins" .. PATHSEP .. self.id end
   self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.path and not self.url) or (self.path and not self.path:find("%.lua$"))) and "complex" or "singleton")
   if self.dependencies and #self.dependencies > 0 then
     local t = {}
@@ -619,11 +611,11 @@ function Addon.new(repository, metadata)
     self.dependencies = t
   end
   if not self.local_path and repository then
-    if metadata.remote then
-      local local_path = (Repository.url(metadata.remote).local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or ""))
-      self.local_path = system.stat(local_path) and (Repository.url(metadata.remote).local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")) or nil
+    if self.remote then
+      local local_path = (Repository.url(self.remote).local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or ""))
+      self.local_path = system.stat(local_path) and (Repository.url(self.remote).local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or "")) or nil
     else
-      self.local_path = (repository.local_path .. (metadata.path and (PATHSEP .. metadata.path:gsub("^/", "")) or "")) or nil
+      self.local_path = (repository.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or "")) or nil
     end
   end
   return self
@@ -773,9 +765,22 @@ function Addon:install(bottle, installing)
       local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
-      log_copy(self.local_path, temporary_path, SYMLINK)
+      if SYMLINK then
+        log_action("Symlinking " .. self.local_path .. " to " .. path)
+        system.symlink(self.local_path, temporary_path)
+      else
+        log_action("Copying " .. self.local_path .. " to " .. path)
+        common.copy(self.local_path, temporary_path)
+      end
     elseif self.organization == 'complex' then -- complex plugin without local path
-      log_copy(self.local_path, temporary_install_path, SYMLINK)
+      local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      if SYMLINK then
+        log_action("Symlinking " .. self.local_path .. " to " .. path)
+        system.symlink(self.local_path, temporary_install_path)
+      else
+        log_action("Copying " .. self.local_path .. " to " .. path)
+        common.copy(self.local_path, temporary_install_path)
+      end
     end
 
 
@@ -793,7 +798,8 @@ function Addon:install(bottle, installing)
             local local_path = self.local_path .. PATHSEP .. (file.path or common.basename(file.url))
 
             if SYMLINK and self.repository:is_local() and system.stat(local_path) then
-              common.log_copy(local_path, temporary_path, SYMLINK)
+              log_action("Symlinking file " .. local_path .. " to " .. install_path)
+              system.symlink(local_path, temporary_path)
             else
               common.get(file.url, temporary_path, file.checksum, write_progress_bar)
               local basename = common.basename(path)
