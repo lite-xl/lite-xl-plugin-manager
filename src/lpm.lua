@@ -463,7 +463,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -501,6 +501,16 @@ local function prompt(message)
   if ASSUME_YES then return true end
   local response = io.stdin:read("*line")
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
+end
+
+local function log_copy(src, dst, symlink)
+  if symlink then
+    log_action("Symlinking " .. src .. " to " .. dst)
+    system.symlink(src, dst)
+  else
+    log_action("Copying " .. src .. " to " .. dst)
+    common.copy(src, dst)
+  end
 end
 
 local status = 0
@@ -630,6 +640,7 @@ function Addon:unstub()
   local addon = Addon.new(repo, remote_entry)
   -- merge in attribtues that are probably more accurate than the stub
   for k,v in pairs(addon) do self[k] = v end
+  return repo
 end
 
 -- Determines whether two addons located at different paths are actually different based on their contents.
@@ -753,25 +764,18 @@ function Addon:install(bottle, installing)
     end
 
     if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
-    if self.url then
+    if self.url then -- remote simple plugin
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, path, self.checksum, write_progress_bar)
       log_action("Downloaded file " .. self.url .. " to " .. path)
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
-    elseif self.remote then
-      log_progress_action("Fetching repository " .. self.remote .. " into " .. install_path)
-      local repo = Repository.url(self.remote):fetch()
-      common.copy(repo.local_path .. (self.path and (PATHSEP .. self.path) or ""), temporary_install_path)
-      common.rmrf(temporary_install_path .. PATHSEP .. ".git")
-      common.rmrf(temporary_install_path .. PATHSEP .. ".gitignore")
-    elseif self.path then
+    elseif self.path then -- local plugin that has a local path
       local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
-      log_action("Copying " .. self.local_path .. " to " .. path)
-      common.copy(self.local_path, temporary_path)
-    elseif self.organization == 'complex' then
-      common.copy(self.local_path, temporary_install_path)
+      log_copy(self.local_path, temporary_path, SYMLINK)
+    elseif self.organization == 'complex' then -- complex plugin without local path
+      log_copy(self.local_path, temporary_install_path, SYMLINK)
     end
 
 
@@ -786,13 +790,19 @@ function Addon:install(bottle, installing)
             if not file.checksum then error("requires a checksum") end
             local path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
             local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
-            common.get(file.url, temporary_path, file.checksum, write_progress_bar)
-            local basename = common.basename(path)
-            if basename:find("%.zip$") or basename:find("%.tar%.gz$") then
-              log_action("Extracting file " .. basename .. " in " .. install_path)
-              system.extract(temporary_path, temporary_install_path)
+            local local_path = self.local_path .. PATHSEP .. (file.path or common.basename(file.url))
+
+            if SYMLINK and self.repository:is_local() and system.stat(local_path) then
+              common.log_copy(local_path, temporary_path, SYMLINK)
             else
-              if file.arch and file.arch ~= "*" then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
+              common.get(file.url, temporary_path, file.checksum, write_progress_bar)
+              local basename = common.basename(path)
+              if basename:find("%.zip$") or basename:find("%.tar%.gz$") then
+                log_action("Extracting file " .. basename .. " in " .. install_path)
+                system.extract(temporary_path, temporary_install_path)
+              else
+                if file.arch and file.arch ~= "*" then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
+              end
             end
           end
         end
@@ -859,28 +869,32 @@ function Repository.new(hash)
     branch = hash.branch,
     live = nil,
     addons = nil,
-    repo_path = CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. system.hash(hash.remote),
+    repo_path = hash.repo_path or (CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. system.hash(hash.remote)),
     lite_xls = {},
     last_retrieval = nil
   }, Repository)
-  if system.stat(self.repo_path) and not self.commit and not self.branch then
-    -- In the case where we don't have a branch, and don't have a commit, check for the presence of `master` and `main`.
-    if system.stat(self.repo_path .. PATHSEP .. "master") then
-      self.branch = "master"
-    elseif system.stat(self.repo_path .. PATHSEP .. "main") then
-      self.branch = "main"
-    else
-      error("can't find branch for " .. self.remote .. " in " .. self.repo_path)
+  if not self:is_local() then
+    if system.stat(self.repo_path) and not self.commit and not self.branch then
+      -- In the case where we don't have a branch, and don't have a commit, check for the presence of `master` and `main`.
+      if system.stat(self.repo_path .. PATHSEP .. "master") then
+        self.branch = "master"
+      elseif system.stat(self.repo_path .. PATHSEP .. "main") then
+        self.branch = "main"
+      else
+        error("can't find branch for " .. self.remote .. " in " .. self.repo_path)
+      end
     end
-  end
-  if self.commit or self.branch then
-    self.local_path = self.repo_path .. PATHSEP .. (self.commit or self.branch)
+    if self.commit or self.branch then
+      self.local_path = self.repo_path .. PATHSEP .. (self.commit or self.branch)
+    end
+  else
+    self.local_path = self.repo_path
   end
   return self
 end
 
-function Repository:is_live()
-  return hash.remote == nil
+function Repository:is_local()
+  return self.remote == nil
 end
 
 function Repository.url(url)
@@ -998,7 +1012,7 @@ end
 
 -- useds to fetch things from a generic place
 function Repository:fetch()
-  if self:is_live() then return self end
+  if self:is_local() then return self end
   local path
   local status, err = pcall(function()
     if not self.branch and not self.commit then
@@ -1081,8 +1095,10 @@ end
 
 
 function Repository:remove()
-  common.rmrf(self.local_path)
-  if #system.ls(self.repo_path) == 0 then common.rmrf(self.repo_path) end
+  if not self:is_local() then
+    common.rmrf(self.local_path)
+    if #system.ls(self.repo_path) == 0 then common.rmrf(self.repo_path) end
+  end
 end
 
 
@@ -1407,7 +1423,7 @@ local function lpm_lite_xl_add(version, path)
   local data_path = DATADIR or (path .. PATHSEP .. "data")
   if not system.stat(binary_path) then error("can't find " .. binary_path) end
   if not system.stat(data_path) then error("can't find " .. data_path) end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path =  { [ARCH[1]] = lite_xl_binary }, datadir_path = data_path path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = lite_xl_binary }, datadir_path = data_path, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
   lpm_lite_xl_save()
 end
 
@@ -1560,7 +1576,7 @@ local function lpm_repo_list()
     for i, repository in ipairs(repositories) do
       local _, remotes = repository:parse_manifest()
       if i ~= 0 then print("---------------------------") end
-      print("Remote :  " .. repository:url())
+      if not repository:is_local() then print("Remote :  " .. repository:url()) end
       print("Path   :  " .. repository.local_path)
       print("Remotes:  " .. json.encode(common.map(repository.remotes or {}, function(r) return r:url() end)))
     end
@@ -1689,7 +1705,7 @@ local function run_command(ARGS)
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[3], ARGS)
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
@@ -1719,6 +1735,7 @@ xpcall(function()
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
+    symlink = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
@@ -1733,7 +1750,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
-  [--datadir=directory] [--binary=path] [--post]
+  [--datadir=directory] [--binary=path] [--symlink] [--post]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1843,7 +1860,10 @@ Flags have the following effects:
                            and other network activity.
   --progress               For JSON mode, lines of progress as JSON objects.
                            By default, JSON does not emit progress lines.
-  --symlink
+  --symlink                Use symlinks where possible when installing modules.
+                           If a repository contains a file of the same name as a
+                           `files` download in the primary directory, will also
+                           symlink that, rather than downloading.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -1893,6 +1913,7 @@ not commonly used publically.
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
   POST = ARGS["post"]
+  SYMLINK = ARGS["symlink"]
   PROGRESS = ARGS["progress"]
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
