@@ -1207,9 +1207,10 @@ function Bottle:construct()
   if self:is_constructed() then error("bottle " .. self.hash .. " already constructed") end
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
-  common.copy(self.lite_xl.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "lite-xl")
-  system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
-  common.copy(self.lite_xl.local_path .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
+
+  common.copy(self.lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
+  system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, 448) -- chmod to rwx-------
+  common.copy(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
   for i,addon in ipairs(self.addons) do addon:install(self) end
 end
 
@@ -1420,22 +1421,20 @@ local function get_lite_xl(version)
 end
 
 local function lpm_lite_xl_save()
-  for i, arch in ipairs(ARCH) do
-    common.mkdirp(CACHEDIR .. PATHSEP .. arch .. PATHSEP .. "lite_xls")
-    common.write(CACHEDIR .. PATHSEP .. arch .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
-      json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() and l.arch == arch end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path } end))
-    )
-  end
+  common.mkdirp(CACHEDIR .. PATHSEP .. "lite_xls")
+  common.write(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
+    json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path } end))
+  )
 end
 
 local function lpm_lite_xl_add(version, path)
   if not version then error("requires a version") end
-  if not path then error("requires a path") end
-  local binary_path  = BINARY or (path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
-  local data_path = DATADIR or (path .. PATHSEP .. "data")
+  if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " lite-xl already exists") end
+  local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
+  local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
   if not system.stat(binary_path) then error("can't find " .. binary_path) end
   if not system.stat(data_path) then error("can't find " .. data_path) end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = lite_xl_binary }, datadir_path = data_path, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_path }, datadir_path = data_path, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
   lpm_lite_xl_save()
 end
 
@@ -1486,7 +1485,7 @@ local function lpm_lite_xl_list()
       status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
       local_path = lite_xl:is_installed() and lite_xl.local_path or nil,
       datadir_path = lite_xl:is_installed() and lite_xl.datadir_path or nil,
-      binary_path = lite_xl:is_installed() and lite_xl:get_binary_path() or nil
+      binary_path = lite_xl:is_installed() and lite_xl.binary_path or nil
     })
     max_version = math.max(max_version, #lite_xl.version)
   end
@@ -1534,7 +1533,7 @@ local function lpm_lite_xl_run(version, ...)
   local addons = {}
   local arguments = { ... }
   local i = 1
-  while i < #arguments and arguments[i] ~= "--" do
+  while i <= #arguments and arguments[i] ~= "--" do
     local str = arguments[i]
     local id, version = common.split(":", str)
     local addon = system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version })
@@ -2087,11 +2086,9 @@ not commonly used publically.
         repositories[#repositories]:parse_manifest()
       end
     end
-    for i, arch in ipairs(ARCH) do
-      if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. arch .. PATHSEP .. "locals.json") then
-        for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. ARCH .. PATHSEP .. "locals.json"))) do
-          table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, arch = arch, path = lite_xl.path, tags = { "local" } }))
-        end
+    if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
+      for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json"))) do
+        table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }))
       end
     end
     local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
