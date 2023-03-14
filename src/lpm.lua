@@ -1328,20 +1328,17 @@ function Bottle:get_addon(id, version, filter)
   local wildcard = id:find("%*$")
   filter = filter or {}
   for i,addon in ipairs(self:all_addons()) do
-    if not version and addon.provides then
-      for k, provides in ipairs(addon.provides) do
-        if provides == id then
-          table.insert(candidates, addon)
-        end
-      end
-    end
-    if (addon.id == id or (wildcard and addon.id:find("^" .. id:sub(1, #id - 1)))) and match_version(addon.version, version) then
-      if (not filter.mod_version or not addon.mod_version or compatible_modversion(filter.mod_version, addon.mod_version)) then
+    if (common.first(addon.replaces or {}, function(replaces) return replaces == id end) or
+      common.first(addon.provides or {}, function(provides) return provides == id end) or
+      (addon.id == id or (wildcard and addon.id:find("^" .. id:sub(1, #id - 1))))) and
+      match_version(addon.version, version) and (not filter.mod_version or not addon.mod_version or compatible_modversion(filter.mod_version, addon.mod_version))
+    then
         table.insert(candidates, addon)
-      end
     end
   end
-  return table.unpack(common.sort(common.uniq(candidates), function (a,b) return a.version < b.version end))
+  return table.unpack(common.sort(common.uniq(candidates), function (a,b)
+    return (a.replaces == id and b.replaces ~= id) or (a.version < b.version)
+  end))
 end
 
 local function get_repository(url)
@@ -2117,7 +2114,6 @@ not commonly used publically.
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
   end, error_handler)
-
   if ARGS[2] ~= '-' then
     engage_locks(function()
       run_command(ARGS)

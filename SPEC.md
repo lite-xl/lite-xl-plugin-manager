@@ -52,6 +52,8 @@ Fields that are required are bolded.
 * `description`: An optional english-language description of the addon.
 * `provides`: An optional array of strings that are a shorthand of functionality
  this addon provides. Can be used as a dependency.
+* `replaces`: An optional array of ids that this plugin explicitly replaces. Will always
+ prefer this plugin in place of those plugins, so long as version requirements are met.
 * `remote`: Optional. Specifies an https git link wheree this addon is located. If present,
  denotes a **stub**.
 * `dependencies`: Optionally a hash of dependencies required, or optional
