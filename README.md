@@ -70,6 +70,12 @@ There are also tagged releases, for specified versions.
 
 You can get a feel for how to use `lpm` by typing `./lpm --help`.
 
+You can also use `scoop` to grab `lpm`, courtesy of @cvladan:
+
+```
+scoop install https://gist.githubusercontent.com/cvladan/416c1945c9e446a6fc64ba766d6ee4ef/raw/lite-xl-plugin-manager.json
+```
+
 ## Supporting Libraries
 
 As seen in the `lib` folder, the following external libraries are used to
