@@ -21,9 +21,7 @@ Conforms to [SCPS3](https://github.com/adamharrison/straightforward-c-project-st
 
 ## Status
 
-Please note that `lpm` has currently not reached version 1.0. As such, it is still heavily in flux, and may change without notice.
-
-Once 1.0 is released, changleogs will be produced, and a more stable process that uses semver will be used.
+`lpm` 1.0 has been just released, and so may still contain bugs, but is generally feature-complete. 
 
 ## Specification
 
