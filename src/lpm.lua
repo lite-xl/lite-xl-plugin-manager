@@ -743,7 +743,7 @@ function Addon:install(bottle, installing)
         if installing[addon] then
           error("circular dependency detected in " .. self.id .. ": requires " .. addon .. " but, " .. addon .. " requires " .. self.id)
         end
-        if not NO_INSTALL_OPTIONAL and (not v.optional or prompt(addon .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
+        if not v.optional or (not NO_INSTALL_OPTIONAL and prompt(addon .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
           compatible[addon]:install(bottle, installing)
         end
       end
@@ -1753,7 +1753,7 @@ xpcall(function()
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
-    ["install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
+    ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
