@@ -1208,9 +1208,14 @@ function Bottle:construct()
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
 
+  -- Always copy the executbale, because of the way that lite determines the user folder (for now).
   common.copy(self.lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
-  system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, 448) -- chmod to rwx-------
-  common.copy(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
+  system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, 448) -- chmod to rwx-------\
+  if SYMLINK then
+    system.symlink(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
+  else
+    common.copy(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
+  end
   for i,addon in ipairs(self.addons) do addon:install(self) end
 end
 
@@ -1223,7 +1228,7 @@ end
 function Bottle:run(args)
   args = args or {}
   if self.is_system then error("system bottle cannot be run") end
-  os.execute(self.local_path .. PATHSEP .. "lite-xl", table.unpack(args))
+  os.execute(self.local_path .. PATHSEP .. "lite-xl" .. (#args > 0 and " " or "") .. table.concat(args, " "))
 end
 
 local function get_repository_addons()
@@ -1530,7 +1535,8 @@ local function lpm_lite_xl_run(version, ...)
   local addons = {}
   local arguments = { ... }
   local i = 1
-  while i <= #arguments and arguments[i] ~= "--" do
+  while i <= #arguments do
+    if arguments[i] == "--" then break end
     local str = arguments[i]
     local id, version = common.split(":", str)
     local addon = system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version })
@@ -1662,6 +1668,10 @@ local function lpm_addon_upgrade()
   end
 end
 
+local function lpm_bottle_purge()
+  common.rmrf(CACHEDIR .. PATHSEP .. "bottles")
+end
+
 local function lpm_purge()
   log_action("Removed " .. CACHEDIR .. ".")
   common.rmrf(CACHEDIR)
@@ -1727,6 +1737,7 @@ local function run_command(ARGS)
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm_lite_xl_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "rm" then return lpm_lite_xl_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm_bottle_purge(common.slice(ARGS, 4))
   elseif ARGS[2] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "purge" then lpm_purge()
