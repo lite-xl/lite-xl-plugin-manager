@@ -44,59 +44,6 @@
   #include <Security/Security.h>
 #endif
 
-static char hex_digits[] = "0123456789abcdef";
-static int lpm_hash(lua_State* L) {
-  size_t len;
-  const char* data = luaL_checklstring(L, 1, &len);
-  const char* type = luaL_optstring(L, 2, "string");
-  static const int digest_length = 32;
-  unsigned char buffer[digest_length];
-  mbedtls_sha256_context hash_ctx;
-  mbedtls_sha256_init(&hash_ctx);
-  mbedtls_sha256_starts_ret(&hash_ctx, 0);
-  if (strcmp(type, "file") == 0) {
-    FILE* file = fopen(data, "rb");
-    if (!file) {
-      mbedtls_sha256_free(&hash_ctx);
-      return luaL_error(L, "can't open %s", data);
-    }
-    while (1) {
-      unsigned char chunk[4096];
-      size_t bytes = fread(chunk, 1, sizeof(chunk), file);
-      mbedtls_sha256_update_ret(&hash_ctx, chunk, bytes);
-      if (bytes < 4096)
-        break;
-    }
-    fclose(file);
-  } else {
-    mbedtls_sha256_update_ret(&hash_ctx, data, len);
-  }
-  mbedtls_sha256_finish_ret(&hash_ctx, buffer);
-  mbedtls_sha256_free(&hash_ctx);
-  char hex_buffer[digest_length * 2 + 1];
-  for (size_t i = 0; i < digest_length; ++i) {
-    hex_buffer[i*2+0] = hex_digits[buffer[i] >> 4];
-    hex_buffer[i*2+1] = hex_digits[buffer[i] & 0xF];
-  }
-  lua_pushlstring(L, hex_buffer, digest_length * 2);
-  return 1;
-}
-
-int lpm_symlink(lua_State* L) {
-  #ifndef _WIN32
-    if (symlink(luaL_checkstring(L, 1), luaL_checkstring(L, 2)))
-      return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
-    return 0;
-  #else
-    return luaL_error(L, "can't create symbolic link %s: your operating system sucks", luaL_checkstring(L, 2));
-  #endif
-}
-
-int lpm_chmod(lua_State* L) {
-  if (chmod(luaL_checkstring(L, 1), luaL_checkinteger(L, 2)))
-    return luaL_error(L, "can't chmod %s: %s", luaL_checkstring(L, 1), strerror(errno));
-  return 0;
-}
 
 #if _WIN32
 static LPCWSTR lua_toutf16(lua_State* L, const char* str) {
@@ -137,6 +84,75 @@ static const char* lua_toutf8(lua_State* L, LPCWSTR str) {
   return NULL;
 }
 #endif
+
+static FILE* lua_fopen(lua_State* L, const char* path, const char* mode) {
+  #ifdef _WIN32
+    FILE* file = _wfopen(lua_toutf16(L, path), lua_toutf16(L, mode));
+    lua_pop(L, 2);
+    return file;
+  #else
+    return fopen(path, mode);
+  #endif
+}
+
+static char hex_digits[] = "0123456789abcdef";
+static int lpm_hash(lua_State* L) {
+  size_t len;
+  const char* data = luaL_checklstring(L, 1, &len);
+  const char* type = luaL_optstring(L, 2, "string");
+  static const int digest_length = 32;
+  unsigned char buffer[digest_length];
+  mbedtls_sha256_context hash_ctx;
+  mbedtls_sha256_init(&hash_ctx);
+  mbedtls_sha256_starts_ret(&hash_ctx, 0);
+  if (strcmp(type, "file") == 0) {
+    FILE* file = lua_fopen(L, data, "rb");
+    if (!file) {
+      mbedtls_sha256_free(&hash_ctx);
+      return luaL_error(L, "can't open %s", data);
+    }
+    while (1) {
+      unsigned char chunk[4096];
+      size_t bytes = fread(chunk, 1, sizeof(chunk), file);
+      mbedtls_sha256_update_ret(&hash_ctx, chunk, bytes);
+      if (bytes < 4096)
+        break;
+    }
+    fclose(file);
+  } else {
+    mbedtls_sha256_update_ret(&hash_ctx, data, len);
+  }
+  mbedtls_sha256_finish_ret(&hash_ctx, buffer);
+  mbedtls_sha256_free(&hash_ctx);
+  char hex_buffer[digest_length * 2 + 1];
+  for (size_t i = 0; i < digest_length; ++i) {
+    hex_buffer[i*2+0] = hex_digits[buffer[i] >> 4];
+    hex_buffer[i*2+1] = hex_digits[buffer[i] & 0xF];
+  }
+  lua_pushlstring(L, hex_buffer, digest_length * 2);
+  return 1;
+}
+
+
+int lpm_symlink(lua_State* L) {
+  #ifndef _WIN32
+    if (symlink(luaL_checkstring(L, 1), luaL_checkstring(L, 2)))
+      return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
+    return 0;
+  #else
+    return luaL_error(L, "can't create symbolic link %s: your operating system sucks", luaL_checkstring(L, 2));
+  #endif
+}
+
+int lpm_chmod(lua_State* L) {
+  #ifdef _WIN32
+    if (_wchmod(lua_toutf16(L, luaL_checkstring(L, 1)), luaL_checkinteger(L, 2)))
+  #else
+    if (chmod(luaL_checkstring(L, 1), luaL_checkinteger(L, 2)))
+  #endif
+      return luaL_error(L, "can't chmod %s: %s", luaL_checkstring(L, 1), strerror(errno));
+  return 0;
+}
 
 static int lpm_ls(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
@@ -517,7 +533,7 @@ static int lpm_certs(lua_State* L) {
     } else {
       if (strcmp(type, "system") == 0) {
         #if _WIN32
-          FILE* file = fopen(path, "wb");
+          FILE* file = lua_fopen(L, path, "wb");
           if (!file)
             return luaL_error(L, "can't open cert store %s for writing: %s", path, strerror(errno));
           HCERTSTORE hSystemStore = CertOpenSystemStore(0, TEXT("ROOT"));
@@ -615,7 +631,7 @@ static int lpm_extract(lua_State* L) {
         return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
       }
       if (target[target_length-1] != '/') {
-        FILE* file = fopen(target, "wb");
+        FILE* file = lua_fopen(L, target, "wb");
         if (!file) {
           zip_fclose(zip_file);
           zip_close(archive);
@@ -673,7 +689,11 @@ static int lpm_extract(lua_State* L) {
       int len = strlen(src) - 3;
       strncpy(actual_src, src, len < PATH_MAX ? len : PATH_MAX);
       actual_src[len] = 0;
-      FILE* file = fopen(actual_src, "wb");
+      FILE* file = lua_fopen(L, actual_src, "wb");
+      if (!file) {
+        gzclose(gzfile);
+        return luaL_error(L, "can't open %s for writing: %s", actual_src, strerror(errno));
+      }
       while (1) {
         int length = gzread(gzfile, buffer, sizeof(buffer));
         if (length == 0)
@@ -889,7 +909,10 @@ static int lpm_get(lua_State* L) {
   int total_downloaded = body_length;
   int remaining = content_length - body_length;
   if (path) {
-    FILE* file = fopen(path, "wb");
+    FILE* file = lua_fopen(L, path, "wb");
+    if (!file) {
+      snprintf(err, sizeof(err), "can't open file %s: %s", path, strerror(errno)); goto cleanup;
+    }
     fwrite(header_end, sizeof(char), body_length, file);
     while (content_length == -1 || remaining > 0) {
       int length = lpm_socket_read(s, buffer, sizeof(buffer), ssl_ctx);
@@ -952,16 +975,27 @@ static int lpm_get(lua_State* L) {
 }
 
 static int lpm_chdir(lua_State* L) {
-  if (chdir(luaL_checkstring(L, 1)))
-    return luaL_error(L, "error chdiring: %s", strerror(errno));
+  #ifdef _WIN32
+    if (_wchdir(lua_toutf16(L, luaL_checkstring(L, 1))))
+  #else
+    if (chdir(luaL_checkstring(L, 1)))
+  #endif
+      return luaL_error(L, "error chdiring: %s", strerror(errno));
   return 0;
 }
 
 static int lpm_pwd(lua_State* L) {
-  char buffer[MAX_PATH];
-  if (!getcwd(buffer, sizeof(buffer)))
-    return luaL_error(L, "error getcwd: %s", strerror(errno));
-  lua_pushstring(L, buffer);
+  #ifdef _WIN32
+    wchar_t buffer[MAX_PATH];
+    if (!_wgetcwd(buffer, sizeof(buffer)))
+      return luaL_error(L, "error getcwd: %s", strerror(errno));
+    lua_toutf8(L, buffer);
+  #else
+    char buffer[MAX_PATH];
+    if (!getcwd(buffer, sizeof(buffer)))
+      return luaL_error(L, "error getcwd: %s", strerror(errno));
+    lua_pushstring(L, buffer);
+  #endif
   return 1;
 }
 
