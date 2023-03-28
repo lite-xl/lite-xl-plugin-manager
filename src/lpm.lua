@@ -2099,8 +2099,9 @@ not commonly used publically.
         table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }))
       end
     end
-    local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
+    if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
     if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
+    local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
     if lite_xl_binary then
       local stat = system.stat(lite_xl_binary)
       if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
@@ -2117,11 +2118,12 @@ not commonly used publically.
         table.insert(lite_xls, system_lite_xl)
         lpm_lite_xl_save()
       else
+        if DATADIR then system_lite_xl.datadir_path = DATADIR end
         table.insert(system_lite_xl.tags, "system")
       end
       system_bottle = Bottle.new(system_lite_xl, nil, true)
     else
-      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } }), nil, true)
+      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, true)
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
   end, error_handler)
