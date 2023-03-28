@@ -1950,7 +1950,7 @@ not commonly used publically.
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
   if ARGS["trace"] then system.trace(true) end
 
-  if (not JSON and not QUIET) or (JSON and PROGRESS) then
+  if (not JSON and not QUIET and (TTY or PROGRESS)) or (JSON and PROGRESS) then
     local start_time, last_read
     local function format_bytes(bytes)
       if bytes < 1024 then return string.format("%6d  B", math.floor(bytes)) end
@@ -1959,7 +1959,6 @@ not commonly used publically.
       return string.format("%6.2f GB", bytes / (1024*1024*1024))
     end
     if JSON then
-
       write_progress_bar = function(total_read, total_objects_or_content_length, indexed_objects, received_objects, local_objects, local_deltas, indexed_deltas)
         if type(total_read) == "boolean" then
           io.stdout:write(json.encode({ progress = { percent = 1, label = progress_bar_label } }) .. "\n")

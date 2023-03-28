@@ -1138,6 +1138,8 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "VERSION");
   lua_pushliteral(L, ARCH_PLATFORM);
   lua_setglobal(L, "PLATFORM");
+  lua_pushboolean(L, isatty(fileno(stdout)));
+  lua_setglobal(L, "TTY");
   #if _WIN32
     lua_pushliteral(L, "\\");
   #else
