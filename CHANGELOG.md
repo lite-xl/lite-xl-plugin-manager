@@ -1,0 +1,171 @@
+
+# 1.0.1
+
+* Fixed an issue with --no-install-optional being non-functional.
+* Modified fopen calls to use `_wfopen` where appropriate to improve UTF-8 support on windows.
+* Fixed some defaults around specifiying explicit binaries and datadirs for certain pathways.
+* Added this CHANGELOG.md.
+
+# 1.0.0
+
+Initial release of `lpm`.
+
+```
+Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
+  [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
+  [--ssl-certs=directory/file] [--force] [--arch=x86_64-linux]
+  [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
+  [--datadir=directory] [--binary=path] [--symlink] [--post]
+
+LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
+
+It's designed to install packages from our central github repository (and
+affiliated repositories), directly into your lite-xl user directory. It can
+be called independently, for from the lite-xl `addon_manager` addon.
+
+LPM will always use https://github.com/lite-xl/lite-xl-plugin-manager as its base
+repository, if none are present, and the cache directory does't exist,
+but others can be added, and this base one can be removed.
+
+It has the following commands:
+
+  lpm init [repo 1] [repo 2] [...]         Implicitly called before all commands
+                                           if necessary, but can be called
+                                           independently to save time later, or
+                                           to set things up differently.
+
+                                           Adds the built in repository to your
+                                           repository list, and all `remotes`.
+
+                                           If repo 1 ... is specified, uses that
+                                           list of repositories as the base instead.
+
+                                           If "none" is specified, initializes
+                                           an empty repository list.
+
+  lpm repo list                            List all extant repos.
+  lpm [repo] add <repository remote>       Add a source repository.
+    [...<repository remote>]
+  lpm [repo] rm <repository remote>        Remove a source repository.
+    [...<repository remote>]
+  lpm [repo] update [<repository remote>]  Update all/the specified repos.
+    [...<repository remote>]
+  lpm [plugin|library|color] install       Install specific addons.
+    <addon id>[:<version>]                 If installed, upgrades.
+    [...<addon id>:<version>]
+  lpm [plugin|library|color] uninstall     Uninstall the specific addon.
+    <addon id> [...<addon id>]
+  lpm [plugin|library|color] reinstall     Uninstall and installs the specific addon.
+   <addon id> [...<addon id>]
+
+  lpm [plugin|library|color] list          List all/associated addons.
+   <remote> [...<remote>]
+
+  lpm upgrade                              Upgrades all installed addons
+                                           to new version if applicable.
+  lpm [lite-xl] install <version>          Installs lite-xl. Infers the
+    [binary] [datadir]                     paths on your system if not
+                                           supplied. Automatically
+                                           switches to be your system default
+                                           if path auto inferred.
+  lpm lite-xl add <version> <path>         Adds a local version of lite-xl to
+                                           the managed list, allowing it to be
+                                           easily bottled.
+  lpm lite-xl remove <path>                Removes a local version of lite-xl
+                                           from the managed list.
+  lpm [lite-xl] switch <version> [<path>]  Sets the active version of lite-xl
+                                           to be the specified version. Auto-detects
+                                           current install of lite-xl; if none found
+                                           path can be specified.
+  lpm lite-xl list [name pattern]          Lists all installed versions of
+     [...filters]                          lite-xl. Can specify the flags listed
+                                           in the filtering seciton.
+  lpm run <version> [...addons]            Sets up a "bottle" to run the specified
+                                           lite version, with the specified addons
+                                           and then opens it.
+  lpm describe [bottle]                    Describes the bottle specified in the form
+                                           of a list of commands, that allow someone
+                                           else to run your configuration.
+  lpm table <manifest path> [readme path]  Formats a markdown table of all specified
+                                           addons. Dumps to stdout normally, but if
+                                           supplied a readme, will remove all tables
+                                           from the readme, and append the new one.
+
+  lpm purge                                Completely purge all state for LPM.
+  lpm -                                    Read these commands from stdin in
+                                           an interactive print-eval loop.
+  lpm help                                 Displays this help text.
+
+
+Flags have the following effects:
+
+  --json                   Performs all communication in JSON.
+  --userdir=directory      Sets the lite-xl userdir manually.
+                           If omitted, uses the normal lite-xl logic.
+  --cachedir=directory     Sets the directory to store all repositories.
+  --tmpdir=directory       During install, sets the staging area.
+  --datadir=directory      Sets the data directory where core addons are located
+                           for the system lite-xl.
+  --binary=path            Sets the lite-xl binary path for the system lite-xl.
+  --verbose                Spits out more information, including intermediate
+                           steps to install and whatnot.
+  --quiet                  Outputs nothing but explicit responses.
+  --mod-version=version    Sets the mod version of lite-xl to install addons.
+  --version                Returns version information.
+  --help                   Displays this help text.
+  --ssl-certs              Sets the SSL certificate store. Can be a directory,
+                           or path to a certificate bundle.
+  --arch=architecture      Sets the architecture (default: x86_64-linux).
+  --assume-yes             Ignores any prompts, and automatically answers yes
+                           to all.
+  --no-install-optional    On install, anything marked as optional
+                           won't prompt.
+  --trace                  Dumps to STDERR useful debugging information, in
+                           particular information relating to SSL connections,
+                           and other network activity.
+  --progress               For JSON mode, lines of progress as JSON objects.
+                           By default, JSON does not emit progress lines.
+  --symlink                Use symlinks where possible when installing modules.
+                           If a repository contains a file of the same name as a
+                           `files` download in the primary directory, will also
+                           symlink that, rather than downloading.
+
+The following flags are useful when listing plugins, or generating the plugin
+table. Putting a ! infront of the string will invert the filter. Multiple
+filters of the same type can be specified to create an OR relationship.
+
+  --author=author          Only display addons by the specified author.
+  --tag=tag                Only display addons with the specified tag.
+  --stub=git/file/false    Only display the specified stubs.
+  --dependency=dep         Only display addons that have a dependency on the
+                           specified addon.
+  --status=status          Only display addons that have the specified status.
+  --type=type              Only display addons on the specified type.
+  --name=name              Only display addons that have a name which matches the
+                           specified filter.
+
+There also several flags which are classified as "risky", and are never enabled
+in any circumstance unless explicitly supplied.
+
+  --force                  Ignores checksum inconsistencies.
+  --post                   Run post-install build steps. Must be explicitly enabled.
+                           Official repositories must function without this
+                           flag being needed; generally they must provide
+                           binaries if there is a native compilation step.
+  --remotes                Automatically adds any specified remotes in the
+                           repository to the end of the resolution list.
+  --ssl-certs=noverify     Ignores SSL certificate validation. Opens you up to
+                           man-in-the-middle attacks.
+
+There exist also other debug commands that are potentially useful, but are
+not commonly used publically.
+
+  lpm test [test file]               Runs the specified test suite.
+  lpm table <manifest> [...filters]  Generates markdown table for the given
+                                     manifest. Used by repositories to build
+                                     READMEs.
+  lpm download <url> [target]        Downloads the specified URL to stdout,
+                                     or to the specified target file.
+  lpm extract <file.[tar.gz|zip]>    Extracts the specified archive at
+    [target]                         target, or the current working directory.
+```
