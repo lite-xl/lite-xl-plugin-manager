@@ -66,6 +66,8 @@ Fields that are required are bolded.
 * `arch`: Optionally a list of architectures this plugin supports. If not present, and no `files` that specify arches, assumes that plugin is valid for all architectures. If not present, and at least one `files` exists that specifies an architecture, only assumed to be valid for all `arch`es specified under `files`. Can be either an array of arch names, or can be `"*"` to explicitly specify all architectures.
 * `post`: Optionally a string which represents a command to run. If presented
   with a dictionary, takes `ARCH` keys, and runs a different command per `ARCH`.
+* `url`: Optionally a URL which specifies a direct download link to a single lua file.
+  precludes the use of `remote`, `path`. Usually a `singleton`.
 * `extra`: Optionally a dictionary which holds any desired extra information.
 
 Any keys not present in this official listing render the manifest non-conforming.
