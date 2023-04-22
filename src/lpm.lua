@@ -1530,10 +1530,14 @@ local function lpm_lite_xl_list()
 end
 
 local function lpm_lite_xl_run(version, ...)
-  if not version then error("requires a version") end
+  if not version then error("requires a version or arguments") end
+  local arguments = { ... }
+  if not version:find("^%d+") and version ~= "system" then
+    table.insert(arguments, 1, version)
+    version = "system"
+  end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
   local addons = {}
-  local arguments = { ... }
   local i = 1
   while i <= #arguments do
     if arguments[i] == "--" then break end

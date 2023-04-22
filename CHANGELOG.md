@@ -1,3 +1,8 @@
+# 1.0.2 (forthcoming)
+
+* Suppresses the progress bar by default if we're not on a TTY.
+* Added `url` as a field to `SPEC.md`.
+* Modified `run` so that it'll use the system version if you don't specify one.
 
 # 1.0.1
 
