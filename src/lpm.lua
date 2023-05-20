@@ -625,14 +625,18 @@ end
 function Addon:is_stub() return self.remote end
 
 function Addon:unstub()
-  if not self:is_stub() then return end
-  local repo = Repository.url(self.remote):fetch()
-  local manifest = repo:parse_manifest(self.id)
-  local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == self.id end)[1]
-  if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
-  local addon = Addon.new(repo, remote_entry)
-  -- merge in attribtues that are probably more accurate than the stub
-  for k,v in pairs(addon) do self[k] = v end
+  if not self:is_stub() or self.inaccessible then return end
+  local repo
+  local status, err = pcall(function()
+    repo = Repository.url(self.remote):fetch()
+    local manifest = repo:parse_manifest(self.id)
+    local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == self.id end)[1]
+    if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
+    local addon = Addon.new(repo, remote_entry)
+    -- merge in attribtues that are probably more accurate than the stub
+    for k,v in pairs(addon) do self[k] = v end
+  end)
+  if not status then self.inaccessible = err end
   return repo
 end
 
@@ -720,6 +724,7 @@ end
 function Addon:install(bottle, installing)
   if self:is_installed(bottle) then error("addon " .. self.id .. " is already installed") return end
   if self:is_stub() then self:unstub() end
+  if self.inaccessible then error("addon " .. self.id .. " is inacessible: " .. self.inaccessible) end
   local install_path = self:get_install_path(bottle)
   local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#USERDIR + 2)
   local status, err = pcall(function()
@@ -1342,7 +1347,7 @@ function Bottle:get_addon(id, version, filter)
     end
   end
   return table.unpack(common.sort(common.uniq(candidates), function (a,b)
-    return (a.replaces == id and b.replaces ~= id) or (a.version < b.version)
+    return (a.replaces == id and b.replaces ~= id) or (a.version > b.version)
   end))
 end
 
@@ -1361,6 +1366,7 @@ local function lpm_repo_save()
   common.mkdirp(directory)
   common.write(directory .. PATHSEP .. "list", common.join("", common.map(repositories, function(r) return r:url() .. "\n" end)))
 end
+
 
 
 local DEFAULT_REPOS
@@ -1542,10 +1548,14 @@ local function lpm_lite_xl_run(version, ...)
   while i <= #arguments do
     if arguments[i] == "--" then break end
     local str = arguments[i]
-    local id, version = common.split(":", str)
-    local addon = system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version })
-    if not addon then error("can't find addon " .. str) end
-    table.insert(addons, addon)
+    if str:find("^http") then
+      table.insert(repositories, 1, Repository.url(str):add())
+    else
+      local id, version = common.split(":", str)
+      local addon = system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version })
+      if not addon then error("can't find addon " .. str) end
+      table.insert(addons, addon)
+    end
     i = i + 1
   end
   local bottle = Bottle.new(lite_xl, addons)
