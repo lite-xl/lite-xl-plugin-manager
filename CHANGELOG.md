@@ -1,8 +1,20 @@
-# 1.0.2 (forthcoming)
+# 1.0.2
 
 * Suppresses the progress bar by default if we're not on a TTY.
 * Added `url` as a field to `SPEC.md`.
 * Modified `run` so that it'll use the system version if you don't specify one.
+* Added the ability to specify a repo url as part of `run`, so you can easily test new plugin branches and their plugins without actually modifying your lpm state.
+* Fixed a few typos.
+* Fixed issue with `run` not handling cases where plugins were either orphaned or core plugins, which would cause the bottle to be incorrectly constructed.
+* Fixed issue where you could add non-numeric lite versions.
+* Fixed issue where tables generated with lpm didn't annotate non-remote url plugins with \*.
+* Fixed a memory leak.
+* Added in warning to let people know when stubs are mismatching versions.
+* Added in warning when we cannot acquire an lpm global lock, and also made it so we do not lock upon running something.
+* Better error handling for invalid manifests, specifically when paths for plugins don't exist.
+* Fixed issue with permissions not being recorded correctly when extracting from a zip file.
+* Added in --reinstall flag.
+
 
 # 1.0.1
 
