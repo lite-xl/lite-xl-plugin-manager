@@ -1004,22 +1004,35 @@ int lpm_flock(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   luaL_checktype(L, 2, LUA_TFUNCTION);
   int error_handler = lua_type(L, 3) == LUA_TFUNCTION ? 3 : 0;
+  int warning_handler = lua_type(L, 4) == LUA_TFUNCTION ? 4 : 0;
   #ifdef _WIN32
     HANDLE file = CreateFileW(lua_toutf16(L, path), FILE_SHARE_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
     if (!file || file == INVALID_HANDLE_VALUE)
       return luaL_error(L, "can't open for flock %s: %d", path, GetLastError());
     OVERLAPPED overlapped = {0};
-    if (!LockFileEx(file, LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 1, &overlapped)) {
-      CloseHandle(file);
-      return luaL_error(L, "can't flock %s: %d", path, GetLastError());
+    if (!LockFileEx(file, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, 0, 1, &overlapped)) {
+      if (GetLastError() == ERROR_IO_PENDING && warning_handler) {
+        lua_pushvalue(L, warning_handler);
+        lua_pcall(L, 0, 0, 0);
+      }
+      if (!LockFileEx(file, LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 1, &overlapped)) {
+        CloseHandle(file);
+        return luaL_error(L, "can't flock %s: %d", path, GetLastError());
+      }
     }
   #else
     int fd = open(path, 0);
     if (fd == -1)
       return luaL_error(L, "can't flock %s: %s", path, strerror(errno));
-    if (flock(fd, LOCK_EX) == -1) {
-      close(fd);
-      return luaL_error(L, "can't acquire exclusive lock on %s: %s", strerror(errno));
+    if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
+      if (errno == EWOULDBLOCK && warning_handler) {
+        lua_pushvalue(L, warning_handler);
+        lua_pcall(L, 0, 0, 0);
+      }
+      if (flock(fd, LOCK_EX) == -1) {
+        close(fd);
+        return luaL_error(L, "can't acquire exclusive lock on %s: %s", strerror(errno));
+      }
     }
   #endif
   lua_pushvalue(L, 2);

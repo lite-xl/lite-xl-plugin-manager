@@ -465,11 +465,11 @@ local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
-local function engage_locks(func, err)
+local function engage_locks(func, err, warn)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   local lockfile = USERDIR .. PATHSEP .. ".lock"
   if not system.stat(lockfile) then common.write(lockfile, "") end
-  system.flock(lockfile, func, err)
+  system.flock(lockfile, func, err, warn)
 end
 
 local Addon, Repository, LiteXL, Bottle = {}, {}, {}, {}
@@ -518,6 +518,9 @@ local function error_handler(err)
     if VERBOSE then io.stderr:write(debug.traceback(nil, 2) .. "\n") end
   end
   status = -1
+end
+local function lock_warning()
+  log_warning("waiting for lpm global lock to be released (only one instance of lpm can be run at once)")
 end
 
 
@@ -1571,7 +1574,9 @@ local function lpm_lite_xl_run(version, ...)
   end
   local bottle = Bottle.new(lite_xl, addons)
   if not bottle:is_constructed() then bottle:construct() end
-  bottle:run(common.slice(arguments, i + 1))
+  return function()
+    bottle:run(common.slice(arguments, i + 1))
+  end
 end
 
 
@@ -1738,22 +1743,22 @@ end
 local function run_command(ARGS)
   if not ARGS[2]:find("%S") then return
   elseif ARGS[2] == "init" then return
-  elseif ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGV[3] == "add" then return lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then return lpm_repo_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "add" then return lpm_repo_add(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "rm" then return lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "update" then return lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "update" then return lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_repo_list()
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then return lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then return lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then return lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "install" then return lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "uninstall" then return lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "reinstall" then lpm_addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "describe" then lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "describe" then return lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "list" then return lpm_addon_list(nil, ARGS[3], ARGS)
   elseif ARGS[2] == "lite-xl" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
@@ -1765,7 +1770,7 @@ local function run_command(ARGS)
   elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm_bottle_purge(common.slice(ARGS, 4))
   elseif ARGS[2] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "purge" then lpm_purge()
+  elseif ARGS[2] == "purge" then return lpm_purge()
   else error("unknown command: " .. ARGS[2]) end
   if JSON then
     io.stdout:write(json.encode({ actions = actions, warnings = warnings }))
@@ -2154,11 +2159,15 @@ not commonly used publically.
       system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, true)
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
-  end, error_handler)
+  end, error_handler, lock_warning)
   if ARGS[2] ~= '-' then
+    local res
     engage_locks(function()
-      run_command(ARGS)
-    end, error_handler)
+      res = run_command(ARGS)
+    end, error_handler, lock_warning)
+    if res then
+      res()
+    end
   else
     while true do
       local line = io.stdin:read("*line")
@@ -2174,7 +2183,7 @@ not commonly used publically.
       xpcall(function()
         engage_locks(function()
           run_command(args)
-        end)
+        end, error_handler, lock_warning)
       end, error_handler)
       actions, warnings = {}, {}
     end
