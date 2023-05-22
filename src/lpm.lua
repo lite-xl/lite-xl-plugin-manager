@@ -460,6 +460,11 @@ function common.chdir(dir, callback)
   system.chdir(wd)
   if not status then error(err) end
 end
+function common.stat(path)
+  local stat = system.stat(path)
+  if not stat then error("can't find file or directory at " .. path) end
+  return stat
+end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
@@ -768,16 +773,16 @@ function Addon:install(bottle, installing)
       log_action("Installing " .. self.organization .. " " .. self.type .. " located at " .. (self.local_path or self.remote) .. " to " .. install_path)
     end
 
-    if self.organization == "complex" and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
+    if self.organization == "complex" and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
     if self.url then -- remote simple plugin
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, path, self.checksum, write_progress_bar)
       log_action("Downloaded file " .. self.url .. " to " .. path)
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     elseif self.path then -- local plugin that has a local path
-      local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
-      if self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
+      if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
       if SYMLINK then
         log_action("Symlinking " .. self.local_path .. " to " .. path)
         system.symlink(self.local_path, temporary_path)
@@ -786,7 +791,7 @@ function Addon:install(bottle, installing)
         common.copy(self.local_path, temporary_path)
       end
     elseif self.organization == 'complex' then -- complex plugin without local path
-      local path = install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+      local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if SYMLINK then
         log_action("Symlinking " .. self.local_path .. " to " .. path)
         system.symlink(self.local_path, temporary_install_path)
