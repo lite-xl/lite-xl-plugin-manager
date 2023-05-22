@@ -667,6 +667,7 @@ function Addon:get_install_path(bottle)
   return path
 end
 
+function Addon:is_orphan(bottle) return not self.repository end
 function Addon:is_core(bottle) return self.location == "core" end
 function Addon:is_bundled(bottle) return self.location == "bundled" end
 function Addon:is_installed(bottle)
@@ -1142,7 +1143,7 @@ end
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
 function LiteXL:is_compatible(addon) return not addon.mod_version or compatible_modversion(self.mod_version, addon.mod_version) end
-function LiteXL:is_installed()  return system.stat(self.local_path) ~= nil end
+function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
   if self:is_installed() then log_warning("lite-xl " .. self.version .. " already installed") return end
@@ -1437,6 +1438,7 @@ end
 
 local function lpm_lite_xl_add(version, path)
   if not version then error("requires a version") end
+  if not version:find("^%d") then error("versions must begin numerically (i.e. 2.1.1-debug)") end
   if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " lite-xl already exists") end
   local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
   local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
@@ -1552,9 +1554,15 @@ local function lpm_lite_xl_run(version, ...)
       table.insert(repositories, 1, Repository.url(str):add())
     else
       local id, version = common.split(":", str)
-      local addon = system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version })
-      if not addon then error("can't find addon " .. str) end
-      table.insert(addons, addon)
+      local potentials = { system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version }) }
+      if #potentials == 0 then error("can't find addon " .. str) end
+      local uniq = {}
+      for i, addon in ipairs(potentials) do
+        if not addon:is_core(system_bottle) and not addon:is_orphan(system_bottle) and not uniq[addon.id] then
+          table.insert(addons, addon)
+          uniq[addon.id] = true
+        end
+      end
     end
     i = i + 1
   end
@@ -1789,7 +1797,7 @@ LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
 It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
-be called independently, for from the lite-xl `addon_manager` addon.
+be called independently, or from the lite-xl `plugin_manager` addon.
 
 LPM will always use https://github.com/lite-xl/lite-xl-plugin-manager as its base
 repository, if none are present, and the cache directory does't exist,
@@ -2070,7 +2078,7 @@ not commonly used publically.
     local ids = common.map(addons, function(addon)
       if addon.path and addon.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path) end
       if addon.path then return string.format("[`%s`](%s)", addon.name or addon.id, addon.path) end
-      if addon.url then return string.format("[`%s`](%s)", addon.name or addon.id, addon.url) end
+      if addon.url then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.url) end
       if addon.remote then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.remote:gsub(":%w+$", "")) end
       return addon.name or addon.id
     end)
