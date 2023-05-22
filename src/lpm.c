@@ -649,7 +649,7 @@ static int lpm_extract(lua_State* L) {
           if (attr & FA_DIREC)
               m = (S_IFDIR | (m & ~S_IFMT)) | S_IXUSR | S_IXGRP | S_IXOTH;
         } else {
-          m = (attr >> 16) & ~0222;
+          m = (attr >> 16);
         }
         if (chmod(target, m)) {
           zip_fclose(zip_file);
