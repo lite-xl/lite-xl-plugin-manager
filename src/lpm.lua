@@ -1356,7 +1356,7 @@ function Bottle:get_addon(id, version, filter)
       (addon.id == id or (wildcard and addon.id:find("^" .. id:sub(1, #id - 1))))) and
       match_version(addon.version, version) and (not filter.mod_version or not addon.mod_version or compatible_modversion(filter.mod_version, addon.mod_version))
     then
-        table.insert(candidates, addon)
+      table.insert(candidates, addon)
     end
   end
   return table.unpack(common.sort(common.uniq(candidates), function (a,b)
@@ -1749,22 +1749,22 @@ end
 local function run_command(ARGS)
   if not ARGS[2]:find("%S") then return
   elseif ARGS[2] == "init" then return
-  elseif ARGS[2] == "repo" and ARGV[3] == "add" then return lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then return lpm_repo_rm(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "add" then return lpm_repo_add(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "rm" then return lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "update" then return lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "update" then return lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_repo_list()
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then return lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then return lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then return lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "install" then return lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "uninstall" then return lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "reinstall" then lpm_addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "describe" then return lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "describe" then lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "list" then return lpm_addon_list(nil, ARGS[3], ARGS)
   elseif ARGS[2] == "lite-xl" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
@@ -1776,7 +1776,7 @@ local function run_command(ARGS)
   elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm_bottle_purge(common.slice(ARGS, 4))
   elseif ARGS[2] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "purge" then return lpm_purge()
+  elseif ARGS[2] == "purge" then lpm_purge()
   else error("unknown command: " .. ARGS[2]) end
   if JSON then
     io.stdout:write(json.encode({ actions = actions, warnings = warnings }))
@@ -2190,9 +2190,13 @@ not commonly used publically.
         s = e + 1
       end
       xpcall(function()
+        local res
         engage_locks(function()
-          run_command(args)
+          res = run_command(args)
         end, error_handler, lock_warning)
+        if res then
+          res()
+        end
       end, error_handler)
       actions, warnings = {}, {}
     end
