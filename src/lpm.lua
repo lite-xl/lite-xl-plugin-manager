@@ -468,7 +468,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -734,7 +734,7 @@ end
 
 
 function Addon:install(bottle, installing)
-  if self:is_installed(bottle) then error("addon " .. self.id .. " is already installed") return end
+  if self:is_installed(bottle) and not REINSTALL then error("addon " .. self.id .. " is already installed") return end
   if self:is_stub() then self:unstub() end
   if self.inaccessible then error("addon " .. self.id .. " is inacessible: " .. self.inaccessible) end
   local install_path = self:get_install_path(bottle)
@@ -1221,7 +1221,7 @@ function Bottle:is_constructed() return self.is_system or system.stat(self.local
 
 function Bottle:construct()
   if self.is_system then error("system bottle cannot be constructed") end
-  if self:is_constructed() then error("bottle " .. self.hash .. " already constructed") end
+  if self:is_constructed() and not REINSTALL then error("bottle " .. self.hash .. " already constructed") end
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
 
@@ -1578,7 +1578,7 @@ local function lpm_lite_xl_run(version, ...)
     i = i + 1
   end
   local bottle = Bottle.new(lite_xl, addons)
-  if not bottle:is_constructed() then bottle:construct() end
+  if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
     bottle:run(common.slice(arguments, i + 1))
   end
@@ -1789,7 +1789,7 @@ xpcall(function()
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
-    symlink = "flag",
+    symlink = "flag", reinstall = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
@@ -1804,7 +1804,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
-  [--datadir=directory] [--binary=path] [--symlink] [--post]
+  [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -1918,6 +1918,8 @@ Flags have the following effects:
                            If a repository contains a file of the same name as a
                            `files` download in the primary directory, will also
                            symlink that, rather than downloading.
+  --reinstall              Ignores that things may be the same, and attempts
+                           to reinstall all modules.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -1969,6 +1971,7 @@ not commonly used publically.
   POST = ARGS["post"]
   SYMLINK = ARGS["symlink"]
   PROGRESS = ARGS["progress"]
+  REINSTALL = ARGS["reinstall"]
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]
