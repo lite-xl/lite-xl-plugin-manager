@@ -829,6 +829,7 @@ function Addon:install(bottle, installing)
               if basename:find("%.zip$") or basename:find("%.tar%.gz$") then
                 log_action("Extracting file " .. basename .. " in " .. install_path)
                 system.extract(temporary_path, temporary_install_path)
+                os.remove(temporary_path)
               else
                 if file.arch and file.arch ~= "*" then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
               end
