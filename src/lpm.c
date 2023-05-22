@@ -115,7 +115,7 @@ static int lpm_hash(lua_State* L) {
       unsigned char chunk[4096];
       size_t bytes = fread(chunk, 1, sizeof(chunk), file);
       mbedtls_sha256_update_ret(&hash_ctx, chunk, bytes);
-      if (bytes < 4096)
+      if (bytes < sizeof(chunk))
         break;
     }
     fclose(file);

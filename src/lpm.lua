@@ -634,6 +634,8 @@ function Addon:unstub()
     if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
     local addon = Addon.new(repo, remote_entry)
     -- merge in attribtues that are probably more accurate than the stub
+    if addon.version ~= self.version then log_warning(self.id .. " stub on " .. self.repository:url() .. " has differing version from remote (" .. self.version .. " vs " .. addon.version .. "); may lead to install being inconsistent") end
+    -- if addon.mod_version ~= self.mod_version then log_warning(self.id .. " stub on " .. self.repository:url() .. " has differing mod_version from remote (" .. self.mod_version .. " vs " .. addon.mod_version .. ")") end
     for k,v in pairs(addon) do self[k] = v end
   end)
   if not status then self.inaccessible = err end
@@ -646,11 +648,12 @@ function Addon.is_path_different(path1, path2)
   local stat1, stat2 = system.stat(path1), system.stat(path2)
   if not stat1 or not stat2 or stat1.type ~= stat2.type or stat1.size ~= stat2.size then return true end
   if stat1.type == "dir" then
-    for i, file in ipairs(system.ls(path1)) do if not common.basename(file):find("^%.") and Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end end
+    for i, file in ipairs(system.ls(path1)) do
+      if not common.basename(file):find("^%.") and Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end
+    end
     return false
-  else
-    return system.hash(path1, "file") ~= system.hash(path2, "file")
   end
+  return system.hash(path1, "file") ~= system.hash(path2, "file")
 end
 
 function Addon.is_addon_different(downloaded_path, installed_path)
@@ -917,7 +920,7 @@ end
 
 function Repository.url(url)
   if type(url) == "table" then return (url.remote and (url.remote .. ":" .. (url.branch or url.commit)) or url.repo_path) end
-  if not url:find("^%a+:") then return Repository.new({ repo_path = url }) end
+  if not url:find("^%a+:") then return Repository.new({ repo_path = url:gsub("[/\\]$", "") }) end
   local e = url:reverse():find(":")
   local s = e and (#url - e + 1)
   local remote, branch_or_commit = url:sub(1, s and (s-1) or #url), s and url:sub(s+1)
@@ -2064,6 +2067,10 @@ not commonly used publically.
   if ARGS[2] == "download" then
     local file = common.get(ARGS[3], ARGS[4]);
     if file then print(file) end
+    os.exit(0)
+  end
+  if ARGS[2] == "hash" then
+    print(system.hash(ARGS[3], "file"))
     os.exit(0)
   end
   if ARGS[2] == "extract" then
