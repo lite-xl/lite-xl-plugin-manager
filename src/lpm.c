@@ -242,7 +242,7 @@ static int lpm_stat(lua_State *L) {
 #else
   struct stat s;
   int err = lstat(path, &s);
-  const char *abs_path = realpath(path, NULL);
+  const char *abs_path = !err ? realpath(path, NULL) : NULL;
 #endif
   if (err || !abs_path) {
     lua_pushnil(L);
@@ -251,6 +251,7 @@ static int lpm_stat(lua_State *L) {
   }
   lua_newtable(L);
   lua_pushstring(L, abs_path); lua_setfield(L, -2, "abs_path");
+  free((char*)abs_path);
   lua_pushvalue(L, 1); lua_setfield(L, -2, "path");
 
 #if __linux__
