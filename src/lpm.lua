@@ -871,30 +871,34 @@ function Addon:depends_on(addon)
 end
 
 
-local function check_dependency(dependency)
-  if common.first(settings.installed, function(id) return dependency.id == id end) then return true end
-  return #common.grep(system_bottle:installed_addons(), function(addon) return addon:depends_on(dependency) end) > 0
+
+function Addon:get_orphaned_dependencies(bottle)
+  local t = {}
+  local installed_addons = system_bottle:installed_addons()
+  for id, options in pairs(self.dependencies) do
+    local dependency = bottle:get_addon(id, options.version)
+    if dependency and dependency:is_installed(bottle) and not common.first(settings.installed, function(id) return dependency.id == id end) and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0 then
+      table.insert(t, dependency)
+    end
+  end
+  return t
 end
 
 
-function Addon:uninstall(bottle)
+function Addon:uninstall(bottle, uninstalling)
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
+  local orphans = self:get_orphaned_dependencies(bottle)
+  if #orphans > 0 and (uninstalling or prompt("Uninstalling " .. self.id .. " will leave the following orphans: " .. common.join(", ", common.map(orphans, function(e) return e.id end)).. ". Do you want to uninstall them as well?")) then
+    common.each(common.sort(orphans, function(a, b) return a.id < b.id end), function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
+  end
   log_action("Uninstalling " .. self.type .. " located at " .. install_path)
-  local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) end)
-  if #incompatible_addons == 0 or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?") then
+  local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
+  if #incompatible_addons == 0 or (installing or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?")) then
     for i,addon in ipairs(incompatible_addons) do
-      if not addon:uninstall(bottle) then return false end
+      if not addon:uninstall(bottle, uninstalling) then return false end
     end
     common.rmrf(install_path)
-    for id, options in pairs(self.dependencies) do
-      local dependency = bottle:get_addon(id, options.version)
-      if dependency and dependency:is_installed(bottle) and not check_dependency(dependency) then
-        if prompt(dependency.id .. " is now an orphaned dependency. Should we uninstall it?") then
-          dependency:uninstall(bottle)
-        end
-      end
-    end
     return true
   end
   return false
