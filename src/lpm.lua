@@ -1014,7 +1014,7 @@ function Repository:generate_manifest(repo_id)
           if repo_id and name == "init" then name = repo_id end
           if name ~= "init" then
             local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
-            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. file) or nil), type = type }
+            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. PATHSEP .. file) or nil), type = type }
             for line in io.lines(path .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
