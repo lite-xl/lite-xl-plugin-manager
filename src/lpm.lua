@@ -870,6 +870,13 @@ function Addon:depends_on(addon)
   return false
 end
 
+
+local function check_dependency(dependency)
+  if common.first(settings.installed, function(id) return dependency.id == id end) then return true end
+  return #common.grep(system_bottle:installed_addons(), function(addon) return addon:depends_on(dependency) end) > 0
+end
+
+
 function Addon:uninstall(bottle)
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
@@ -880,6 +887,14 @@ function Addon:uninstall(bottle)
       if not addon:uninstall(bottle) then return false end
     end
     common.rmrf(install_path)
+    for id, options in pairs(self.dependencies) do
+      local dependency = bottle:get_addon(id, options.version)
+      if dependency and dependency:is_installed(bottle) and not check_dependency(dependency) then
+        if prompt(dependency.id .. " is now an orphaned dependency. Should we uninstall it?") then
+          dependency:uninstall(bottle)
+        end
+      end
+    end
     return true
   end
   return false
@@ -1603,8 +1618,8 @@ local function lpm_install(type, ...)
       if #addons == 0 then
         log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
       else
-        for j,v in ipairs(addons) do 
-          v:install(system_bottle) 
+        for j,v in ipairs(addons) do
+          v:install(system_bottle)
           table.insert(settings.installed, v.id)
         end
       end
@@ -1613,10 +1628,6 @@ local function lpm_install(type, ...)
   lpm_settings_save()
 end
 
-local function check_dependency(dependency)
-  if common.first(settings.installed, function(id) return dependency.id == id end) then return true end
-  return #common.grep(system_bottle:installed_addons(), function(addon) return addon:depends_on(dependency) end) > 0
-end
 
 local function lpm_addon_uninstall(type, ...)
   for i, id in ipairs({ ... }) do
@@ -1624,17 +1635,9 @@ local function lpm_addon_uninstall(type, ...)
     if #addons == 0 then error("can't find addon " .. id) end
     local installed_addons = common.grep(addons, function(e) return e:is_installed(system_bottle) end)
     if #installed_addons == 0 then error("addon " .. id .. " not installed") end
-    for i, addon in ipairs(installed_addons) do 
-      addon:uninstall(system_bottle) 
+    for i, addon in ipairs(installed_addons) do
       settings.installed = common.grep(settings.installed, function(e) return e ~= addon.id end)
-      for id, options in pairs(addon.dependencies) do
-        local dependency = system_bottle:get_addon(id, options.version)
-        if dependency and dependency:is_installed(system_bottle) and not check_dependency(dependency) then
-          if prompt(dependency.id .. " is now an orphaned dependency. Should we uninstall it?") then
-            dependency:uninstall(system_bottle)
-          end
-        end
-      end
+      addon:uninstall(system_bottle)
     end
   end
   lpm_settings_save()
@@ -2157,7 +2160,7 @@ not commonly used publically.
     if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
     repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
     lite_xls = common.map(settings.lite_xls or {}, function(lite_xl) return LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }) end)
-    
+
     if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
     if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
     local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
