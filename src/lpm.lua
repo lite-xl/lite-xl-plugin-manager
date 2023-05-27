@@ -888,9 +888,9 @@ end
 function Addon:uninstall(bottle, uninstalling)
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
-  local orphans = self:get_orphaned_dependencies(bottle)
+  local orphans = common.sort(self:get_orphaned_dependencies(bottle), function(a, b) return a.id < b.id end)
   if #orphans > 0 and (uninstalling or prompt("Uninstalling " .. self.id .. " will leave the following orphans: " .. common.join(", ", common.map(orphans, function(e) return e.id end)).. ". Do you want to uninstall them as well?")) then
-    common.each(common.sort(orphans, function(a, b) return a.id < b.id end), function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
+    common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
   end
   log_action("Uninstalling " .. self.type .. " located at " .. install_path)
   local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
