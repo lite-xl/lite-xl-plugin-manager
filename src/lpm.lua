@@ -889,9 +889,11 @@ function Addon:uninstall(bottle, uninstalling)
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
   local orphans = common.sort(self:get_orphaned_dependencies(bottle), function(a, b) return a.id < b.id end)
-  if #orphans > 0 and (uninstalling or prompt("Uninstalling " .. self.id .. " will leave the following orphans: " .. common.join(", ", common.map(orphans, function(e) return e.id end)).. ". Do you want to uninstall them as well?")) then
-    common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
+  -- debate about this being a full abort, vs. just not uninstalling the orphans; settled in favour of full abort. can be revisited.
+  if #orphans > 0 and not uninstalling and not prompt("Uninstalling " .. self.id .. " will uninstall the following orphans: " .. common.join(", ", common.map(orphans, function(e) return e.id end)).. ". Do you want to continue?") then
+    return false
   end
+  common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
   log_action("Uninstalling " .. self.type .. " located at " .. install_path)
   local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
   if #incompatible_addons == 0 or (installing or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?")) then
@@ -1623,8 +1625,8 @@ local function lpm_install(type, ...)
         log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
       else
         for j,v in ipairs(addons) do
-          v:install(system_bottle)
           table.insert(settings.installed, v.id)
+          v:install(system_bottle)
         end
       end
     end
