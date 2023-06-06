@@ -366,7 +366,7 @@ function common.each(l, p) for i, v in ipairs(l) do p(v) end end
 function common.flat_map(l, p) local t = {} for i, v in ipairs(l) do local r = p(v) for k, w in ipairs(r) do table.insert(t, w) end end return t end
 function common.concat(t1, t2) local t = {} for i, v in ipairs(t1) do table.insert(t, v) end for i, v in ipairs(t2) do table.insert(t, v) end return t end
 function common.grep(l, p) local t = {} for i, v in ipairs(l) do if p(v) then table.insert(t, v) end end return t end
-function common.first(l, p) for i, v in ipairs(l) do if p(v) then return v end end end
+function common.first(l, p) for i, v in ipairs(l) do if (type(p) == 'function' and p(v)) or p == v then return v end end end
 function common.slice(t, i, l) local n = {} for j = i, l ~= nil and (i - l) or #t do table.insert(n, t[j]) end return n end
 function common.join(j, l) local s = "" for i, v in ipairs(l) do if i > 1 then s = s .. j .. v else s = v end end return s end
 function common.sort(t, f) table.sort(t, f) return t end
@@ -871,13 +871,17 @@ function Addon:depends_on(addon)
 end
 
 
+function Addon:is_explicitly_installed(bottle)
+  return common.first(settings.installed, function(id) return self.id == id end)
+end
+
 
 function Addon:get_orphaned_dependencies(bottle)
   local t = {}
   local installed_addons = system_bottle:installed_addons()
   for id, options in pairs(self.dependencies) do
     local dependency = bottle:get_addon(id, options.version)
-    if dependency and dependency:is_installed(bottle) and not common.first(settings.installed, function(id) return dependency.id == id end) and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0 then
+    if dependency and dependency:is_installed(bottle) and not dependency:is_explicitly_installed(bottle) and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0 then
       table.insert(t, dependency)
     end
   end
@@ -888,7 +892,7 @@ end
 function Addon:uninstall(bottle, uninstalling)
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
-  local orphans = common.sort(self:get_orphaned_dependencies(bottle), function(a, b) return a.id < b.id end)
+  local orphans = common.sort(common.grep(self:get_orphaned_dependencies(bottle), function(e) return not uninstalling or not uninstalling[e.id] end), function(a, b) return a.id < b.id end)
   -- debate about this being a full abort, vs. just not uninstalling the orphans; settled in favour of full abort. can be revisited.
   if #orphans > 0 and not uninstalling and not prompt("Uninstalling " .. self.id .. " will uninstall the following orphans: " .. common.join(", ", common.map(orphans, function(e) return e.id end)).. ". Do you want to continue?") then
     return false
@@ -896,9 +900,17 @@ function Addon:uninstall(bottle, uninstalling)
   common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
   log_action("Uninstalling " .. self.type .. " located at " .. install_path)
   local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
-  if #incompatible_addons == 0 or (installing or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?")) then
+  local should_uninstall = #incompatible_addons == 0 or uninstalling
+  if not should_uninstall then
+    should_uninstall = prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?")
+    if not should_uninstall and self:is_explicitly_installed(bottle) and prompt(self.id .. " is explicitly installed. Mark as non-explicit?") then
+      settings.installed = common.grep(settings.installed, function(e) return e ~= self.id end)
+      return false
+    end
+  end
+  if should_uninstall then
     for i,addon in ipairs(incompatible_addons) do
-      if not addon:uninstall(bottle, uninstalling) then return false end
+      if not addon:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) then return false end
     end
     common.rmrf(install_path)
     return true
@@ -1611,6 +1623,7 @@ end
 
 
 local function lpm_install(type, ...)
+  local to_install = {}
   for i, identifier in ipairs({ ... }) do
     local s = identifier:find(":")
     local id, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
@@ -1623,15 +1636,17 @@ local function lpm_install(type, ...)
       if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       if #addons == 0 then
         log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
+        if not common.first(settings.installed, id) then table.insert(settings.installed, id) end
       else
         for j,v in ipairs(addons) do
-          table.insert(settings.installed, v.id)
-          v:install(system_bottle)
+          if not common.first(settings.installed, v.id) then table.insert(settings.installed, v.id) end
+          table.insert(to_install, v)
         end
       end
     end
   end
   lpm_settings_save()
+  common.each(to_install, function(e) e:install(system_bottle) end)
 end
 
 
@@ -1642,7 +1657,6 @@ local function lpm_addon_uninstall(type, ...)
     local installed_addons = common.grep(addons, function(e) return e:is_installed(system_bottle) end)
     if #installed_addons == 0 then error("addon " .. id .. " not installed") end
     for i, addon in ipairs(installed_addons) do
-      settings.installed = common.grep(settings.installed, function(e) return e ~= addon.id end)
       addon:uninstall(system_bottle)
     end
   end
