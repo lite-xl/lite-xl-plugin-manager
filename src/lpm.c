@@ -231,18 +231,18 @@ static int lpm_mkdir(lua_State *L) {
 
 static int lpm_stat(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
+  char fullpath[MAX_PATH];
 #ifdef _WIN32
-  #define realpath(x, y) _wfullpath(y, x, MAX_PATH)
   struct _stat s;
   LPCWSTR wpath = lua_toutf16(L, path);
   int err = _wstat(wpath, &s);
-  LPCWSTR wfullpath = realpath(wpath, NULL);
+  LPCWSTR wfullpath = _wfullpath(fullpath, wpath, MAX_PATH);
   if (!wfullpath) return 0;
   const char *abs_path = lua_toutf8(L, wfullpath);
 #else
   struct stat s;
   int err = lstat(path, &s);
-  const char *abs_path = !err ? realpath(path, NULL) : NULL;
+  const char *abs_path = !err ? realpath(path, fullpath) : NULL;
 #endif
   if (err || !abs_path) {
     lua_pushnil(L);
@@ -251,7 +251,6 @@ static int lpm_stat(lua_State *L) {
   }
   lua_newtable(L);
   lua_pushstring(L, abs_path); lua_setfield(L, -2, "abs_path");
-  free((char*)abs_path);
   lua_pushvalue(L, 1); lua_setfield(L, -2, "path");
 
 #if __linux__
