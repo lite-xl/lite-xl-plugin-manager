@@ -231,15 +231,14 @@ static int lpm_mkdir(lua_State *L) {
 
 static int lpm_stat(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
-  char fullpath[MAX_PATH];
 #ifdef _WIN32
+  wchar_t fullpath[MAX_PATH];
   struct _stat s;
   LPCWSTR wpath = lua_toutf16(L, path);
   int err = _wstat(wpath, &s);
-  LPCWSTR wfullpath = _wfullpath(fullpath, wpath, MAX_PATH);
-  if (!wfullpath) return 0;
-  const char *abs_path = lua_toutf8(L, wfullpath);
+  const char *abs_path = !err && _wfullpath(fullpath, wpath, MAX_PATH) ? lua_toutf8(L, (LPCWSTR)fullpath) : NULL;
 #else
+  char fullpath[MAX_PATH];
   struct stat s;
   int err = lstat(path, &s);
   const char *abs_path = !err ? realpath(path, fullpath) : NULL;
