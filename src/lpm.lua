@@ -469,7 +469,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -480,14 +480,28 @@ end
 
 local Addon, Repository, LiteXL, Bottle = {}, {}, {}, {}
 
+local colors = {
+  green = 32,
+  yellow = 33,
+  blue = 34,
+  cyan = 36
+}
+local TERM = os.getenv("TERM")
+local function colorize(text, color)
+  if TERM and not TTY or NO_COLOR or not color then return text end
+  return "\x1B[" .. colors[color] .. "m" .. text .. "\x1B[0m"
+end
+
 local actions, warnings = {}, {}
-local function log_action(message)
+local function log_action(message, color)
   if JSON then table.insert(actions, message) end
-  if not QUIET then io.stderr:write(message .. "\n") end
+  if not QUIET then io.stderr:write(colorize(message .. "\n", color)) end
 end
 local function log_warning(message)
   if JSON then table.insert(warnings, message) end
-  if not QUIET then io.stderr:write("warning: " .. message .. "\n") end
+  if not QUIET then
+    io.stderr:write(colorize("warning: " .. message .. "\n", "yellow"))
+  end
 end
 local function fatal_warning(message)
   if not FORCE then error(message .. "; use --force to override") else log_warning(message) end
@@ -501,7 +515,7 @@ local function log_progress_action(message)
 end
 local function prompt(message)
   if not ASSUME_YES or not JSON then
-    io.stderr:write(message .. " [Y/n]: ")
+    io.stderr:write(colorize(message .. " [Y/n]: ", "cyan"))
     if ASSUME_YES then io.stderr:write("Y\n") end
   end
   if ASSUME_YES then return true end
@@ -701,6 +715,7 @@ function Addon:is_upgradable(bottle)
   end
   return false
 end
+function Addon:is_installable(bottle) return not self:is_core(bottle) and not self:is_orphan(bottle) end
 function Addon:is_incompatible(addon)
   return (self.dependencies[addon.id] and not match_version(addon.version, self.dependencies[addon.id] and self.dependencies[addon.id].version)) or
     (self.conflicts[addon.id] and match_version(addon.version, self.conflicts[addon.id] and self.conflicts[addon.id].version))
@@ -768,36 +783,36 @@ function Addon:install(bottle, installing)
     end
     common.mkdirp(common.dirname(temporary_install_path))
     if self:is_upgradable(bottle) then
-      log_action("Upgrading " .. self.organization .. " " .. self.type .. " located at " .. self.local_path .. " to " .. install_path)
+      log_action("Upgrading " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
       common.rmrf(install_path)
     else
-      log_action("Installing " .. self.organization .. " " .. self.type .. " located at " .. (self.local_path or self.remote) .. " to " .. install_path)
+      log_action("Installing " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
     end
 
     if self.organization == "complex" and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
     if self.url then -- remote simple plugin
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, path, self.checksum, write_progress_bar)
-      log_action("Downloaded file " .. self.url .. " to " .. path)
+      if VERBOSE then log_action("Downloaded file " .. self.url .. " to " .. path) end
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     elseif self.path then -- local plugin that has a local path
       local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
       if SYMLINK then
-        log_action("Symlinking " .. self.local_path .. " to " .. path)
+        if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path) end
         system.symlink(self.local_path, temporary_path)
       else
-        log_action("Copying " .. self.local_path .. " to " .. path)
+        if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path) end
         common.copy(self.local_path, temporary_path)
       end
     elseif self.organization == 'complex' then -- complex plugin without local path
       local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if SYMLINK then
-        log_action("Symlinking " .. self.local_path .. " to " .. path)
+        if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path) end
         system.symlink(self.local_path, temporary_install_path)
       else
-        log_action("Copying " .. self.local_path .. " to " .. path)
+        if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path) end
         common.copy(self.local_path, temporary_install_path)
       end
     end
@@ -898,7 +913,7 @@ function Addon:uninstall(bottle, uninstalling)
     return false
   end
   common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
-  log_action("Uninstalling " .. self.type .. " located at " .. install_path)
+  log_action("Uninstalling " .. self.type .. " located at " .. install_path, "green")
   local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
   local should_uninstall = #incompatible_addons == 0 or uninstalling
   if not should_uninstall then
@@ -1632,7 +1647,7 @@ local function lpm_install(type, ...)
       lpm_lite_xl_install(version)
     else
       local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
-      local addons = common.grep(potential_addons, function(e) return not e:is_installed(system_bottle) or REINSTALL end)
+      local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
       if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       if #addons == 0 then
         log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
@@ -1836,7 +1851,7 @@ xpcall(function()
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
-    symlink = "flag", reinstall = "flag",
+    symlink = "flag", reinstall = "flag", ["no-color"] = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
@@ -1967,6 +1982,8 @@ Flags have the following effects:
                            symlink that, rather than downloading.
   --reinstall              Ignores that things may be the same, and attempts
                            to reinstall all modules.
+  --no-color               Suppresses ANSI escape sequences that are emitted
+                           when connected over a TTY.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2019,6 +2036,7 @@ not commonly used publically.
   SYMLINK = ARGS["symlink"]
   PROGRESS = ARGS["progress"]
   REINSTALL = ARGS["reinstall"]
+  NO_COLOR = ARGS["no-color"]
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]

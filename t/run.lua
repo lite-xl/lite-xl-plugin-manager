@@ -110,6 +110,16 @@ local tests = {
     assert_exists(userdir .. "/plugins/plugin_manager/lpm.x86_64-linux")
     assert_exists(userdir .. "/plugins/plugin_manager/lpm.x86_64-windows.exe")
     assert_exists(userdir .. "/plugins/plugin_manager/init.lua")
+  end,
+  ["11_dependency_check"] = function()
+    lpm("install lsp")
+    assert_exists(userdir .. "/plugins/lsp")
+    assert_exists(userdir .. "/plugins/lintplus")
+    assert_exists(userdir .. "/plugins/settings.lua")
+    lpm("uninstall lsp")
+    assert_not_exists(userdir .. "/plugins/lsp")
+    assert_not_exists(userdir .. "/plugins/lintplus")
+    assert_not_exists(userdir .. "/plugins/settings.lua")
   end
 }
 
