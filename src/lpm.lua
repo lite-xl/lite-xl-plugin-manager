@@ -362,10 +362,11 @@ end
 local common = {}
 function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
 function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v)) end return t end
+function common.each(l, p) for i, v in ipairs(l) do p(v) end end
 function common.flat_map(l, p) local t = {} for i, v in ipairs(l) do local r = p(v) for k, w in ipairs(r) do table.insert(t, w) end end return t end
 function common.concat(t1, t2) local t = {} for i, v in ipairs(t1) do table.insert(t, v) end for i, v in ipairs(t2) do table.insert(t, v) end return t end
 function common.grep(l, p) local t = {} for i, v in ipairs(l) do if p(v) then table.insert(t, v) end end return t end
-function common.first(l, p) for i, v in ipairs(l) do if p(v) then return v end end end
+function common.first(l, p) for i, v in ipairs(l) do if (type(p) == 'function' and p(v)) or p == v then return v end end end
 function common.slice(t, i, l) local n = {} for j = i, l ~= nil and (i - l) or #t do table.insert(n, t[j]) end return n end
 function common.join(j, l) local s = "" for i, v in ipairs(l) do if i > 1 then s = s .. j .. v else s = v end end return s end
 function common.sort(t, f) table.sort(t, f) return t end
@@ -468,7 +469,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -869,14 +870,47 @@ function Addon:depends_on(addon)
   return false
 end
 
-function Addon:uninstall(bottle)
+
+function Addon:is_explicitly_installed(bottle)
+  return common.first(settings.installed, function(id) return self.id == id end)
+end
+
+
+function Addon:get_orphaned_dependencies(bottle)
+  local t = {}
+  local installed_addons = system_bottle:installed_addons()
+  for id, options in pairs(self.dependencies) do
+    local dependency = bottle:get_addon(id, options.version)
+    if dependency and dependency:is_installed(bottle) and not dependency:is_explicitly_installed(bottle) and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0 then
+      table.insert(t, dependency)
+    end
+  end
+  return t
+end
+
+
+function Addon:uninstall(bottle, uninstalling)
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
+  local orphans = common.sort(common.grep(self:get_orphaned_dependencies(bottle), function(e) return not uninstalling or not uninstalling[e.id] end), function(a, b) return a.id < b.id end)
+  -- debate about this being a full abort, vs. just not uninstalling the orphans; settled in favour of full abort. can be revisited.
+  if #orphans > 0 and not uninstalling and not prompt("Uninstalling " .. self.id .. " will uninstall the following orphans: " .. common.join(", ", common.map(orphans, function(e) return e.id end)).. ". Do you want to continue?") then
+    return false
+  end
+  common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
   log_action("Uninstalling " .. self.type .. " located at " .. install_path)
-  local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) end)
-  if #incompatible_addons == 0 or prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?") then
+  local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
+  local should_uninstall = #incompatible_addons == 0 or uninstalling
+  if not should_uninstall then
+    should_uninstall = prompt(self.id .. " is depended upon by " .. common.join(", ", common.map(incompatible_addons, function(p) return p.id end)) .. ". Remove as well?")
+    if not should_uninstall and self:is_explicitly_installed(bottle) and prompt(self.id .. " is explicitly installed. Mark as non-explicit?") then
+      settings.installed = common.grep(settings.installed, function(e) return e ~= self.id end)
+      return false
+    end
+  end
+  if should_uninstall then
     for i,addon in ipairs(incompatible_addons) do
-      if not addon:uninstall(bottle) then return false end
+      if not addon:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) then return false end
     end
     common.rmrf(install_path)
     return true
@@ -1374,10 +1408,14 @@ local function get_repository(url)
 end
 
 
+local function lpm_settings_save()
+  common.write(CACHEDIR .. PATHSEP .. "settings.json", json.encode(settings))
+end
+
+
 local function lpm_repo_save()
-  local directory = CACHEDIR .. PATHSEP .. "repos"
-  common.mkdirp(directory)
-  common.write(directory .. PATHSEP .. "list", common.join("", common.map(repositories, function(r) return r:url() .. "\n" end)))
+  settings.repositories = common.map(repositories, function(r) return r:url() end)
+  lpm_settings_save()
 end
 
 
@@ -1442,10 +1480,8 @@ local function get_lite_xl(version)
 end
 
 local function lpm_lite_xl_save()
-  common.mkdirp(CACHEDIR .. PATHSEP .. "lite_xls")
-  common.write(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json",
-    json.encode(common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path } end))
-  )
+  settings.lite_xls = common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path } end)
+  lpm_settings_save()
 end
 
 local function lpm_lite_xl_add(version, path)
@@ -1587,6 +1623,7 @@ end
 
 
 local function lpm_install(type, ...)
+  local to_install = {}
   for i, identifier in ipairs({ ... }) do
     local s = identifier:find(":")
     local id, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
@@ -1599,11 +1636,17 @@ local function lpm_install(type, ...)
       if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       if #addons == 0 then
         log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
+        if not common.first(settings.installed, id) then table.insert(settings.installed, id) end
       else
-        for j,v in ipairs(addons) do v:install(system_bottle) end
+        for j,v in ipairs(addons) do
+          if not common.first(settings.installed, v.id) then table.insert(settings.installed, v.id) end
+          table.insert(to_install, v)
+        end
       end
     end
   end
+  lpm_settings_save()
+  common.each(to_install, function(e) e:install(system_bottle) end)
 end
 
 
@@ -1613,8 +1656,11 @@ local function lpm_addon_uninstall(type, ...)
     if #addons == 0 then error("can't find addon " .. id) end
     local installed_addons = common.grep(addons, function(e) return e:is_installed(system_bottle) end)
     if #installed_addons == 0 then error("addon " .. id .. " not installed") end
-    for i, addon in ipairs(installed_addons) do addon:uninstall(system_bottle) end
+    for i, addon in ipairs(installed_addons) do
+      addon:uninstall(system_bottle)
+    end
   end
+  lpm_settings_save()
 end
 
 local function lpm_addon_reinstall(type, ...) for i, id in ipairs({ ... }) do pcall(lpm_addon_uninstall, type, id) end lpm_install(type, ...) end
@@ -2128,19 +2174,13 @@ not commonly used publically.
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   engage_locks(function()
+    settings = { lite_xls = {}, repositories = {}, installed = {} }
     lpm_repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
     repositories, lite_xls = {}, {}
-    if system.stat(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") then
-      for url in io.lines(CACHEDIR .. PATHSEP .. "repos" .. PATHSEP .. "list") do
-        table.insert(repositories, Repository.url(url))
-        repositories[#repositories]:parse_manifest()
-      end
-    end
-    if system.stat(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json") then
-      for i, lite_xl in ipairs(json.decode(common.read(CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. "locals.json"))) do
-        table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }))
-      end
-    end
+    if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
+    repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
+    lite_xls = common.map(settings.lite_xls or {}, function(lite_xl) return LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }) end)
+
     if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
     if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
     local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
