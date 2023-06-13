@@ -2174,7 +2174,7 @@ not commonly used publically.
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   engage_locks(function()
-    settings = { lite_xls = {}, repositories = {}, installed = {} }
+    settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
     lpm_repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
     repositories, lite_xls = {}, {}
     if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
