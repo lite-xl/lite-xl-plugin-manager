@@ -481,6 +481,7 @@ end
 local Addon, Repository, LiteXL, Bottle = {}, {}, {}, {}
 
 local colors = {
+  red = 31,
   green = 32,
   yellow = 33,
   blue = 34,
@@ -534,7 +535,7 @@ local function error_handler(err)
       io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
     end
   else
-    if err then io.stderr:write((not VERBOSE and message or err) .. "\n") end
+    if err then io.stderr:write(colorize((not VERBOSE and message or err) .. "\n", "red")) end
     if VERBOSE then io.stderr:write(debug.traceback(nil, 2) .. "\n") end
   end
   status = -1
