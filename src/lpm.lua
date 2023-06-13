@@ -489,7 +489,7 @@ local colors = {
 }
 local TERM = os.getenv("TERM")
 local function colorize(text, color)
-  if TERM and not TTY or NO_COLOR or not color then return text end
+  if not TERM or not TTY or NO_COLOR or not color then return text end
   return "\x1B[" .. colors[color] .. "m" .. text .. "\x1B[0m"
 end
 
@@ -1868,6 +1868,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
   [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
+  [--no-color]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
