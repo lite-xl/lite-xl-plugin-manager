@@ -487,9 +487,9 @@ local colors = {
   blue = 34,
   cyan = 36
 }
-local TERM = os.getenv("TERM")
+local SHOULD_COLOR = os.getenv("TERM") and os.getenv("TERM") ~= "dumb" and not os.getenv("NO_COLOR")
 local function colorize(text, color)
-  if not TERM or not TTY or NO_COLOR or not color then return text end
+  if not SHOULD_COLOR or not TTY or NO_COLOR or not color then return text end
   return "\x1B[" .. colors[color] .. "m" .. text .. "\x1B[0m"
 end
 
