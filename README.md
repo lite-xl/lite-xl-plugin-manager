@@ -8,8 +8,6 @@ plugins from lite-xl, as well as different version of lite-xl.
 Can be used by a package manager plugin that works from inside the editor
 and calls this binary.
 
-Releases forthcoming, should be available on Windows, Mac, Linux and FreeBSD.
-
 Also contains a plugin_manager.lua plugin to integrate the binary with lite in
 the form of an easy-to-use GUI.
 
@@ -21,7 +19,7 @@ Conforms to [SCPS3](https://github.com/adamharrison/straightforward-c-project-st
 
 ## Status
 
-`lpm` 1.0 has been just released, and so may still contain bugs, but is generally feature-complete. 
+`lpm` 1.0 has been just released, and so may still contain bugs, but is generally feature-complete.
 
 ## Specification
 
@@ -74,10 +72,10 @@ You can also use `scoop` to grab `lpm`, courtesy of @cvladan:
 scoop install https://gist.githubusercontent.com/cvladan/416c1945c9e446a6fc64ba766d6ee4ef/raw/lite-xl-plugin-manager.json
 ```
 
-## Supporting Libraries
+## Supporting Libraries / Dependencies
 
 As seen in the `lib` folder, the following external libraries are used to
-build `lpm`:
+build `lpm` as git submodules:
 
 * `lua` (core program written in)
 * `mbedtls` (https/SSL support)
@@ -85,6 +83,9 @@ build `lpm`:
 * `libz` (supporting library for everything)
 * `libzip` (for unpacking .zip files)
 * `libmicrotar` (for unpacking .tar.gz files)
+
+To build, `lpm` only requires a C compiler. To run the underlying build process
+for `mbedtls` and `libgit2`, `cmake` is also required.
 
 ## Supported Platforms
 

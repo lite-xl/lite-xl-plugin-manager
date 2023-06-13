@@ -134,7 +134,7 @@ static int lpm_hash(lua_State* L) {
 }
 
 
-int lpm_symlink(lua_State* L) {
+static int lpm_symlink(lua_State* L) {
   #ifndef _WIN32
     if (symlink(luaL_checkstring(L, 1), luaL_checkstring(L, 2)))
       return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
@@ -144,7 +144,7 @@ int lpm_symlink(lua_State* L) {
   #endif
 }
 
-int lpm_chmod(lua_State* L) {
+static int lpm_chmod(lua_State* L) {
   #ifdef _WIN32
     if (_wchmod(lua_toutf16(L, luaL_checkstring(L, 1)), luaL_checkinteger(L, 2)))
   #else
@@ -998,7 +998,7 @@ static int lpm_pwd(lua_State* L) {
   return 1;
 }
 
-int lpm_flock(lua_State* L) {
+static int lpm_flock(lua_State* L) {
   const char* path = luaL_checkstring(L, 1);
   luaL_checktype(L, 2, LUA_TFUNCTION);
   int error_handler = lua_type(L, 3) == LUA_TFUNCTION ? 3 : 0;
@@ -1048,7 +1048,7 @@ int lpm_flock(lua_State* L) {
   return 0;
 }
 
-double get_time() {
+static double get_time() {
    #if _WIN32 // Fuck I hate windows jesus chrsit.
     LARGE_INTEGER LoggedTime, Frequency;
     QueryPerformanceFrequency(&Frequency);
@@ -1061,7 +1061,7 @@ double get_time() {
   #endif
 }
 
-int lpm_time(lua_State* L) {
+static int lpm_time(lua_State* L) {
   lua_pushnumber(L, get_time());
   return 1;
 }

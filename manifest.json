@@ -67,17 +67,17 @@
       "files": [
         {
           "arch": "x86_64-linux",
-          "url": "https://github.com/lite-xl/lite-xl-simplified/releases/download/v2.1.1-simplified/lite-xl-v2.1.1-simplified-x86_64-linux.tar.gz",
+          "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1.1-simplified/lite-xl-v2.1.1-simplified-x86_64-linux.tar.gz",
           "checksum": "6a0589cf822e04563330bcf4d26b70be9a59ac268fbbd15073ae45ebb292917e"
         },
         {
           "arch": "x86_64-windows",
-          "url": "https://github.com/lite-xl/lite-xl-simplified/releases/download/v2.1.1-simplified/lite-xl-v2.1.1-simplified-x86_64-windows.zip",
+          "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1.1-simplified/lite-xl-v2.1.1-simplified-x86_64-windows.zip",
           "checksum": "15aca182dbf3768c6f9366d3715cca2154b1a1fbce8d79794aa350f9e24ca2bf"
         },
         {
           "arch": "x86_64-darwin",
-          "url": "https://github.com/lite-xl/lite-xl-simplified/releases/download/v2.1.1-simplified/lite-xl-v2.1.1-simplified-x86_64-darwin.tar.gz",
+          "url": "https://github.com/adamharrison/lite-xl-simplified/releases/download/v2.1.1-simplified/lite-xl-v2.1.1-simplified-x86_64-darwin.tar.gz",
           "checksum": "222f227adede48eb41fe98a800e3c67256a48ba2cc68bc8a9cce36ff9866e26c"
         }
       ]

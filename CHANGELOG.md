@@ -1,3 +1,8 @@
+# 1.0.3
+
+* Fixed a major issue with windows that causes a crash.
+* Ensured that the simplified releases are pointing to the right place.
+
 # 1.0.2
 
 * Suppresses the progress bar by default if we're not on a TTY.
