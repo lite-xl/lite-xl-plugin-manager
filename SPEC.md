@@ -17,11 +17,11 @@ the form of a git remote url, i.e. `<url>:<ref>`. An example would be:
 
 Addons are the primary objects specified in this specification. An addon
 consists of a series of metadata, the path to the addon in this repository,
-or its location on a remote repository, or a publically accessible URL,and a
+or its location on a remote repository, or a publically accessible URL, and a
 set of files to be downloaded with the plugin (usually releases, but can be
 data files, or fonts, or anything else).
 
-Addons can specify optionally specify a type, which determines where they're
+Addons can optionally specify a type, which determines where they're
 installed. Currently three types are supported:
 
 * `library`
@@ -43,7 +43,7 @@ The vast majority of addons are `singleton` `plugin`s.
 Fields that are required are bolded.
 
 * **`id`**: The semantic id of the addon, a string only containing `[a-z0-9\-_]`.
-* **`version`**: The addon's semantic version. A string that can contains `[0-9\.]`.
+* **`version`**: The addon's semantic version. A string that can contain `[0-9\.]`.
 * **`mod_version`**: The mod_version this addon is compatible with.
   A string that can contain `[0-9\.]`. If `type` is `library`, this field is optional.
 * `type`: An optional string that specifies the addon type. Valid values are `"plugin"`
@@ -89,7 +89,7 @@ Dependency values are an object which contain the following keys:
 
 ### Stubs
 
-If a addon likes, it can specify a particular `remote`; a publically acessible
+If an addon likes, it can specify a particular `remote`; a publically acessible
 git repository, accessed via HTTPS, pinned at a specific commit to be used as a
 source for its data. In that case, the package manager must download the repository,
 and interpret the manifest file found there to determine the addon's metadata.
@@ -149,7 +149,7 @@ that any version greater than `0.1` can be used.
       ],
       "files": [ # A list of files (usually binaries) this plugin requires to function.
         {
-          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-linux", # A publically accessible to download from.
+          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-linux", # A publically accessible URL to download from.
           "arch": "x86_64-linux", # The lite-xl/clang target tuple that represents the architecture this file is for.
           "checksum": "d27f03c850bacdf808436722cd16e2d7649683e017fe6267934eeeedbcd21096" # the sha256hex checksum that corresponds to this file.
         },
