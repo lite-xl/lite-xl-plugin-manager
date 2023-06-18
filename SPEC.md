@@ -108,6 +108,8 @@ can also optionally contain the `arch` and `path` keys.
 * `arch` is the lite-xl/clang architecture tuple that the file is relevant for.
   if omitted, file is to be assumed to be valid for all arhcitectures. Can be an array.
 * `path` is the location to install this file inside the addon's directory.
+* `optional` is a boolean that determines whether the file is an optional addition;
+  if omitted, the file is assumed to be required.
 
 If a file is an archive, of either `.zip` or `.tar.gz`, it will automatically
 be extracted inside the addon's directory.
