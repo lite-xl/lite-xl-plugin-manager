@@ -1,3 +1,11 @@
+# 1.0.4
+
+* Added in metapackage support into manifest and SPEC.
+* Fixed issue with system lite-xls not being detected correctly.
+* Colorized output by default.
+* Added in NO_COLOR standard.
+* Updated SPEC and fixed a few spelling/grammatical errors.
+
 # 1.0.3
 
 * Fixed a major issue with windows that causes a crash.

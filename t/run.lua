@@ -63,12 +63,12 @@ local tests = {
     assert(#plugins > 20)
   end,
   ["05_install_url"] = function()
-    local plugins = lpm("list language_ksy")["addons"]
+    local plugins = lpm("list eofnewline")["addons"]
     assert(#plugins == 1)
     assert(plugins[1].organization == "singleton")
     assert(plugins[1].status == "available")
-    local actions = lpm("install language_ksy")
-    assert_exists(userdir .. "/plugins/language_ksy.lua")
+    local actions = lpm("install eofnewline")
+    assert_exists(userdir .. "/plugins/eofnewline.lua")
   end,
   ["06_install_stub"] = function()
     local plugins = lpm("list lsp")["addons"]
