@@ -699,6 +699,7 @@ function Addon:is_core(bottle) return self.location == "core" end
 function Addon:is_bundled(bottle) return self.location == "bundled" end
 function Addon:is_installed(bottle)
   if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
+  if self.type == "meta" and self:is_explicitly_installed(bottle) then return true end
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
   local installed_addons = common.grep({ bottle:get_addon(self.id, nil, {  }) }, function(addon) return not addon.repository end)
@@ -782,6 +783,12 @@ function Addon:install(bottle, installing)
         end
       end
     end
+
+    if self.type == "meta" then
+      log_action("Installed metapackage " .. self.id .. ".", "green")
+      return
+    end
+
     common.mkdirp(common.dirname(temporary_install_path))
     if self:is_upgradable(bottle) then
       log_action("Upgrading " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
@@ -864,7 +871,7 @@ function Addon:install(bottle, installing)
   if not status then
     common.rmrf(temporary_install_path)
     error(err)
-  else
+  elseif self.type ~= "meta" then
     if POST and self.post then
       common.chdir(temporary_install_path, function()
         for i, arch in ipairs(ARCH) do
@@ -897,8 +904,11 @@ function Addon:get_orphaned_dependencies(bottle)
   local installed_addons = system_bottle:installed_addons()
   for id, options in pairs(self.dependencies) do
     local dependency = bottle:get_addon(id, options.version)
-    if dependency and dependency:is_installed(bottle) and not dependency:is_explicitly_installed(bottle) and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0 then
+    if dependency and (dependency.type == "meta" or dependency:is_installed(bottle)) and not dependency:is_explicitly_installed(bottle) and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0 then
       table.insert(t, dependency)
+      if dependency.type == "meta" then
+        t = common.concat(t, dependency:get_orphaned_dependencies(bottle))
+      end
     end
   end
   return t
@@ -914,7 +924,11 @@ function Addon:uninstall(bottle, uninstalling)
     return false
   end
   common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
-  log_action("Uninstalling " .. self.type .. " located at " .. install_path, "green")
+  if self.type == "meta" then
+    log_action("Uninstalling meta " .. self.id .. ".", "green")
+  else
+    log_action("Uninstalling " .. self.type .. " located at " .. install_path, "green")
+  end
   local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
   local should_uninstall = #incompatible_addons == 0 or uninstalling
   if not should_uninstall then
@@ -1640,6 +1654,7 @@ end
 
 local function lpm_install(type, ...)
   local to_install = {}
+  local to_explicitly_install = {}
   for i, identifier in ipairs({ ... }) do
     local s = identifier:find(":")
     local id, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
@@ -1652,17 +1667,18 @@ local function lpm_install(type, ...)
       if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       if #addons == 0 then
         log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
-        if not common.first(settings.installed, id) then table.insert(settings.installed, id) end
+        if not common.first(settings.installed, id) then table.insert(to_explicitly_install, id) end
       else
         for j,v in ipairs(addons) do
-          if not common.first(settings.installed, v.id) then table.insert(settings.installed, v.id) end
+          if not common.first(settings.installed, v.id) then table.insert(to_explicitly_install, v.id) end
           table.insert(to_install, v)
         end
       end
     end
   end
-  lpm_settings_save()
   common.each(to_install, function(e) e:install(system_bottle) end)
+  settings.installed = common.concat(settings.installed, to_explicitly_install)
+  lpm_settings_save()
 end
 
 
@@ -1670,10 +1686,11 @@ local function lpm_addon_uninstall(type, ...)
   for i, id in ipairs({ ... }) do
     local addons = { system_bottle:get_addon(id) }
     if #addons == 0 then error("can't find addon " .. id) end
-    local installed_addons = common.grep(addons, function(e) return e:is_installed(system_bottle) end)
+    local installed_addons = common.grep(addons, function(e) return e:is_installed(system_bottle) and not e:is_core(system_bottle) end)
     if #installed_addons == 0 then error("addon " .. id .. " not installed") end
     for i, addon in ipairs(installed_addons) do
       addon:uninstall(system_bottle)
+      settings.installed = common.grep(settings.installed, function(e) return e ~= addon.id end)
     end
   end
   lpm_settings_save()
@@ -2208,12 +2225,11 @@ not commonly used publically.
       local stat = system.stat(lite_xl_binary)
       if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
       lite_xl_binary = stat.symlink or lite_xl_binary
-      local directory = common.dirname(lite_xl_binary)
-      local hash = system.hash(lite_xl_binary, "file")
-      local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl.local_path == directory end)
+      local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl:get_binary_path() == lite_xl_binary end)
       if not system_lite_xl then
         system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
         if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+        local directory = common.dirname(lite_xl_binary)
         local lite_xl_datadirs = { DATADIR, directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
         local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
         system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [_G.ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })

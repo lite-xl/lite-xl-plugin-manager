@@ -27,6 +27,7 @@ installed. Currently three types are supported:
 * `library`
 * `plugin`
 * `color`
+* `meta`
 
 Addons are further classified into two organizational categories.
 `singleton` addons, and `complex` addons. Addons are listed a `singleton`
@@ -47,7 +48,7 @@ Fields that are required are bolded.
 * **`mod_version`**: The mod_version this addon is compatible with.
   A string that can contain `[0-9\.]`. If `type` is `library`, this field is optional.
 * `type`: An optional string that specifies the addon type. Valid values are `"plugin"`
-  `"library"`, or `"color"`. Defaults to `"plugin"`.
+  `"library"`, `"color"`, or `"meta"`. Defaults to `"plugin"`.
 * `name`: The optional name of the addon.
 * `description`: An optional english-language description of the addon.
 * `provides`: An optional array of strings that are a shorthand of functionality
