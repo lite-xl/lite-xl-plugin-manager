@@ -43,7 +43,7 @@ The vast majority of addons are `singleton` `plugin`s.
 Fields that are required are bolded.
 
 * **`id`**: The semantic id of the addon, a string only containing `[a-z0-9\-_]`.
-* **`version`**: The addon's semantic version. A string that can contain `[0-9\.]`.
+* **`version`**: The addon's semantic version (major.minor.revision). A string that matches the regex `^[0-9]+(\.[0-9]+){0,2}$`.
 * **`mod_version`**: The mod_version this addon is compatible with.
   A string that can contain `[0-9\.]`. If `type` is `library`, this field is optional.
 * `type`: An optional string that specifies the addon type. Valid values are `"plugin"`
