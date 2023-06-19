@@ -1043,8 +1043,10 @@ static int lpm_flock(lua_State* L) {
     flock(fd, LOCK_UN);
     close(fd);
   #endif
-  if (err)
-    return lua_error(L);
+  if (err) {
+    lua_pushboolean(L, 1);
+    return 1;
+  }
   return 0;
 }
 

@@ -387,7 +387,7 @@ end
 
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
-function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) return system.stat(e) end) end
+function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) local s = system.stat(e) return s and s.type ~= "dir" and s.mode & 73 end) end
 function common.normalize_path(path) if not path or not path:find("^~") then return path end return os.getenv("HOME") .. path:sub(2) end
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
@@ -475,7 +475,7 @@ local function engage_locks(func, err, warn)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   local lockfile = USERDIR .. PATHSEP .. ".lock"
   if not system.stat(lockfile) then common.write(lockfile, "") end
-  system.flock(lockfile, func, err, warn)
+  return system.flock(lockfile, func, err, warn)
 end
 
 local Addon, Repository, LiteXL, Bottle = {}, {}, {}, {}
@@ -2210,7 +2210,7 @@ not commonly used publically.
   end
 
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
-  engage_locks(function()
+  if engage_locks(function()
     settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
     lpm_repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
     repositories, lite_xls = {}, {}
@@ -2221,6 +2221,8 @@ not commonly used publically.
     if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
     if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
     local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
+    print("BINRAY", lite_xl_binary)
+    os.exit(0)
     if lite_xl_binary then
       local stat = system.stat(lite_xl_binary)
       if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
@@ -2230,9 +2232,10 @@ not commonly used publically.
         system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
         if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
         local directory = common.dirname(lite_xl_binary)
-        local lite_xl_datadirs = { DATADIR, directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
+        local lite_xl_datadirs = { DATADIR, directory .. PATHSEP .. "data", directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
         local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
         system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [_G.ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
+        print("BINARY", json.encode(system_lite_xl))
         table.insert(lite_xls, system_lite_xl)
         lpm_lite_xl_save()
       else
@@ -2244,7 +2247,7 @@ not commonly used publically.
       system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, true)
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
-  end, error_handler, lock_warning)
+  end, error_handler, lock_warning) then return end
   if ARGS[2] ~= '-' then
     local res
     engage_locks(function()
