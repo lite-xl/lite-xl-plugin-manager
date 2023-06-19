@@ -2235,7 +2235,6 @@ not commonly used publically.
         local lite_xl_datadirs = { DATADIR, directory .. PATHSEP .. "data", directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
         local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
         system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [_G.ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
-        print("BINARY", json.encode(system_lite_xl))
         table.insert(lite_xls, system_lite_xl)
         lpm_lite_xl_save()
       else
