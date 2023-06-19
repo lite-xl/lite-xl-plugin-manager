@@ -1,0 +1,1 @@
+option('static', type : 'boolean', value : false, description: 'Build the pre-packaged lua file into the executable.')
