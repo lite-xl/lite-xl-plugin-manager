@@ -2221,8 +2221,6 @@ not commonly used publically.
     if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
     if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
     local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
-    print("BINRAY", lite_xl_binary)
-    os.exit(0)
     if lite_xl_binary then
       local stat = system.stat(lite_xl_binary)
       if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
