@@ -1107,17 +1107,18 @@ end
 -- useds to fetch things from a generic place
 function Repository:fetch()
   if self:is_local() then return self end
-  local path
+  local path, temporary_path
   local status, err = pcall(function()
     if not self.branch and not self.commit then
+      temporary_path = TMPDIR .. PATHSEP .. "transient-repo"
       path = self.repo_path .. PATHSEP .. "master"
-      common.mkdirp(path)
+      common.rmrf(temporary_path)
+      common.mkdirp(temporary_path)
       log_progress_action("Fetching " .. self.remote .. ":master/main...")
-      system.init(path, self.remote)
-      system.fetch(path, write_progress_bar)
-      if not pcall(system.reset, path, "refs/remotes/origin/master", "hard") then
-        if pcall(system.reset, path, "refs/remotes/origin/main", "hard") then
-          common.rename(path, self.repo_path .. PATHSEP .. "main")
+      system.init(temporary_path, self.remote)
+      system.fetch(temporary_path, write_progress_bar)
+      if not pcall(system.reset, temporary_path, "refs/remotes/origin/master", "hard") then
+        if pcall(system.reset, temporary_path, "refs/remotes/origin/main", "hard") then
           path = self.repo_path .. PATHSEP .. "main"
           self.branch = "main"
         else
@@ -1131,15 +1132,21 @@ function Repository:fetch()
       path = self.local_path
       local exists = system.stat(path)
       if not exists then
-        common.mkdirp(path)
-        system.init(path, self.remote)
+        temporary_path = TMPDIR .. PATHSEP .. "tranient-repo"
+        common.rmrf(temporary_path)
+        common.mkdirp(temporary_path)
+        system.init(temporary_path, self.remote)
       end
       if not exists or self.branch then
         log_progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
-        system.fetch(path, write_progress_bar)
-        common.reset(path, self.commit or self.branch, "hard")
+        system.fetch(temporary_path or path, write_progress_bar)
+        common.reset(temporary_path or path, self.commit or self.branch, "hard")
       end
       self.manifest = nil
+    end
+    if temporary_path then
+      common.mkdirp(path)
+      common.rename(temporary_path, path)
     end
   end)
   if not status then
@@ -1173,7 +1180,7 @@ function Repository:update(pull_remotes)
   if self.branch then
     system.fetch(self.local_path)
     common.reset(self.local_path, self.branch, "hard")
-    log_action("Updated " .. self:url())
+    log_action("Updated " .. self:url() .. ".", "green")
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
   end
@@ -1453,11 +1460,9 @@ end
 local DEFAULT_REPOS
 local function lpm_repo_init(repos)
   DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
-  if not system.stat(CACHEDIR .. PATHSEP .. "repos") then
+  if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
     for i, repository in ipairs(repos or DEFAULT_REPOS) do
-      if not system.stat(repository.local_path) then
-        table.insert(repositories, repository:add(true))
-      end
+      table.insert(repositories, repository:add(true))
     end
     lpm_repo_save()
   end
@@ -1788,7 +1793,7 @@ local function lpm_bottle_purge()
 end
 
 local function lpm_purge()
-  log_action("Removed " .. CACHEDIR .. ".")
+  log_action("Purged " .. CACHEDIR .. ".", "green")
   common.rmrf(CACHEDIR)
 end
 
