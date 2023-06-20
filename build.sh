@@ -40,7 +40,7 @@ fi
 if [[ "$@" == *"-DLPM_STATIC"* ]]; then
   [[ ! -e "lua.exe" ]] && gcc -Ilib/lua -o lua.exe lib/lua/onelua.c -lm
   ./lua.exe -e 'io.open("src/lpm.luac", "wb"):write(string.dump(assert(loadfile("src/lpm.lua"))))'
-  xxd -n lpm_luac -i src/lpm.luac > src/lpm.lua.c
+  xxd -i src/lpm.luac > src/lpm.lua.c
 fi
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && CFLAGS="$CFLAGS -DLUA_USE_LINUX" && LDFLAGS="$LDFLAGS -ldl"
