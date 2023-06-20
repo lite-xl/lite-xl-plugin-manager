@@ -1,3 +1,14 @@
+# 1.0.5
+
+* Marked `lpm` for `plugin_manager` as optional.
+* Made `--help` and `help` output on `stdout`, rather than `stderr`, following convention.
+* Removed system configuration search paths for `git`.
+* Removed `xxd` as a build dependency.
+* Colorized some extra messages.
+* Made repository fetching atomic.
+* Made sure that `common.path` checked for executability and non-folderness.
+* Added in meson as a build system (thank you @Jan200101).
+
 # 1.0.4
 
 * Added in metapackage support into manifest and SPEC.
