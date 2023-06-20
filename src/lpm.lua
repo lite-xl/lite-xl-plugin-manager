@@ -1884,7 +1884,7 @@ xpcall(function()
     return 0
   end
   if ARGS["help"] or #ARGS == 1 or ARGS[2] == "help" then
-    io.stderr:write([[
+    io.stdout:write([[
 Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
