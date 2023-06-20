@@ -39,8 +39,7 @@ fi
 # Build the pre-packaged lua file into the executbale.
 if [[ "$@" == *"-DLPM_STATIC"* ]]; then
   [[ ! -e "lua.exe" ]] && gcc -Ilib/lua -o lua.exe lib/lua/onelua.c -lm
-  ./lua.exe -e 'io.open("src/lpm.luac", "wb"):write(string.dump(assert(loadfile("src/lpm.lua"))))'
-  xxd -i src/lpm.luac > src/lpm.lua.c
+  ./lua.exe -e 'f = string.dump(assert(loadfile("src/lpm.lua"))) io.open("src/lpm.lua.c", "wb"):write("unsigned char lpm_luac[] = \"" .. f:gsub(".", function (c) return string.format("\\x%02X",string.byte(c)) end) .. "\";unsigned int lpm_luac_len = " .. #f .. ";")'
 fi
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && CFLAGS="$CFLAGS -DLUA_USE_LINUX" && LDFLAGS="$LDFLAGS -ldl"
