@@ -1133,8 +1133,8 @@ static const luaL_Reg system_lib[] = {
 
 
 #ifdef LPM_STATIC
-  extern const char lpm_luac[];
-  extern unsigned int lpm_luac_len;
+  extern const char src_lpm_luac[];
+  extern unsigned int src_lpm_luac_len;
 #endif
 
 int main(int argc, char* argv[]) {
@@ -1165,7 +1165,7 @@ int main(int argc, char* argv[]) {
   #ifndef LPM_STATIC
   if (luaL_loadfile(L, "src/lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #else
-  if (luaL_loadbuffer(L, lpm_luac, lpm_luac_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
+  if (luaL_loadbuffer(L, src_lpm_luac, src_lpm_luac_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #endif
     fprintf(stderr, "internal error when starting the application: %s\n", lua_tostring(L, -1));
     return -1;
