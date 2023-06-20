@@ -10,42 +10,50 @@
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux",
           "arch": "x86_64-linux",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         },
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe",
           "arch": "x86_64-windows",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         },
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-darwin",
           "arch": "x86_64-darwin",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         },
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.aarch64-darwin",
           "arch": "aarch64-darwin",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         },
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.aarch64-android",
           "arch": "aarch64-android",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         },
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.arm-android",
           "arch": "arm-android",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         },
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86-android",
           "arch": "x86-android",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         },
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-android",
           "arch": "x86_64-android",
-          "checksum": "SKIP"
+          "checksum": "SKIP",
+          "optional": true
         }
       ],
       "dependencies": {

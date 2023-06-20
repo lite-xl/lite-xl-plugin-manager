@@ -833,7 +833,7 @@ function Addon:install(bottle, installing)
         local file_arch = file.arch and type(file.arch) == "string" and { file.arch } or file.arch
         if not file.arch or #common.grep(file_arch, function(e) return e == arch end) > 0 then
           if file.arch then has_one_file = true end
-          if not file.optional or (not NO_INSTALL_OPTIONAL and prompt(common.basename(file.url) .. " is an optional dependency of " .. self.id .. ". Should we install it?")) then
+          if not file.optional or (not NO_INSTALL_OPTIONAL and prompt(common.basename(file.url) .. " is an optional file for " .. self.id .. ". Should we install it?")) then
             if not file.checksum then error("requires a checksum") end
             local target_path = install_path .. PATHSEP .. (file.path or common.basename(file.url))
             local temporary_path = temporary_install_path .. PATHSEP .. (file.path or common.basename(file.url))
