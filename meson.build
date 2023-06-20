@@ -34,7 +34,7 @@ if not microtar_dep.found()
 endif
 
 lpm_source = files('src/lpm.c')
-cargs = []
+cflags = []
 if get_option('static')
     lua_exe = find_program('lua')
     xxd_exe = find_program('xxd')
@@ -48,11 +48,17 @@ if get_option('static')
 
     lpm_source += configure_file(
         capture: true,
-        command: [xxd_exe, '-i', '@INPUT@'],
+        command: [lua_exe, '-e', 'io.write("unsigned char lpm_luac[]={");i=0;k=io.open("@INPUT0@", "rb");c=k:read(1);while c ~= nil do io.write(string.format("0x%02x,", string.byte(c)));c=k:read(1)i=i+1;end;print("};");print("unsigned int lpm_luac_len="..i..";")'],
         input: lpm_luac,
         output: 'lpm.lua.c'
     )
 
+    cflags += '-DLPM_STATIC'
+
 endif
 
-executable('lpm', lpm_source, dependencies: [zlib_dep, mbedtls_dep, libgit2_dep, libzip_dep, lua_dep, microtar_dep])
+executable('lpm',
+    lpm_source,
+    dependencies: [zlib_dep, mbedtls_dep, libgit2_dep, libzip_dep, lua_dep, microtar_dep],
+    c_args: cflags
+)

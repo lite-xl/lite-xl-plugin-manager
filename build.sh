@@ -40,7 +40,7 @@ fi
 if [[ "$@" == *"-DLPM_STATIC"* ]]; then
   [[ ! -e "lua.exe" ]] && gcc -Ilib/lua -o lua.exe lib/lua/onelua.c -lm
   ./lua.exe -e 'io.open("src/lpm.luac", "wb"):write(string.dump(assert(loadfile("src/lpm.lua"))))'
-  xxd -i src/lpm.luac > src/lpm.lua.c
+  ./lua.exe -e 'io.write("unsigned char lpm_luac[]={");i=0;k=io.open("src/lpm.luac", "rb");c=k:read(1);while c ~= nil do io.write(string.format("0x%02x,", string.byte(c)));c=k:read(1)i=i+1;end;print("};");print("unsigned int lpm_luac_len="..i..";")' > src/lpm.lua.c
 fi
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && CFLAGS="$CFLAGS -DLUA_USE_LINUX" && LDFLAGS="$LDFLAGS -ldl"
