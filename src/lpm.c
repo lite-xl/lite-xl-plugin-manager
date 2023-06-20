@@ -324,6 +324,9 @@ static void git_init() {
     git_libgit2_init();
     if (git_cert_type)
       git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, git_cert_type == 2 ? git_cert_path : NULL, git_cert_type == 1 ? git_cert_path : NULL);
+    git_libgit2_opts(GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_SYSTEM, ".");
+    git_libgit2_opts(GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL, ".");
+    git_libgit2_opts(GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_XDG, ".");
     git_initialized = 1;
   }
 }
