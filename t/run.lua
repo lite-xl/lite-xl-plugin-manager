@@ -96,7 +96,7 @@ local tests = {
   ["07_manifest"] = function()
    local results = json.decode(io.open("manifest.json", "rb"):read("*all"))
    assert(#results["remotes"] == 2)
-   assert(#results["addons"] == 2)
+   assert(#results["addons"] == 3)
   end,
   ["08_install_many"] = function()
     lpm("install encoding gitblame gitstatus language_ts lsp minimap")
