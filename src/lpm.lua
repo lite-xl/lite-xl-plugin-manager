@@ -993,7 +993,10 @@ end
 
 function Repository.url(url)
   if type(url) == "table" then return (url.remote and (url.remote .. ":" .. (url.branch or url.commit)) or url.repo_path) end
-  if not url:find("^%a+:") then return Repository.new({ repo_path = url:gsub("[/\\]$", "") }) end
+  if not url:find("^%a+:") then
+    local stat = system.stat(url:gsub("[/\\]$", "")) or error("can't find repository " .. url)
+    return Repository.new({ repo_path = stat.abs_path })
+  end
   local e = url:reverse():find(":")
   local s = e and (#url - e + 1)
   local remote, branch_or_commit = url:sub(1, s and (s-1) or #url), s and url:sub(s+1)
@@ -2233,13 +2236,22 @@ not commonly used publically.
       local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl:get_binary_path() == lite_xl_binary end)
       if not system_lite_xl then
         system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
-        if system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+
         local directory = common.dirname(lite_xl_binary)
         local lite_xl_datadirs = { DATADIR, directory .. PATHSEP .. "data", directory:find(PATHSEP .. "bin$") and common.dirname(directory .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"), directory .. PATHSEP .. "data" }
         local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
-        system_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [_G.ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
-        table.insert(lite_xls, system_lite_xl)
-        lpm_lite_xl_save()
+
+        if not BINARY and not DATADIR and system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+        local detected_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [_G.ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
+        if not system_lite_xl then
+          system_lite_xl = detected_lite_xl
+          table.insert(lite_xls, system_lite_xl)
+          lpm_lite_xl_save()
+        else
+          lite_xls = common.grep(lite_xls, function(e) return e ~= system_lite_xl end)
+          system_lite_xl = detected_lite_xl
+          table.insert(lite_xls, system_lite_xl)
+        end
       else
         if DATADIR then system_lite_xl.datadir_path = DATADIR end
         table.insert(system_lite_xl.tags, "system")

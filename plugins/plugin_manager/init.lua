@@ -166,10 +166,10 @@ function PluginManager:refresh(progress)
 end
 
 
-function PluginManager:upgrade(progress)
+function PluginManager:upgrade(options)
   local prom = Promise.new()
-  run({ "update" }, progress):done(function()
-    run({ "upgrade" }, progress):done(function()
+  run({ "update" }, options.progress):done(function()
+    run({ "upgrade" }, options.progress):done(function()
       prom:resolve()
     end)
   end)
@@ -178,8 +178,8 @@ end
 
 
 
-function PluginManager:purge(progress)
-  return run({ "purge" }, progress)
+function PluginManager:purge(options)
+  return run({ "purge" }, options.progress)
 end
 
 
@@ -195,22 +195,22 @@ function PluginManager:get_addons()
   return prom
 end
 
-local function run_stateful_plugin_command(plugin_manager, cmd, arg, progress)
+local function run_stateful_plugin_command(plugin_manager, cmd, arg, options)
   local promise = Promise.new()
-  run({ cmd, arg }, progress):done(function(result)
-    if config.plugins.plugin_manager.restart_on_change then
+  run({ cmd, arg }, options.progress):done(function(result)
+    if (options.restart == nil and config.plugins.plugin_manager.restart_on_change) or options.restart then
       command.perform("core:restart")
     else
-      plugin_manager:refresh(progress):forward(promise)
+      plugin_manager:refresh(options):forward(promise)
     end
   end)
   return promise
 end
 
 
-function PluginManager:install(addon, progress) return run_stateful_plugin_command(self, "install", addon.id .. (addon.version and (":" .. addon.version) or ""), progress) end
-function PluginManager:uninstall(addon, progress) return run_stateful_plugin_command(self, "uninstall", addon.id, progress) end
-function PluginManager:reinstall(addon, progress) return run_stateful_plugin_command(self, "reinstall", addon.id, progress) end
+function PluginManager:install(addon, options) return run_stateful_plugin_command(self, "install", addon.id .. (addon.version and (":" .. addon.version) or ""), options) end
+function PluginManager:uninstall(addon, options) return run_stateful_plugin_command(self, "uninstall", addon.id, options) end
+function PluginManager:reinstall(addon, options) return run_stateful_plugin_command(self, "reinstall", addon.id, options) end
 
 
 function PluginManager:get_addon(name_and_version)
@@ -245,7 +245,7 @@ command.add(nil, {
       function(name)
         PluginManager:get_addon(name):done(function(addon)
           core.log("Attempting to install plugin " .. name .. "...")
-          PluginManager:install(addon, PluginManager.view.progress_callback):done(function()
+          PluginManager:install(addon, { progress = PluginManager.view.progress_callback }):done(function()
             core.log("Successfully installed plugin " .. addon.id .. ".")
           end)
         end):fail(function()
@@ -270,7 +270,7 @@ command.add(nil, {
       function(name)
         PluginManager:get_addon(name):done(function(addon)
           core.log("Attempting to uninstall plugin " .. addon.id .. "...")
-          PluginManager:uninstall(addon, PluginManager.view.progress_callback):done(function()
+          PluginManager:uninstall(addon, { progress = PluginManager.view.progress_callback }):done(function()
             core.log("Successfully uninstalled plugin " .. addon.id .. ".")
           end)
         end):fail(function()
@@ -317,9 +317,9 @@ command.add(nil, {
       end
     )
   end,
-  ["plugin-manager:refresh"] = function() PluginManager:refresh(PluginManager.view.progress_callback):done(function() core.log("Successfully refreshed plugin listing.") end) end,
-  ["plugin-manager:upgrade"] = function() PluginManager:upgrade(PluginManager.view.progress_callback):done(function() core.log("Successfully upgraded installed plugins.") end) end,
-  ["plugin-manager:purge"] = function() PluginManager:purge(PluginManager.view.progress_callback):done(function() core.log("Successfully purged lpm directory.") end) end,
+  ["plugin-manager:refresh"] = function() PluginManager:refresh({ progress = PluginManager.view.progress_callback }):done(function() core.log("Successfully refreshed plugin listing.") end) end,
+  ["plugin-manager:upgrade"] = function() PluginManager:upgrade({ progress = PluginManager.view.progress_callback }):done(function() core.log("Successfully upgraded installed plugins.") end) end,
+  ["plugin-manager:purge"] = function() PluginManager:purge({ progress = PluginManager.view.progress_callback }):done(function() core.log("Successfully purged lpm directory.") end) end,
   ["plugin-manager:show"] = function()
     local node = core.root_view:get_active_node_default()
     node:add_view(PluginManager.view(PluginManager))

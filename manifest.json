@@ -65,7 +65,7 @@
       "version": "1.0",
       "description": "JSON support plugin, provides encoding/decoding.",
       "type": "library",
-      "path": "plugins/json.lua"
+      "path": "libraries/json.lua"
     }
   ],
   "lite-xls": [

@@ -96,7 +96,7 @@ end
 
 function PluginView:refresh()
   self.loading = true
-  return self.plugin_manager:refresh(self.progress_callback):done(function()
+  return self.plugin_manager:refresh({ progress = self.progress_callback }):done(function()
     self.loading = false
     self.initialized = true
     self.widths = {}
@@ -204,7 +204,7 @@ end
 
 function PluginView:install(plugin)
   self.loading = true
-  self.plugin_manager:install(plugin, self.progress_callback):done(function()
+  self.plugin_manager:install(plugin, { progress = self.progress_callback }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -212,7 +212,7 @@ end
 
 function PluginView:uninstall(plugin)
   self.loading = true
-  self.plugin_manager:uninstall(plugin, self.progress_callback):done(function()
+  self.plugin_manager:uninstall(plugin, { progress = self.progress_callback }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -221,7 +221,7 @@ end
 
 function PluginView:reinstall(plugin)
   self.loading = true
-  self.plugin_manager:reinstall(plugin, self.progress_callback):done(function()
+  self.plugin_manager:reinstall(plugin, { progress = self.progress_callback }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -230,7 +230,7 @@ end
 
 function PluginView:upgrade()
   self.loading = true
-  return self.plugin_manager:upgrade(self.progress_callback):done(function()
+  return self.plugin_manager:upgrade({ progress = self.progress_callback }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
