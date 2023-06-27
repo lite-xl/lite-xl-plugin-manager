@@ -1148,7 +1148,7 @@ function Repository:fetch()
       self.manifest = nil
     end
     if temporary_path then
-      common.mkdirp(path)
+      common.mkdirp(common.dirname(path))
       common.rename(temporary_path, path)
     end
   end)
