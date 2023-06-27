@@ -1,3 +1,9 @@
+# 1.0.6
+
+* Changed from full git cloning to shallow cloning.
+* Fixed major bug on windows.
+* Moved `json` to the `libraries` folder.
+
 # 1.0.5
 
 * Marked `lpm` for `plugin_manager` as optional.
