@@ -2116,7 +2116,7 @@ not commonly used publically.
           last_read = nil
           return
         end
-        if not start_time or total_read < last_read then start_time = system.time() end
+        if not start_time or not last_read or total_read < last_read then start_time = system.time() end
         local status_line = string.format("%s [%s/s][%03d%%]: %s", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100), progress_bar_label)
         io.stdout:write("\r")
         io.stdout:write(status_line)

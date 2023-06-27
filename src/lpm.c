@@ -434,7 +434,7 @@ static int lpm_fetch(lua_State* L) {
     fetch_opts.callbacks.certificate_check = lpm_git_transport_certificate_check_cb;
   if (lua_type(L, 2) == LUA_TFUNCTION)
     fetch_opts.callbacks.transfer_progress = lpm_git_transfer_progress_cb;
-  git_strarray array = { &refspec, 1 };
+  git_strarray array = { (char**)&refspec, 1 };
   if (git_remote_fetch(remote, refspec ? &array : NULL, &fetch_opts, NULL)) {
     git_remote_free(remote);
     git_repository_free(repository);
