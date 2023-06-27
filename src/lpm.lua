@@ -1142,7 +1142,11 @@ function Repository:fetch()
       end
       if not exists or self.branch then
         log_progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
-        system.fetch(temporary_path or path, write_progress_bar)
+        if self.commit then
+          system.fetch(temporary_path or path, write_progress_bar, self.commit)
+        elseif self.branch then
+          system.fetch(temporary_path or path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
+        end
         common.reset(temporary_path or path, self.commit or self.branch, "hard")
       end
       self.manifest = nil
@@ -1181,9 +1185,9 @@ end
 function Repository:update(pull_remotes)
   local manifest, remotes = self:parse_manifest()
   if self.branch then
-    system.fetch(self.local_path)
+    log_progress_action("Updating " .. self:url() .. "...")
+    system.fetch(self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
     common.reset(self.local_path, self.branch, "hard")
-    log_action("Updated " .. self:url() .. ".", "green")
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
   end
@@ -2093,6 +2097,7 @@ not commonly used publically.
         if type(total_read) == "boolean" then
           io.stdout:write(json.encode({ progress = { percent = 1, label = progress_bar_label } }) .. "\n")
           io.stdout:flush()
+          last_read = nil
           return
         end
         if not last_read then last_read = system.time() end
@@ -2105,8 +2110,10 @@ not commonly used publically.
     else
       write_progress_bar = function(total_read, total_objects_or_content_length, indexed_objects, received_objects, local_objects, local_deltas, indexed_deltas)
         if type(total_read) == "boolean" then
+          if not last_read then io.stdout:write(progress_bar_label) end
           io.stdout:write("\n")
           io.stdout:flush()
+          last_read = nil
           return
         end
         if not start_time or total_read < last_read then start_time = system.time() end
