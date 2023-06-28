@@ -1085,7 +1085,7 @@ function Repository:generate_manifest(repo_id)
             for line in io.lines(path .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
-              local _, _, required_addon = line:find("require [\"']plugins.([%w_]+)")
+              local _, _, required_addon = line:find("require [\"']plugins.([%w_-]+)")
               if required_addon and not CORE_PLUGINS[required_addon] then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
             end
             if addon_map[addon.id] then
