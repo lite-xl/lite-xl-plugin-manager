@@ -1467,6 +1467,7 @@ end
 local DEFAULT_REPOS
 local function lpm_repo_init(repos)
   DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
+  common.mkdirp(CACHEDIR)
   if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
     for i, repository in ipairs(repos or DEFAULT_REPOS) do
       table.insert(repositories, repository:add(true))
