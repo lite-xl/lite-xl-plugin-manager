@@ -598,10 +598,6 @@ static int mkdirp(char* path, int len) {
   return 0;
 }
 
-static int gzip_read(mtar_t* tar, void* data, unsigned int size) { return gzread(tar->stream, data, size) >= 0 ? MTAR_ESUCCESS : -1; }
-static int gzip_seek(mtar_t* tar, unsigned int pos) { return gzseek(tar->stream, pos, SEEK_SET) >= 0 ? MTAR_ESUCCESS : -1; }
-static int gzip_close(mtar_t* tar) { return gzclose(tar->stream) == Z_OK ? MTAR_ESUCCESS : -1; }
-
 #define FA_RDONLY       0x01            // FILE_ATTRIBUTE_READONLY
 #define FA_DIREC        0x10            // FILE_ATTRIBUTE_DIRECTORY
 
