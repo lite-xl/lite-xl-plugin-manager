@@ -142,9 +142,9 @@ local function run(cmd, progress)
 end
 
 
-function PluginManager:refresh(progress)
+function PluginManager:refresh(options)
   local prom = Promise.new()
-  run({ "list" }, progress):done(function(addons)
+  run({ "list" }, options.progress):done(function(addons)
     self.addons = json.decode(addons)["addons"]
     table.sort(self.addons, function(a,b) return a.id < b.id end)
     self.valid_addons = {}
@@ -188,7 +188,7 @@ function PluginManager:get_addons()
   if self.addons then
     prom:resolve(self.addons)
   else
-    self:refresh():done(function()
+    self:refresh(options):done(function()
       prom:resolve(self.addons)
     end)
   end
