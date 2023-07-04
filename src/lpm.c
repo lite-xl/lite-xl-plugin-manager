@@ -238,7 +238,7 @@ static int lpm_stat(lua_State *L) {
   struct _stat s;
   LPCWSTR wpath = lua_toutf16(L, path);
   int err = _wstat(wpath, &s);
-  const char *abs_path = !err && _wfullpath(full_path, wpath, MAX_PATH) ? lua_toutf8(L, (LPCWSTR)fullpath) : NULL;
+  const char *abs_path = !err && _wfullpath(full_path, wpath, MAX_PATH) ? lua_toutf8(L, (LPCWSTR)full_path) : NULL;
 #else
   char full_path[MAX_PATH];
   struct stat s;
