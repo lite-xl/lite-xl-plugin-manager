@@ -1642,7 +1642,7 @@ local function lpm_lite_xl_run(version, ...)
     if arguments[i] == "--" then break end
     local str = arguments[i]
     if str:find("^http") then
-      table.insert(repositories, 1, Repository.url(str):add())
+      table.insert(repositories, 1, Repository.url(str):add(AUTO_PULL_REMOTES))
     else
       local id, version = common.split(":", str)
       local potentials = { system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version }) }
