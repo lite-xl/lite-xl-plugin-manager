@@ -543,6 +543,10 @@ static int lpm_certs(lua_State* L) {
   if (strcmp(type, "noverify") == 0) {
     no_verify_ssl = 1;
     mbedtls_ssl_conf_authmode(&ssl_config, MBEDTLS_SSL_VERIFY_OPTIONAL);
+    if (print_trace) {
+      fprintf(stderr, "[ssl] SSL verify set to optional.\n");
+      fflush(stderr);
+    }
   } else {
     const char* path = luaL_checkstring(L, 2);
     if (strcmp(type, "dir") == 0) {
@@ -550,6 +554,10 @@ static int lpm_certs(lua_State* L) {
       if (git_initialized)
         git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
       strncpy(git_cert_path, path, MAX_PATH);
+      if (print_trace) {
+        fprintf(stderr, "[ssl] SSL directory set to %s.\n", git_cert_path);
+        fflush(stderr);
+      }
     } else {
       if (strcmp(type, "system") == 0) {
         #if _WIN32
@@ -578,6 +586,10 @@ static int lpm_certs(lua_State* L) {
           }
           fclose(file);
           CertCloseStore(hSystemStore, 0);
+          if (print_trace) {
+            fprintf(stderr, "[ssl] SSL file pulled from system store and written to %s.\n", path);
+            fflush(stderr);
+          }
         #elif __APPLE__ // https://developer.apple.com/forums/thread/691009; see also curl's mac version
           return luaL_error(L, "can't use system on mac yet");
         #else
@@ -591,6 +603,10 @@ static int lpm_certs(lua_State* L) {
       if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
         return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s", path);
       mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
+      if (print_trace) {
+        fprintf(stderr, "[ssl] SSL file set to %s.\n", path);
+        fflush(stderr);
+      }
     }
   }
   return 0;
