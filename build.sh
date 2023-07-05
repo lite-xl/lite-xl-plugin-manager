@@ -18,19 +18,19 @@ CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_PR
 mkdir -p lib/prefix/include lib/prefix/lib
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
-  [[ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ]] && cd lib/zlib && mkdir build && cd build && $CC $CFLAGS -O3 -D_LARGEFILE64_SOURCE -I.. ../*.c -c && $AR rc libz.a *.o && cp libz.a ../../prefix/lib && cp ../*.h ../../prefix/include && cd ../../../
+  [[ ! -e "lib/zlib/build" && $OSTYPE != 'msys'* ]] && { cd lib/zlib && mkdir build && cd build && $CC $CFLAGS -O3 -D_LARGEFILE64_SOURCE -I.. ../*.c -c && $AR rc libz.a *.o && cp libz.a ../../prefix/lib && cp ../*.h ../../prefix/include && cd ../../../ || exit -1; }
   LDFLAGS="$LDFLAGS -lz"
 fi
 if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* && "$@" != *"-lmbedx509"* ]]; then
-  [ ! -e "lib/mbedtls-2.27.0/build" ] && cd lib/mbedtls-2.27.0 && mkdir build && cd build && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" cmake .. $CMAKE_DEFAULT_FLAGS  -G "Unix Makefiles" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/mbedtls-2.27.0/build" ] && { cd lib/mbedtls-2.27.0 && mkdir build && cd build && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" cmake .. $CMAKE_DEFAULT_FLAGS  -G "Unix Makefiles" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LDFLAGS="$LDFLAGS -lmbedtls -lmbedx509 -lmbedcrypto"
 fi
 if [[ "$@" != *"-lgit2"* ]]; then
-  [ ! -e "lib/libgit2/build" ] && cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=mbedTLS && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/libgit2/build" ] && { cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=mbedTLS && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LDFLAGS="-lgit2 $LDFLAGS"
 fi
 if [[ "$@" != *"-lzip"* ]]; then
-  [ ! -e "lib/libzip/build" ] && cd lib/libzip && mkdir build && cd build && cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=OFF -DENABLE_ZSTD=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../
+  [ ! -e "lib/libzip/build" ] && { cd lib/libzip && mkdir build && cd build && cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=OFF -DENABLE_ZSTD=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LDFLAGS="$LDFLAGS -lzip"
 fi
 [[ "$@" != *"-lmicrotar"* ]] && CFLAGS="$CFLAGS -Ilib/microtar/src" && SRCS="$SRCS lib/microtar/src/microtar.c"
@@ -38,7 +38,7 @@ fi
 
 # Build the pre-packaged lua file into the executbale.
 if [[ "$@" == *"-DLPM_STATIC"* ]]; then
-  [[ ! -e "lua.exe" ]] && gcc -Ilib/lua -o lua.exe lib/lua/onelua.c -lm
+  [[ ! -e "lua.exe" ]] && { gcc -Ilib/lua -o lua.exe lib/lua/onelua.c -lm || exit -1; }
   ./lua.exe -e 'io.open("src/lpm.lua.c", "wb"):write("unsigned char lpm_luac[] = \""..string.dump(loadfile("src/lpm.lua")):gsub(".",function(c) return string.format("\\x%02X",string.byte(c)) end).."\";unsigned int lpm_luac_len = sizeof(lpm_luac)-1;")'
 fi
 
