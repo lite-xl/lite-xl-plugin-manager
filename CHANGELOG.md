@@ -1,3 +1,16 @@
+# 1.0.7
+
+* Upgraded submodules.
+* Moved mbedtls to a submodule, as there was an erroneous resaon why it wasn't, and upgraded it to fix #33, which occurs due to a clang compiler bug.
+* Improved debuggability with regards to tls and the `--trace` flag.
+* Fixed some small bugs with `plugin_manager` that nonetheless rendered it inoperable.
+* Fixed issues with getting the absolute path of symlinks.
+* Fixed issues with symlinks that are broken not getting detected at all.
+* Allowed for dashes in auto-generated ids.
+* Fixed a bug that stopped things form working when explicitly calling `init`.
+* Allowed `run` to use `--remotes`.
+* Fixed bug for auto-detecting data directories, when determining system `lite-xl`.
+
 # 1.0.6
 
 * Changed from full git cloning to shallow cloning.
