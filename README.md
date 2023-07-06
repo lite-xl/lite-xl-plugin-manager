@@ -34,11 +34,20 @@ The fastest way to get started with lpm is to simply pull a release.
 wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm && chmod +x lpm
 ```
 
+If you want to get the GUI version installed with lite-xl, you can tell `lpm` to install `plugin_manager`, which will allow
+you to access `Plugin Manager: Show` in the command palette in `lite-xl`.
+
+```
+./lpm install plugin_manager --assume-yes
+```
+
+### Compilation
+
 If you have a C compiler, and `git`, and want to compile from scratch,
 you can do:
 
 ```
-git clone git@github.com:lite-xl/lite-xl-plugin-manager.git \
+git clone https://github.com/lite-xl/lite-xl-plugin-manager.git \
   --shallow-submodules --recurse-submodules && cd lite-xl-plugin-manager &&\
   ./build.sh -DLPM_STATIC && ./lpm
 ````
