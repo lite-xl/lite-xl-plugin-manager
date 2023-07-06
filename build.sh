@@ -7,10 +7,10 @@
 : ${JOBS=4}
 
 SRCS="src/*.c"
-CFLAGS="$CFLAGS -DMBEDTLS_DEBUG_C -Ilib/prefix/include"
+CFLAGS="$CFLAGS -Ilib/prefix/include"
 LDFLAGS="$LDFLAGS -lm -Llib/prefix/lib"
 
-[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libzip/build lib/mbedtls-2.27.0/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
+[[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libzip/build lib/mbedtls/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
 cmake --version >/dev/null 2>/dev/null || { echo "Please ensure that you have cmake installed." && exit -1; }
 
 # Build supporting libraries, libz, libmbedtls, libmbedcrypto, libgit2, libzip, libmicrotar, liblua
@@ -22,7 +22,7 @@ if [[ "$@" != *"-lz"* ]]; then
   LDFLAGS="$LDFLAGS -lz"
 fi
 if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* && "$@" != *"-lmbedx509"* ]]; then
-  [ ! -e "lib/mbedtls-2.27.0/build" ] && { cd lib/mbedtls-2.27.0 && mkdir build && cd build && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" cmake .. $CMAKE_DEFAULT_FLAGS  -G "Unix Makefiles" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  [ ! -e "lib/mbedtls/build" ] && { cd lib/mbedtls && mkdir build && cd build && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -DMBEDTLS_DEBUG_C -w" cmake .. $CMAKE_DEFAULT_FLAGS  -G "Unix Makefiles" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="$CFLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LDFLAGS="$LDFLAGS -lmbedtls -lmbedx509 -lmbedcrypto"
 fi
 if [[ "$@" != *"-lgit2"* ]]; then

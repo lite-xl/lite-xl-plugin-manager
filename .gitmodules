@@ -19,3 +19,8 @@
 	path = lib/microtar
 	url = https://github.com/rxi/microtar.git
 	shallow = true
+[submodule "lib/mbedtls"]
+	path = lib/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git
+	tag = mbedtls-2.28.3
+	shallow = true
