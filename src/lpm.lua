@@ -552,6 +552,7 @@ function common.get(source, target, checksum, callback, depth)
   log_progress_action("Downloading " .. source:sub(1, 100) .. "...")
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
+  if not rest or rest == "" then rest = "/" end
   if not checksum then
     local res, headers = system.get(protocol, hostname, port, rest, target, callback)
     if headers.location then return common.get(headers.location, target, checksum, callback, (depth or 0) + 1) end
@@ -1466,7 +1467,7 @@ end
 
 local DEFAULT_REPOS
 local function lpm_repo_init(repos)
-  DEFAULT_REPOS = { Repository.url("https://github.com/adamharrison/lite-xl-plugin-manager.git:latest") }
+  DEFAULT_REPOS = { Repository.url(DEFAULT_REPO_URL) }
   common.mkdirp(CACHEDIR)
   if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
     for i, repository in ipairs(repos or DEFAULT_REPOS) do
@@ -1906,9 +1907,9 @@ It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, or from the lite-xl `plugin_manager` addon.
 
-LPM will always use https://github.com/lite-xl/lite-xl-plugin-manager as its base
-repository, if none are present, and the cache directory does't exist,
-but others can be added, and this base one can be removed.
+LPM will always use ]] .. DEFAULT_REPO_URL .. [[
+as its base repository, if none are present, and the cache directory
+does't exist, but others can be added, and this base one can be removed.
 
 It has the following commands:
 

@@ -1128,7 +1128,9 @@ static const luaL_Reg system_lib[] = {
 #ifndef LPM_VERSION
   #define LPM_VERSION "unknown"
 #endif
-
+#ifndef LPM_DEFAULT_REPO
+  #define LPM_DEFAULT_REPOSITORY "https://github.com/lite-xl/lite-xl-plugin-manager.git:latest"
+#endif
 
 #ifndef ARCH_PROCESSOR
   #if defined(__x86_64__) || defined(_M_AMD64) || defined(__MINGW64__)
@@ -1164,7 +1166,6 @@ static const luaL_Reg system_lib[] = {
   #define LITE_ARCH_TUPLE ARCH_PROCESSOR "-" ARCH_PLATFORM
 #endif
 
-
 #ifdef LPM_STATIC
   extern const char lpm_luac[];
   extern unsigned int lpm_luac_len;
@@ -1195,6 +1196,8 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "PATHSEP");
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
+  lua_pushliteral(L, LPM_DEFAULT_REPOSITORY);
+  lua_setglobal(L, "DEFAULT_REPO_URL");
   #ifndef LPM_STATIC
   if (luaL_loadfile(L, "src/lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #else
