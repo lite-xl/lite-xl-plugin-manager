@@ -671,7 +671,7 @@ end
 -- If path1 is a directory, will still return true if it's a subset of path2 (accounting for binary downloads).
 function Addon.is_path_different(path1, path2)
   local stat1, stat2 = system.stat(path1), system.stat(path2)
-  if not stat1 or not stat2 or stat1.type ~= stat2.type or stat1.size ~= stat2.size then return true end
+  if not stat1 or not stat2 or stat1.type ~= stat2.type or (stat1 == "file" and stat1.size ~= stat2.size) then return true end
   if stat1.type == "dir" then
     for i, file in ipairs(system.ls(path1)) do
       if not common.basename(file):find("^%.") and Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end
@@ -2226,7 +2226,7 @@ not commonly used publically.
     end
     os.exit(0)
   end
-  
+
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   if engage_locks(function()
