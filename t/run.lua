@@ -125,7 +125,7 @@ local tests = {
 
 local last_command_result, last_command
 lpm = function(cmd)
-  last_command = "./lpm --quiet --json --assume-yes --userdir=" .. userdir .. " " .. cmd
+  last_command = arg[0] .. " --quiet --json --assume-yes --userdir=" .. userdir .. " " .. cmd
   local pipe = io.popen(last_command, "r")
   local result = pipe:read("*all")
   last_command_result = result ~= "" and json.decode(result) or nil

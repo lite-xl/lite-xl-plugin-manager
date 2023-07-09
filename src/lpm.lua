@@ -2174,7 +2174,9 @@ not commonly used publically.
   -- Small utility functions that don't play into the larger app; are used for testing
   -- or for handy scripts.
   if ARGS[2] == "test" then
-    rawset(_G, "arg", common.slice(ARGS, 4))
+    local arg = common.slice(ARGS, 4)
+    arg[0] = ARGS[1]
+    rawset(_G, "arg", arg)
     dofile(ARGS[3])
     os.exit(0)
   end
