@@ -2081,7 +2081,6 @@ not commonly used publically.
   USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
   AUTO_PULL_REMOTES = ARGS["remotes"]
-  if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
   if ARGS["trace"] then system.trace(true) end
@@ -2227,7 +2226,8 @@ not commonly used publically.
     end
     os.exit(0)
   end
-
+  
+  if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   if engage_locks(function()
     settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
