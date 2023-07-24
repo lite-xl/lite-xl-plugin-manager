@@ -1676,16 +1676,20 @@ local function lpm_install(type, ...)
     if id == "lite-xl" then
       lpm_lite_xl_install(version)
     else
-      local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
-      local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
-      if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-      if #addons == 0 then
-        log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
-        if not common.first(settings.installed, id) then table.insert(to_explicitly_install, id) end
+      if identifier:find("^http") then
+        table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
       else
-        for j,v in ipairs(addons) do
-          if not common.first(settings.installed, v.id) then table.insert(to_explicitly_install, v.id) end
-          table.insert(to_install, v)
+        local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
+        local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
+        if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+        if #addons == 0 then
+          log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
+          if not common.first(settings.installed, id) then table.insert(to_explicitly_install, id) end
+        else
+          for j,v in ipairs(addons) do
+            if not common.first(settings.installed, v.id) then table.insert(to_explicitly_install, v.id) end
+            table.insert(to_install, v)
+          end
         end
       end
     end
