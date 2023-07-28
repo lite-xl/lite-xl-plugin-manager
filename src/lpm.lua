@@ -496,12 +496,16 @@ end
 local actions, warnings = {}, {}
 local function log_action(message, color)
   if JSON then table.insert(actions, message) end
-  if not QUIET then io.stderr:write(colorize(message .. "\n", color)) end
+  if not QUIET then
+    io.stderr:write(colorize(message .. "\n", color))
+    io.stderr:flush()
+  end
 end
 local function log_warning(message)
   if JSON then table.insert(warnings, message) end
   if not QUIET then
     io.stderr:write(colorize("warning: " .. message .. "\n", "yellow"))
+    io.stderr:flush()
   end
 end
 local function fatal_warning(message)
@@ -518,6 +522,7 @@ local function prompt(message)
   if not ASSUME_YES or not JSON then
     io.stderr:write(colorize(message .. " [Y/n]: ", "cyan"))
     if ASSUME_YES then io.stderr:write("Y\n") end
+    io.stderr:flush()
   end
   if ASSUME_YES then return true end
   local response = io.stdin:read("*line")
@@ -538,6 +543,7 @@ local function error_handler(err)
     if err then io.stderr:write(colorize((not VERBOSE and message or err) .. "\n", "red")) end
     if VERBOSE then io.stderr:write(debug.traceback(nil, 2) .. "\n") end
   end
+  io.stderr:flush()
   status = -1
 end
 local function lock_warning()
@@ -1629,6 +1635,10 @@ local function lpm_lite_xl_list()
   end
 end
 
+local function is_argument_repo(arg)
+  return arg:find("^http") or arg:find("[%.\\/]")
+end
+
 local function lpm_lite_xl_run(version, ...)
   if not version then error("requires a version or arguments") end
   local arguments = { ... }
@@ -1642,7 +1652,7 @@ local function lpm_lite_xl_run(version, ...)
   while i <= #arguments do
     if arguments[i] == "--" then break end
     local str = arguments[i]
-    if str:find("^http") then
+    if is_argument_repo(str) then
       table.insert(repositories, 1, Repository.url(str):add(AUTO_PULL_REMOTES))
     else
       local id, version = common.split(":", str)
@@ -1676,7 +1686,7 @@ local function lpm_install(type, ...)
     if id == "lite-xl" then
       lpm_lite_xl_install(version)
     else
-      if identifier:find("^http") then
+      if is_argument_repo(identifier) then
         table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
       else
         local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
