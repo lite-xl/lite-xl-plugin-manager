@@ -388,7 +388,7 @@ end
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
 function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) local s = system.stat(e) return s and s.type ~= "dir" and s.mode & 73 end) end
-function common.normalize_path(path) if PLATFORM == "Windows" and path then path = path:gsub("/", PATHSEP) end if not path or not path:find("^~") then return path end return os.getenv("HOME") .. path:sub(2) end
+function common.normalize_path(path) if PLATFORM == "windows" and path then path = path:gsub("/", PATHSEP) end if not path or not path:find("^~") then return path end return os.getenv("HOME") .. path:sub(2) end
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
   if not info then return end
