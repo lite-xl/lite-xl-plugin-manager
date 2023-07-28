@@ -1,3 +1,13 @@
+# 1.0.8
+
+* Autoflush stderr, so that certain windows terminals don't get blank prompts.
+* Added method to grab and install orphan plugins from one-off repos.
+* Passed debug build status through to underlying libraries.
+* Fixed bug where we compared sizes of folders to determined if they were the same.
+* Made it so you can set the define LPM_DEFAULT_REPOSITORY if you want to build a custom manager.
+* Made it so tests run more smoothly, and will always use the lpm you compiled, instead of system lpm.
+* Normalized paths on windows to backslashes for consistency.
+
 # 1.0.7
 
 * Upgraded submodules.
