@@ -444,7 +444,9 @@ static int lpm_fetch(lua_State* L) {
   git_fetch_options fetch_opts = GIT_FETCH_OPTIONS_INIT;
   fetch_opts.download_tags = GIT_REMOTE_DOWNLOAD_TAGS_ALL;
   fetch_opts.callbacks.payload = L;
-  fetch_opts.depth = 1;
+  #if LIBGIT2_VER_MAJOR >= 1 && LIBGIT2_VER_MINOR >= 7
+    fetch_opts.depth = 1;
+  #endif
   if (no_verify_ssl)
     fetch_opts.callbacks.certificate_check = lpm_git_transport_certificate_check_cb;
   if (lua_type(L, 2) == LUA_TFUNCTION)
