@@ -158,7 +158,7 @@ function PluginManager:refresh(options)
     end
     self.last_refresh = os.time()
     prom:resolve(addons)
-    run({ "repo", "list" }):done(function(repositories)
+    run({ "repo", "list" }, options.progress):done(function(repositories)
       self.repositories = json.decode(repositories)["repositories"]
     end)
   end)
