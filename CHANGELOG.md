@@ -1,3 +1,9 @@
+# 1.0.9
+
+* `lpm` now automatically extracts and chmod's `.gz` files.
+* Added in preprocessor guard for shallow cloning to allow non-bleeding-edge `libgit2` linkings.
+* Fixed bug where dangling symlinks of lite binaries in `$PATH` would cause an error.
+
 # 1.0.8
 
 * Autoflush stderr, so that certain windows terminals don't get blank prompts.
