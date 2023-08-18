@@ -112,7 +112,7 @@ can also optionally contain the `arch` and `path` keys.
 * `optional` is a boolean that determines whether the file is an optional addition;
   if omitted, the file is assumed to be required.
 
-If a file is an archive, of either `.zip` or `.tar.gz`, it will automatically
+If a file is an archive, of either `.zip`, `.gz` or `.tar.gz`, it will automatically
 be extracted inside the addon's directory.
 
 ## Lite-XLs
