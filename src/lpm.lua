@@ -857,13 +857,15 @@ function Addon:install(bottle, installing)
             else
               common.get(file.url, temporary_path, file.checksum, write_progress_bar)
               local basename = common.basename(target_path)
-              if basename:find("%.zip$") or basename:find("%.tar%.gz$") or basename:find("%.gz$") then
+              local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
+              local target = temporary_path
+              if is_archive or basename:find("%.gz$") then
                 log_action("Extracting file " .. basename .. " in " .. install_path)
-                system.extract(temporary_path, temporary_install_path .. (not basename:find("%.tar%.gz$") and basename:find("%.gz$") and (PATHSEP .. basename:gsub(".gz$", "")) or ""))
+                target = temporary_install_path .. (not is_archive and (PATHSEP .. basename:gsub(".gz$", "")) or "")
+                system.extract(temporary_path, target)
                 os.remove(temporary_path)
-              else
-                if file.arch and file.arch ~= "*" then system.chmod(temporary_path, 448) end -- chmod any ARCH tagged file to rwx-------
               end
+              if not is_archive and file.arch and file.arch ~= "*" then system.chmod(target, 448) end -- chmod any ARCH tagged file to rwx-------
             end
           end
         end
@@ -1309,6 +1311,7 @@ function Bottle:construct()
   if self.is_system then error("system bottle cannot be constructed") end
   if self:is_constructed() and not REINSTALL then error("bottle " .. self.hash .. " already constructed") end
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
+  common.rmrf(self.local_path .. PATHSEP .. "user")
   common.mkdirp(self.local_path .. PATHSEP .. "user")
 
   -- Always copy the executbale, because of the way that lite determines the user folder (for now).
