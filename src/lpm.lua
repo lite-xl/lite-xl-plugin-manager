@@ -1310,8 +1310,8 @@ function Bottle:is_constructed() return self.is_system or system.stat(self.local
 function Bottle:construct()
   if self.is_system then error("system bottle cannot be constructed") end
   if self:is_constructed() and not REINSTALL then error("bottle " .. self.hash .. " already constructed") end
+  common.rmrf(self.local_path)
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
-  common.rmrf(self.local_path .. PATHSEP .. "user")
   common.mkdirp(self.local_path .. PATHSEP .. "user")
 
   -- Always copy the executbale, because of the way that lite determines the user folder (for now).
