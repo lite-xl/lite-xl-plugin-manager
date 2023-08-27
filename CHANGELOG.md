@@ -1,3 +1,8 @@
+# 1.0.10
+
+* We now fully clear bottles when reconstructing them avoiding confusion/bugs over old bottles.
+* A `--config` flag has been added that allows you to specify a user config when running.
+
 # 1.0.9
 
 * `lpm` now automatically extracts and chmod's `.gz` files.
