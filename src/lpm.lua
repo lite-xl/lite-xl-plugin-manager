@@ -469,7 +469,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
@@ -1291,15 +1291,16 @@ end
 
 
 function Bottle.__index(t, k) return Bottle[k] end
-function Bottle.new(lite_xl, addons, is_system)
+function Bottle.new(lite_xl, addons, config, is_system)
   local self = setmetatable({
     lite_xl = lite_xl,
     addons = addons,
+    config = config,
     is_system = is_system
   }, Bottle)
   if not is_system then
     table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
-    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return p.id .. ":" .. p.version end)))
+    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return p.id .. ":" .. p.version end)) .. (config or ""))
     self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
   end
   return self
@@ -1313,6 +1314,14 @@ function Bottle:construct()
   common.rmrf(self.local_path)
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
+  io.open(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", "wb"):write([[
+    local core = require "core"
+    local command = require "core.command"
+    local keymap = require "core.keymap"
+    local config = require "core.config"
+    local style = require "core.style"
+    ]] .. self.config
+  ):close()
 
   -- Always copy the executbale, because of the way that lite determines the user folder (for now).
   common.copy(self.lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
@@ -1671,7 +1680,7 @@ local function lpm_lite_xl_run(version, ...)
     end
     i = i + 1
   end
-  local bottle = Bottle.new(lite_xl, addons)
+  local bottle = Bottle.new(lite_xl, addons, CONFIG)
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
     bottle:run(common.slice(arguments, i + 1))
@@ -1900,7 +1909,7 @@ xpcall(function()
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
-    symlink = "flag", reinstall = "flag", ["no-color"] = "flag",
+    symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
@@ -2034,6 +2043,8 @@ Flags have the following effects:
                            to reinstall all modules.
   --no-color               Suppresses ANSI escape sequences that are emitted
                            when connected over a TTY.
+  --config=string          When used with `run`, applies the literal supplied
+                           config.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2083,6 +2094,7 @@ not commonly used publically.
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   FORCE = ARGS["force"]
   POST = ARGS["post"]
+  CONFIG = ARGS["config"]
   SYMLINK = ARGS["symlink"]
   PROGRESS = ARGS["progress"]
   REINSTALL = ARGS["reinstall"]
@@ -2284,11 +2296,11 @@ not commonly used publically.
         if DATADIR then system_lite_xl.datadir_path = DATADIR end
         table.insert(system_lite_xl.tags, "system")
       end
-      system_bottle = Bottle.new(system_lite_xl, nil, true)
+      system_bottle = Bottle.new(system_lite_xl, nil, nil, true)
     else
-      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, true)
+      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, nil, true)
     end
-    if not system_bottle then system_bottle = Bottle.new(nil, nil, true) end
+    if not system_bottle then system_bottle = Bottle.new(nil, nil, nil, true) end
   end, error_handler, lock_warning) then return end
   if ARGS[2] ~= '-' then
     local res
