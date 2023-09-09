@@ -1648,7 +1648,7 @@ local function lpm_lite_xl_list()
 end
 
 local function is_argument_repo(arg)
-  return arg:find("^http") or arg:find("[%.\\/]")
+  return arg:find("^http") or arg:find("[\\/]") or arg == "."
 end
 
 local function lpm_lite_xl_run(version, ...)
