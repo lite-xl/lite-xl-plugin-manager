@@ -656,7 +656,11 @@ function Addon.new(repository, metadata)
   return self
 end
 
-function Addon:is_stub() return self.remote end
+function Addon:is_stub()
+  if self.remote == nil then return false end
+  local repo = Repository.url(self.remote)
+  return system.stat(repo.local_path) == nil
+end
 
 function Addon:unstub()
   if not self:is_stub() or self.inaccessible then return end
@@ -1736,6 +1740,25 @@ local function lpm_install(type, ...)
 end
 
 
+local function lpm_unstub(type, ...)
+  local addons = {}
+  for i, identifier in ipairs({ ... }) do
+    if not identifier then error('unrecognized identifier ' .. identifier) end
+    if is_argument_repo(identifier) then
+      table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
+    else
+      local potential_addons = { system_bottle:get_addon(identifier, nil, { mod_version = system_bottle.lite_xl.mod_version }) }
+      addons = common.grep(potential_addons, function(e) return e:is_stub() end)
+      if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. identifier .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+      if #addons == 0 then
+        log_warning((potential_addons[1].type or "addon") .. " " .. identifier .. " already unstubbed")
+      end
+    end
+  end
+  common.each(addons, function(e) e:unstub() end)
+end
+
+
 local function lpm_addon_uninstall(type, ...)
   for i, id in ipairs({ ... }) do
     local addons = { system_bottle:get_addon(id) }
@@ -1776,6 +1799,7 @@ local function lpm_addon_list(type, id, filters)
     local hash = {
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
+      stub = addon:is_stub(),
       version = "" .. addon.version,
       dependencies = addon.dependencies,
       remote = addon.remote,
@@ -1895,6 +1919,7 @@ local function run_command(ARGS)
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "unstub" then lpm_unstub(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "reinstall" then lpm_addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "describe" then lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
