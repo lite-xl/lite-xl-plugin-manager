@@ -1314,14 +1314,16 @@ function Bottle:construct()
   common.rmrf(self.local_path)
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
-  io.open(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", "wb"):write([[
-    local core = require "core"
-    local command = require "core.command"
-    local keymap = require "core.keymap"
-    local config = require "core.config"
-    local style = require "core.style"
-    ]] .. self.config
-  ):close()
+  if self.config then
+    io.open(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", "wb"):write([[
+      local core = require "core"
+      local command = require "core.command"
+      local keymap = require "core.keymap"
+      local config = require "core.config"
+      local style = require "core.style"
+      ]] .. self.config
+    ):close()
+  end
 
   -- Always copy the executbale, because of the way that lite determines the user folder (for now).
   common.copy(self.lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
