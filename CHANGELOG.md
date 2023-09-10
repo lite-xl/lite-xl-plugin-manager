@@ -1,3 +1,9 @@
+# 1.0.11
+
+* Fixed an issue with constructing bottles when not specifying a config.
+* Fixed a major issue when installing packages with distinct versions (like `plugin_manager` does).
+* Thanks to @guldoman for both fixes!
+
 # 1.0.10
 
 * We now fully clear bottles when reconstructing them avoiding confusion/bugs over old bottles.
