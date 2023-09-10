@@ -441,11 +441,14 @@ function common.copy(src, dst, hidden)
       dst_io:write(chunk)
     end
     dst_io:close()
+    system.chmod(dst, src_stat.mode)
   end
 end
 function common.rename(src, dst)
-  local _, err = os.rename(src, dst)
-  if err then error("can't rename file " .. src ..  " to " .. dst .. ": " .. err) end
+  if not os.rename(src, dst) then
+    common.copy(src, dst)
+    common.rmrf(src)
+  end
 end
 function common.reset(path, ref, type)
   if is_commit_hash(ref) then
@@ -1311,7 +1314,11 @@ function Bottle:is_constructed() return self.is_system or system.stat(self.local
 function Bottle:construct()
   if self.is_system then error("system bottle cannot be constructed") end
   if self:is_constructed() and not REINSTALL then error("bottle " .. self.hash .. " already constructed") end
+  -- swap out the local path for a temporary path while we construct the bottle to make things atomic
+  local local_path = self.local_path
+  self.local_path = TMPDIR .. PATHSEP .. "bottles" .. self.hash
   common.rmrf(self.local_path)
+
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   if self.config then
@@ -1334,6 +1341,11 @@ function Bottle:construct()
     common.copy(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
   end
   for i,addon in ipairs(self.addons) do addon:install(self) end
+  -- atomically move things
+  common.rmrf(local_path)
+  common.mkdirp(local_path)
+  common.rename(self.local_path, local_path)
+  self.local_path = local_path
 end
 
 function Bottle:destruct()
