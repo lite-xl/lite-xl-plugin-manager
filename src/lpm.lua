@@ -1740,6 +1740,63 @@ local function lpm_install(type, ...)
 end
 
 
+local function print_addon_info(addons, filters)
+  local max_id = 4
+  local plural = (type or "addon") .. "s"
+  local result = { [plural] = { } }
+  for j,addon in ipairs(addons) do
+    max_id = math.max(max_id, #addon.id)
+    local repo = addon.repository
+    local hash = {
+      id = addon.id,
+      status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
+      stub = addon:is_stub(),
+      version = "" .. addon.version,
+      dependencies = addon.dependencies,
+      remote = addon.remote,
+      description = addon.description,
+      author = addon.author or (addon:is_core(system_bottle) and "lite-xl") or nil,
+      mod_version = addon.mod_version,
+      tags = addon.tags,
+      type = addon.type,
+      organization = addon.organization,
+      repository = repo and repo:url(),
+      path = addon:get_path(system_bottle)
+    }
+    if addon_matches_filter(hash, filters or {}) then table.insert(result[plural], hash) end
+  end
+  if JSON then
+    io.stdout:write(json.encode(result) .. "\n")
+  elseif #result[plural] > 0 then
+    if not VERBOSE then
+      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", "ID", "Version", "Type", "ModVer", "Status"))
+      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", string.rep("-", max_id), "-------", "----", "------", "-----------"))
+    end
+    for i, addon in ipairs(common.sort(result[plural], function(a,b) return a.id < b.id end)) do
+      if VERBOSE then
+        if i ~= 0 then print("---------------------------") end
+        print("ID:            " .. addon.id)
+        print("Name:          " .. (addon.name or addon.id))
+        print("Version:       " .. addon.version)
+        print("Status:        " .. addon.status)
+        print("Author:        " .. (addon.author or ""))
+        print("Type:          " .. addon.type)
+        print("Orgnization:   " .. addon.organization)
+        print("Repository:    " .. (addon.repository or "orphan"))
+        print("Remote:        " .. (addon.remote or ""))
+        print("Description:   " .. (addon.description or ""))
+        print("Mod-Version:   " .. (addon.mod_version or "unknown"))
+        print("Dependencies:  " .. json.encode(addon.dependencies))
+        print("Tags:          " .. common.join(", ", addon.tags))
+        print("Path:          " .. (addon.path or ""))
+      elseif addon.status ~= "incompatible" then
+        print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", addon.id, addon.version, addon.type, addon.mod_version or "n/a", addon.status))
+      end
+    end
+  end
+end
+
+
 local function lpm_unstub(type, ...)
   local addons = {}
   for i, identifier in ipairs({ ... }) do
@@ -1756,6 +1813,7 @@ local function lpm_unstub(type, ...)
     end
   end
   common.each(addons, function(e) e:unstub() end)
+  print_addon_info(addons)
 end
 
 
@@ -1790,68 +1848,12 @@ local function lpm_repo_list()
 end
 
 local function lpm_addon_list(type, id, filters)
-  local max_id = 4
-  local plural = (type or "addon") .. "s"
-  local result = { [plural] = { } }
-  for j,addon in ipairs(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end)) do
-    max_id = math.max(max_id, #addon.id)
-    local repo = addon.repository
-    local hash = {
-      id = addon.id,
-      status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
-      stub = addon:is_stub(),
-      version = "" .. addon.version,
-      dependencies = addon.dependencies,
-      remote = addon.remote,
-      description = addon.description,
-      author = addon.author or (addon:is_core(system_bottle) and "lite-xl") or nil,
-      mod_version = addon.mod_version,
-      tags = addon.tags,
-      type = addon.type,
-      organization = addon.organization,
-      repository = repo and repo:url(),
-      path = addon:get_path(system_bottle)
-    }
-    if addon_matches_filter(hash, filters) then table.insert(result[plural], hash) end
-  end
-  if JSON then
-    io.stdout:write(json.encode(result) .. "\n")
-  elseif #result[plural] > 0 then
-    if not VERBOSE then
-      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", "ID", "Version", "Type", "ModVer", "Status"))
-      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", string.rep("-", max_id), "-------", "----", "------", "-----------"))
-    end
-    for i, addon in ipairs(common.sort(result[plural], function(a,b) return a.id < b.id end)) do
-      if VERBOSE then
-        if i ~= 0 then print("---------------------------") end
-        print("ID:            " .. addon.id)
-        print("Name:          " .. (addon.name or addon.id))
-        print("Version:       " .. addon.version)
-        print("Status:        " .. addon.status)
-        print("Author:        " .. (addon.author or ""))
-        print("Type:          " .. addon.type)
-        print("Orgnization:   " .. addon.organization)
-        print("Repository:    " .. (addon.repository or "orphan"))
-        print("Remote:        " .. (addon.remote or ""))
-        print("Description:   " .. (addon.description or ""))
-        print("Mod-Version:   " .. (addon.mod_version or "unknown"))
-        print("Dependencies:  " .. json.encode(addon.dependencies))
-        print("Tags:          " .. common.join(", ", addon.tags))
-        print("Path:          " .. (addon.path or ""))
-      elseif addon.status ~= "incompatible" then
-        print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", addon.id, addon.version, addon.type, addon.mod_version or "n/a", addon.status))
-      end
-    end
-  end
+  print_addon_info(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end), filters)
 end
 
 local function lpm_describe()
-  for i,v in ipairs(repositories) do
-    if #common.grep(DEFAULT_REPOS, function(r) return r:url() == v:url() end) == 0 then
-      io.stdout:write("lpm add " .. v:url() .. " && ")
-    end
-  end
-  print("lpm run " .. system_bottle.lite_xl.version .. " " .. common.join(" ", common.map(system_bottle:installed_addons(), function(p) return p.id .. ":" .. p.version end)))
+  local repo_urls = common.grep(common.map(repositories, function(e) return e:url() end), function(url) return #common.grep(DEFAULT_REPOS, function(r) return r:url() == url end) == 0  end)
+  print("lpm run " .. common.join(" ", { system_bottle.lite_xl.version, table.unpack(repo_urls) }) .. " " .. common.join(" ", common.map(system_bottle:installed_addons(), function(p) return p.id .. ":" .. p.version end)))
 end
 
 local function lpm_addon_upgrade()
