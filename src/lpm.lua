@@ -656,11 +656,7 @@ function Addon.new(repository, metadata)
   return self
 end
 
-function Addon:is_stub()
-  if self.remote == nil then return false end
-  local repo = Repository.url(self.remote)
-  return system.stat(repo.local_path) == nil
-end
+function Addon:is_stub() return self.remote end
 
 function Addon:unstub()
   if not self:is_stub() or self.inaccessible then return end
@@ -810,7 +806,6 @@ function Addon:install(bottle, installing)
     else
       log_action("Installing " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
     end
-
     if self.organization == "complex" and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
     if self.url then -- remote simple plugin
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
@@ -1740,7 +1735,7 @@ local function lpm_install(type, ...)
 end
 
 
-local function print_addon_info(addons, filters)
+local function print_addon_info(type, addons, filters)
   local max_id = 4
   local plural = (type or "addon") .. "s"
   local result = { [plural] = { } }
@@ -1813,7 +1808,7 @@ local function lpm_unstub(type, ...)
     end
   end
   common.each(addons, function(e) e:unstub() end)
-  print_addon_info(addons)
+  print_addon_info(nil, addons)
 end
 
 
@@ -1848,7 +1843,7 @@ local function lpm_repo_list()
 end
 
 local function lpm_addon_list(type, id, filters)
-  print_addon_info(common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end), filters)
+  print_addon_info(type, common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end), filters)
 end
 
 local function lpm_describe()
