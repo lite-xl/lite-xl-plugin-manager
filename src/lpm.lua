@@ -766,7 +766,8 @@ function Addon:install(bottle, installing)
   if self:is_stub() then self:unstub() end
   if self.inaccessible then error("addon " .. self.id .. " is inacessible: " .. self.inaccessible) end
   local install_path = self:get_install_path(bottle)
-  local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(#USERDIR + 2)
+  if install_path:find(USERDIR, 1, true) ~= 1 and install_path:find(TMPDIR, 1, true) ~= 1 then error("invalid install path: " .. install_path) end
+  local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(((install_path:find(TMPDIR, 1, true) == 1) and #TMPDIR or #USERDIR) + 2)
   local status, err = pcall(function()
     installing = installing or {}
     installing[self.id] = true
@@ -850,24 +851,26 @@ function Addon:install(bottle, installing)
             local local_path = self.repository.repo_path .. PATHSEP .. (file.path or common.basename(file.url))
             local stripped_local_path = local_path:find("%.[^%.]+%-[^%.]+%.[^%.]*$") and local_path:gsub("%.[^%.]+%-[^%.]+", "") or local_path
 
-            if SYMLINK and self.repository:is_local() and system.stat(local_path) then
-              log_action("Symlinking " .. local_path .. " to " .. target_path)
-              system.symlink(local_path, temporary_path)
-            elseif SYMLINK and self.repository:is_local() and system.stat(stripped_local_path) then
-              log_action("Symlinking " .. stripped_local_path .. " to " .. target_path)
-              system.symlink(stripped_local_path, temporary_path)
-            else
-              common.get(file.url, temporary_path, file.checksum, write_progress_bar)
-              local basename = common.basename(target_path)
-              local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
-              local target = temporary_path
-              if is_archive or basename:find("%.gz$") then
-                log_action("Extracting file " .. basename .. " in " .. install_path)
-                target = temporary_install_path .. (not is_archive and (PATHSEP .. basename:gsub(".gz$", "")) or "")
-                system.extract(temporary_path, target)
-                os.remove(temporary_path)
+            if not system.stat(temporary_path) then
+              if SYMLINK and self.repository:is_local() and system.stat(local_path) then
+                log_action("Symlinking " .. local_path .. " to " .. target_path)
+                system.symlink(local_path, temporary_path)
+              elseif SYMLINK and self.repository:is_local() and system.stat(stripped_local_path) then
+                log_action("Symlinking " .. stripped_local_path .. " to " .. target_path)
+                system.symlink(stripped_local_path, temporary_path)
+              else
+                common.get(file.url, temporary_path, file.checksum, write_progress_bar)
+                local basename = common.basename(target_path)
+                local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
+                local target = temporary_path
+                if is_archive or basename:find("%.gz$") then
+                  log_action("Extracting file " .. basename .. " in " .. install_path)
+                  target = temporary_install_path .. (not is_archive and (PATHSEP .. basename:gsub(".gz$", "")) or "")
+                  system.extract(temporary_path, target)
+                  os.remove(temporary_path)
+                end
+                if not is_archive and file.arch and file.arch ~= "*" then system.chmod(target, 448) end -- chmod any ARCH tagged file to rwx-------
               end
-              if not is_archive and file.arch and file.arch ~= "*" then system.chmod(target, 448) end -- chmod any ARCH tagged file to rwx-------
             end
           end
         end
@@ -892,9 +895,11 @@ function Addon:install(bottle, installing)
         end
       end)
     end
-    common.rmrf(install_path)
-    common.mkdirp(common.dirname(install_path))
-    common.rename(temporary_install_path, install_path)
+    if install_path ~= temporary_install_path then
+      common.rmrf(install_path)
+      common.mkdirp(common.dirname(install_path))
+      common.rename(temporary_install_path, install_path)
+    end
   end
 end
 
@@ -1315,7 +1320,7 @@ function Bottle:construct()
   if self:is_constructed() and not REINSTALL then error("bottle " .. self.hash .. " already constructed") end
   -- swap out the local path for a temporary path while we construct the bottle to make things atomic
   local local_path = self.local_path
-  self.local_path = TMPDIR .. PATHSEP .. "bottles" .. self.hash
+  self.local_path = TMPDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
   common.rmrf(self.local_path)
 
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
