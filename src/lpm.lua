@@ -475,8 +475,8 @@ local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
 local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
-  if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
-  local lockfile = USERDIR .. PATHSEP .. ".lock"
+  if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
+  local lockfile = CACHEDIR .. PATHSEP .. ".lock"
   if not system.stat(lockfile) then common.write(lockfile, "") end
   return system.flock(lockfile, func, err, warn)
 end
@@ -1088,8 +1088,8 @@ function Repository:generate_manifest(repo_id)
       end
     end
     if folder == "plugins" or system.stat(path .. PATHSEP .. folder) then
-      local addon_dir = system.stat(path .. PATHSEP .. folder) and PATHSEP .. folder or ""
-      local files = folder == "plugins" and system.stat(path .. PATHSEP .. "init.lua") and { "init.lua" } or system.ls(path .. addon_dir)
+      local addon_dir = system.stat(path .. PATHSEP .. folder) and folder or ""
+      local files = folder == "plugins" and system.stat(path .. PATHSEP .. "init.lua") and { "init.lua" } or system.ls(path .. PATHSEP .. addon_dir)
       for i, file in ipairs(files) do
         if file:find("%.lua$") then
           local filename = common.basename(file):gsub("%.lua$", "")
@@ -1098,7 +1098,7 @@ function Repository:generate_manifest(repo_id)
           if name ~= "init" then
             local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
             local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. PATHSEP .. file) or nil), type = type }
-            for line in io.lines(path .. addon_dir .. PATHSEP .. file) do
+            for line in io.lines(path .. PATHSEP .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
               local _, _, required_addon = line:find("require [\"']plugins.([%w_-]+)")
@@ -1441,12 +1441,17 @@ local function filter_match(field, filter)
   if not field and not filter then return true end
   if not field and filter then return false end
   local filters = type(filter) == "table" and filter or { filter }
+  local fields = type(field) == "table" and field or { field }
+  local matches
   for i,v in ipairs(filters) do
     local inverted = filter:find("^!")
     local actual_filter = inverted and filter:sub(2) or filter
-    local matches = field:find("^" .. actual_filter .. "$")
-    if not matches and not inverted then return false end
-    if matches and inverted then return false end
+    for k, field in ipairs(fields) do
+      matches = field:find("^" .. actual_filter .. "$")
+      if not inverted and matches then break end
+      if inverted and matches then return false end
+    end
+    if not inverted and not matches then return false end
   end
   return true
 end
@@ -2118,6 +2123,8 @@ There exist also other debug commands that are potentially useful, but are
 not commonly used publically.
 
   lpm test [test file]               Runs the specified test suite.
+  lpm exec [file]                    Runs the specified lua file with the internal
+                                     interpreter.
   lpm table <manifest> [...filters]  Generates markdown table for the given
                                      manifest. Used by repositories to build
                                      READMEs.
@@ -2242,11 +2249,11 @@ not commonly used publically.
 
   -- Small utility functions that don't play into the larger app; are used for testing
   -- or for handy scripts.
-  if ARGS[2] == "test" then
+  if ARGS[2] == "test" or ARGS[2] == "exec" then
     local arg = common.slice(ARGS, 4)
     arg[0] = ARGS[1]
     rawset(_G, "arg", arg)
-    dofile(ARGS[3])
+    loadfile(ARGS[3])(table.unpack(arg))
     os.exit(0)
   end
   if ARGS[2] == "download" then
@@ -2262,9 +2269,15 @@ not commonly used publically.
     system.extract(ARGS[3], ARGS[4] or ".")
     os.exit(0)
   end
+  if ARGS[2] == "manifest" then
+    local repo = Repository.url(ARGS[3])
+    repo.branch = "master"
+    repo:generate_manifest()
+    os.exit(0)
+  end
   if ARGS[2] == "table" then
     local info = json.decode(common.read(ARGS[3]))
-    local addons = common.grep(info["addons"] or info["plugins"], function(addon) return addon_matches_filter(addon, ARGS) end)
+    local addons = common.grep(info["addons"], function(addon) return addon_matches_filter(addon, ARGS) end)
     if #addons == 0 then return end
     table.sort(addons, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
     local ids = common.map(addons, function(addon)
@@ -2277,11 +2290,12 @@ not commonly used publically.
     local descriptions = common.map(addons, function(e) return e.description or "" end)
     local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
     local max_id = math.max(table.unpack(common.map(ids, function(e) return #e end)))
+    local type_name = ARGS["type"]:gsub("^%l", string.upper) or "Addon"
     local t = { }
-    table.insert(t, "| Plugin" .. string.rep(" ", max_id - 6) .. " | Description" .. string.rep(" ", max_description - 11) .. " |")
-    table.insert(t, "| :" .. string.rep("-", max_id-1) .. " | :" .. string.rep("-", max_description - 1) .. " |")
+    table.insert(t, "| " .. type_name .. string.rep(" ", max_id - #type_name) .. (max_description > 0 and (" | Description" .. string.rep(" ", max_description - 11)) or "") .. " |")
+    table.insert(t, "| :" .. string.rep("-", max_id-1) .. (max_description > 0 and (" | :" .. string.rep("-", max_description - 1)) or "") .. " |")
     for i = 1, #addons do
-      table.insert(t, "| " .. ids[i] .. string.rep(" ", max_id - #ids[i]) .. " | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i]) .. " |")
+      table.insert(t, "| " .. ids[i] .. string.rep(" ", max_id - #ids[i]) .. (max_description > 0 and (" | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i])) or "") .. " |")
     end
     if ARGS[4] then
       local file = {}
@@ -2294,6 +2308,7 @@ not commonly used publically.
     else
       print(table.concat(t, "\n"))
     end
+
     os.exit(0)
   end
 

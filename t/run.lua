@@ -175,4 +175,4 @@ local function run_tests(tests, arg)
   os.exit(fail_count)
 end
 
-run_tests(tests, arg)
+run_tests(tests, { ... })
