@@ -82,3 +82,5 @@ jobs:
             git push -f origin refs/heads/latest
             git push -f origin refs/tags/latest
           fi
+          git tag -f continuous
+          git push -f origin refs/tags/continuous
