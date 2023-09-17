@@ -361,7 +361,7 @@ end
 
 local common = {}
 function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
-function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v)) end return t end
+function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v, i)) end return t end
 function common.each(l, p) for i, v in ipairs(l) do p(v) end end
 function common.flat_map(l, p) local t = {} for i, v in ipairs(l) do local r = p(v) for k, w in ipairs(r) do table.insert(t, w) end end return t end
 function common.concat(t1, t2) local t = {} for i, v in ipairs(t1) do table.insert(t, v) end for i, v in ipairs(t2) do table.insert(t, v) end return t end
@@ -472,7 +472,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
@@ -1744,6 +1744,23 @@ local function lpm_install(type, ...)
   lpm_settings_save()
 end
 
+local function get_table(headers, rows)
+  local maxes = common.map(headers, function(h) return #h end)
+  for i,row in ipairs(rows) do for k,v in ipairs(row) do
+    if type(v) == "table" then v = table.concat(v, ", ") else v = tostring(v) end
+    maxes[k] = math.max(#v, maxes[k] or 0)
+  end end
+  local strs = {}
+  table.insert(strs, table.concat(common.map(headers, function(v, i) return v .. string.rep(" ", maxes[i] - #v) end), " | "))
+  table.insert(strs, table.concat(common.map(headers, function(v, i) return string.rep("-", maxes[i]) end), " | "))
+  for i,row in ipairs(rows) do
+    table.insert(strs, table.concat(common.map(row, function(v, i)
+      if type(v) == "table" then v = table.concat(v, ", ") else v = tostring(v) end
+      return v .. string.rep(" ", maxes[i] - #v)
+    end), " | "))
+  end
+  return table.concat(strs, "\n")
+end
 
 local function print_addon_info(type, addons, filters)
   local max_id = 4
@@ -1751,7 +1768,11 @@ local function print_addon_info(type, addons, filters)
   local result = { [plural] = { } }
   for j,addon in ipairs(addons) do
     max_id = math.max(max_id, #addon.id)
-    local repo = addon.repository
+    local url = addon.name or addon.id
+    if addon.remote then url = string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.remote:gsub(":%w+$", ""))
+    elseif addon.url then url = string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.url)
+    elseif addon.path and addon.path:find(".lua$") then url = string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path)
+    elseif addon.path then url = string.format("[`%s`](%s)", addon.name or addon.id, addon.path) end
     local hash = {
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
@@ -1765,20 +1786,30 @@ local function print_addon_info(type, addons, filters)
       tags = addon.tags,
       type = addon.type,
       organization = addon.organization,
-      repository = repo and repo:url(),
-      path = addon:get_path(system_bottle)
+      repository = addon.repository and addon.repository:url(),
+      path = addon:get_path(system_bottle),
+      url = url
     }
-    if addon_matches_filter(hash, filters or {}) then table.insert(result[plural], hash) end
+    if addon_matches_filter(hash, filters or {}) then
+      table.insert(result[plural], hash)
+    end
   end
   if JSON then
     io.stdout:write(json.encode(result) .. "\n")
   elseif #result[plural] > 0 then
-    if not VERBOSE then
-      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", "ID", "Version", "Type", "ModVer", "Status"))
-      print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", string.rep("-", max_id), "-------", "----", "------", "-----------"))
+    local sorted = common.sort(result[plural], function(a,b) return a.id < b.id end)
+    if not VERBOSE and not TABLE then
+      TABLE = { "id", "version", "type", "mod_version", "status" }
     end
-    for i, addon in ipairs(common.sort(result[plural], function(a,b) return a.id < b.id end)) do
-      if VERBOSE then
+    if TABLE then
+      local addons = common.grep(sorted, function(addon) return addon.status ~= "incompatible" end)
+      print(get_table(HEADER or common.map(TABLE, function(header)
+        return ("" .. header:gsub("^%l", string.upper):gsub("_", " "))
+      end), common.map(result[plural], function(addon)
+        return common.map(TABLE, function(header) return _G.type(header) == "function" and header(addon) or addon[header] end)
+      end)))
+    else
+      for i, addon in ipairs(sorted) do
         if i ~= 0 then print("---------------------------") end
         print("ID:            " .. addon.id)
         print("Name:          " .. (addon.name or addon.id))
@@ -1794,8 +1825,6 @@ local function print_addon_info(type, addons, filters)
         print("Dependencies:  " .. json.encode(addon.dependencies))
         print("Tags:          " .. common.join(", ", addon.tags))
         print("Path:          " .. (addon.path or ""))
-      elseif addon.status ~= "incompatible" then
-        print(string.format("%" .. max_id .."s | %10s | %10s | %10s | %s", addon.id, addon.version, addon.type, addon.mod_version or "n/a", addon.status))
       end
     end
   end
@@ -1955,7 +1984,8 @@ xpcall(function()
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
-    symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string",
+    symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
+    repository = "string",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
@@ -1971,7 +2001,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
   [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
-  [--no-color]
+  [--no-color] [--table=...]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -2091,6 +2121,11 @@ Flags have the following effects:
                            when connected over a TTY.
   --config=string          When used with `run`, applies the literal supplied
                            config.
+  --table                  Outputs things a markdown table, specify the columns
+                           you'd like.
+  --repository             For the duration of this command, do not load default
+                           repositories, simply act as if the only repositories
+                           are those specified in this option.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2125,9 +2160,6 @@ not commonly used publically.
   lpm test [test file]               Runs the specified test suite.
   lpm exec [file]                    Runs the specified lua file with the internal
                                      interpreter.
-  lpm table <manifest> [...filters]  Generates markdown table for the given
-                                     manifest. Used by repositories to build
-                                     READMEs.
   lpm download <url> [target]        Downloads the specified URL to stdout,
                                      or to the specified target file.
   lpm extract <file.[tar.gz|zip]>    Extracts the specified archive at
@@ -2140,6 +2172,29 @@ not commonly used publically.
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
+  if ARGS["table"] then
+    local offset,s,e,i = 1, 1, 0, 1
+    TABLE = {}
+    while true do
+      if ARGS["table"]:sub(offset, offset) == "{" then
+        s,e = ARGS["table"]:find("%b{}", offset)
+        if not e then error(string.format("no end to chunk %s", ARGS["table"]:sub(offset))) end
+        local chunk = ARGS["table"]:sub(s + 1, e - 1)
+        local func, err = load("local addon = ... return " .. chunk)
+        if err then error(string.format("can't parse chunk %s: %s", chunk, err)) end
+        TABLE[i] = func
+        offset = e + 1
+      end
+      s,e = ARGS["table"]:find("%s*,%s*", offset)
+      if not e then s,e = #ARGS["table"],#ARGS["table"] end
+      if offset >= e then break end
+      TABLE[i] = ARGS["table"]:sub(offset, s - 1)
+      offset = e + 1
+      i = i + 1
+    end
+  end
+  HEADER = ARGS["header"] and { common.split("%s*,%s*", ARGS["header"]) }
+  REPOSITORY = ARGS["repository"]
   FORCE = ARGS["force"]
   POST = ARGS["post"]
   CONFIG = ARGS["config"]
@@ -2275,42 +2330,6 @@ not commonly used publically.
     repo:generate_manifest()
     os.exit(0)
   end
-  if ARGS[2] == "table" then
-    local info = json.decode(common.read(ARGS[3]))
-    local addons = common.grep(info["addons"], function(addon) return addon_matches_filter(addon, ARGS) end)
-    if #addons == 0 then return end
-    table.sort(addons, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
-    local ids = common.map(addons, function(addon)
-      if addon.remote then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.remote:gsub(":%w+$", "")) end
-      if addon.url then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.url) end
-      if addon.path and addon.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path) end
-      if addon.path then return string.format("[`%s`](%s)", addon.name or addon.id, addon.path) end
-      return addon.name or addon.id
-    end)
-    local descriptions = common.map(addons, function(e) return e.description or "" end)
-    local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
-    local max_id = math.max(table.unpack(common.map(ids, function(e) return #e end)))
-    local type_name = ARGS["type"] and ARGS["type"]:gsub("^%l", string.upper) or "Addon"
-    local t = { }
-    table.insert(t, "| " .. type_name .. string.rep(" ", max_id - #type_name) .. (max_description > 0 and (" | Description" .. string.rep(" ", max_description - 11)) or "") .. " |")
-    table.insert(t, "| :" .. string.rep("-", max_id-1) .. (max_description > 0 and (" | :" .. string.rep("-", max_description - 1)) or "") .. " |")
-    for i = 1, #addons do
-      table.insert(t, "| " .. ids[i] .. string.rep(" ", max_id - #ids[i]) .. (max_description > 0 and (" | " .. descriptions[i] .. string.rep(" ", max_description - #descriptions[i])) or "") .. " |")
-    end
-    if ARGS[4] then
-      local file = {}
-      for line in io.lines(ARGS[4]) do
-        if not line:find("^|.*") then
-          table.insert(file, line)
-        end
-      end
-      io.open(ARGS[4], "wb"):write(table.concat(file, "\n") .. "\n" .. table.concat(t, "\n") .. "\n")
-    else
-      print(table.concat(t, "\n"))
-    end
-
-    os.exit(0)
-  end
 
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
@@ -2357,6 +2376,7 @@ not commonly used publically.
       system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, nil, true)
     end
     if not system_bottle then system_bottle = Bottle.new(nil, nil, nil, true) end
+    if REPOSITORY then repositories = common.map(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end) end
   end, error_handler, lock_warning) then return end
   if ARGS[2] ~= '-' then
     local res
