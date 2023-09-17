@@ -2281,16 +2281,16 @@ not commonly used publically.
     if #addons == 0 then return end
     table.sort(addons, function(a,b) return string.lower(a.name or a.id) < string.lower(b.name or b.id) end)
     local ids = common.map(addons, function(addon)
+      if addon.remote then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.remote:gsub(":%w+$", "")) end
+      if addon.url then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.url) end
       if addon.path and addon.path:find(".lua$") then return string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path) end
       if addon.path then return string.format("[`%s`](%s)", addon.name or addon.id, addon.path) end
-      if addon.url then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.url) end
-      if addon.remote then return string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.remote:gsub(":%w+$", "")) end
       return addon.name or addon.id
     end)
     local descriptions = common.map(addons, function(e) return e.description or "" end)
     local max_description = math.max(table.unpack(common.map(descriptions, function(e) return #e end)))
     local max_id = math.max(table.unpack(common.map(ids, function(e) return #e end)))
-    local type_name = ARGS["type"]:gsub("^%l", string.upper) or "Addon"
+    local type_name = ARGS["type"] and ARGS["type"]:gsub("^%l", string.upper) or "Addon"
     local t = { }
     table.insert(t, "| " .. type_name .. string.rep(" ", max_id - #type_name) .. (max_description > 0 and (" | Description" .. string.rep(" ", max_description - 11)) or "") .. " |")
     table.insert(t, "| :" .. string.rep("-", max_id-1) .. (max_description > 0 and (" | :" .. string.rep("-", max_description - 1)) or "") .. " |")
