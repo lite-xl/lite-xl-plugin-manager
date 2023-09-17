@@ -2186,7 +2186,7 @@ not commonly used publically.
         offset = e + 1
       end
       s,e = ARGS["table"]:find("%s*,%s*", offset)
-      if not e then s,e = #ARGS["table"],#ARGS["table"] end
+      if not e then s,e = #ARGS["table"]+1, #ARGS["table"] end
       if offset >= e then break end
       TABLE[i] = ARGS["table"]:sub(offset, s - 1)
       offset = e + 1
