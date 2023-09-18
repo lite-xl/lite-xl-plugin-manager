@@ -1751,13 +1751,13 @@ local function get_table(headers, rows)
     maxes[k] = math.max(#v, maxes[k] or 0)
   end end
   local strs = {}
-  table.insert(strs, table.concat(common.map(headers, function(v, i) return v .. string.rep(" ", maxes[i] - #v) end), " | "))
-  table.insert(strs, table.concat(common.map(headers, function(v, i) return string.rep("-", maxes[i]) end), " | "))
+  table.insert(strs, "| " .. table.concat(common.map(headers, function(v, i) return v .. string.rep(" ", maxes[i] - #v) end), " | ") .. " |")
+  table.insert(strs, "| " .. table.concat(common.map(headers, function(v, i) return string.rep("-", maxes[i]) end), " | ") .. " |")
   for i,row in ipairs(rows) do
-    table.insert(strs, table.concat(common.map(row, function(v, i)
+    table.insert(strs, "| " .. table.concat(common.map(row, function(v, i)
       if type(v) == "table" then v = table.concat(v, ", ") else v = tostring(v) end
       return v .. string.rep(" ", maxes[i] - #v)
-    end), " | "))
+    end), " | ") .. " |")
   end
   return table.concat(strs, "\n")
 end
