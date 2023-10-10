@@ -1,3 +1,16 @@
+# 1.0.12
+
+* Updated meson to properly retrieve mbedtls2 when compiling.
+* Added in `exec` to run lua files.
+* Changed how arguments are interpreted when using `test` or `exec`.
+* Fixed bug with windows not properly flushing files on first run.
+* Moved lockfile to `CACHEDIR` from `USERDIR`.
+* Fixed some caching issues when something failed to install during bottle construction.
+* Fixed issues around filtering/matching when using `list`.
+* Added in table output format that allows you to generically specify a table and column list you want.
+* Added in `unstub` command.
+* Added in `--repository` flag.
+
 # 1.0.11
 
 * Fixed an issue with constructing bottles when not specifying a config.
