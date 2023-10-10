@@ -195,9 +195,9 @@ function PluginManager:get_addons()
   return prom
 end
 
-local function run_stateful_plugin_command(plugin_manager, cmd, arg, options)
+local function run_stateful_plugin_command(plugin_manager, cmd, args, options)
   local promise = Promise.new()
-  run({ cmd, arg }, options.progress):done(function(result)
+  run({ cmd, table.unpack(args) }, options.progress):done(function(result)
     if (options.restart == nil and config.plugins.plugin_manager.restart_on_change) or options.restart then
       command.perform("core:restart")
     else
@@ -208,9 +208,10 @@ local function run_stateful_plugin_command(plugin_manager, cmd, arg, options)
 end
 
 
-function PluginManager:install(addon, options) return run_stateful_plugin_command(self, "install", addon.id .. (addon.version and (":" .. addon.version) or ""), options) end
-function PluginManager:uninstall(addon, options) return run_stateful_plugin_command(self, "uninstall", addon.id, options) end
-function PluginManager:reinstall(addon, options) return run_stateful_plugin_command(self, "reinstall", addon.id, options) end
+function PluginManager:install(addon, options) return run_stateful_plugin_command(self, "install", { addon.id .. (addon.version and (":" .. addon.version) or "") }, options) end
+function PluginManager:reinstall(addon, options) return run_stateful_plugin_command(self, "install", { addon.id .. (addon.version and (":" .. addon.version) or ""), "--reinstall" }, options) end
+function PluginManager:uninstall(addon, options) return run_stateful_plugin_command(self, "uninstall", { addon.id }, options) end
+function PluginManager:unstub(addon, options) return run_stateful_plugin_command(self, "unstub", { addon.id }, options) end
 
 
 function PluginManager:get_addon(name_and_version)

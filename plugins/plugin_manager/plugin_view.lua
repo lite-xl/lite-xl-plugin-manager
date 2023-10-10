@@ -219,6 +219,14 @@ function PluginView:uninstall(plugin)
 end
 
 
+function PluginView:unstub(plugin)
+  self.loading = true
+  self.plugin_manager:unstub(plugin, { progress = self.progress_callback }):done(function()
+    self.loading = false
+    self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
+  end)
+end
+
 function PluginView:reinstall(plugin)
   self.loading = true
   self.plugin_manager:reinstall(plugin, { progress = self.progress_callback }):done(function()
@@ -330,6 +338,20 @@ end, {
       end
     end
     if not opened then core.error("Can't find source for plugin.") end
+  end,
+  ["plugin-manager:view-readme-hovered"] = function()
+    local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
+    local opened = false
+    plugin_view.hovered_plugin:unstub(plugin_view.hovered_plugin):done(function(plugin)
+      for i, path in ipairs({ plugin_view.hovered_plugin.path .. PATHSEP .. "README.md" }) do
+        local stat = system.get_file_info(path)
+        if stat and stat.type == "file" then
+          core.root_view:open_doc(core.open_doc(path))
+          opened = true
+        end
+      end
+      if not opened then core.error("Can't find README for plugin.") end
+    end)
   end
 })
 
@@ -354,6 +376,7 @@ PluginView.menu:register(nil, {
   { text = "Install", command = "plugin-manager:install-hovered" },
   { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
   { text = "View Source", command = "plugin-manager:view-source-hovered" },
+  { text = "View README", command = "plugin-manager:view-readme-hovered" },
   ContextMenu.DIVIDER,
   { text = "Refresh Listing", command = "plugin-manager:refresh-all" },
   { text = "Upgrade All", command = "plugin-manager:upgrade-all" },
