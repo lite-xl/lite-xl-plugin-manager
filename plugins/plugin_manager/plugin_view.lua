@@ -221,7 +221,7 @@ end
 
 function PluginView:unstub(plugin)
   self.loading = true
-  self.plugin_manager:unstub(plugin, { progress = self.progress_callback }):done(function()
+  return self.plugin_manager:unstub(plugin, { progress = self.progress_callback, restart = false }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -330,20 +330,34 @@ end, {
   ["plugin-manager:view-source-hovered"] = function()
     local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
     local opened = false
-    for i, path in ipairs({ plugin_view.hovered_plugin.path, plugin_view.hovered_plugin.path .. PATHSEP .. "init.lua" }) do
-      local stat = system.get_file_info(path)
-      if stat and stat.type == "file" then
-        core.root_view:open_doc(core.open_doc(path))
-        opened = true
+    local open_source = function(plugin)
+      for i, path in ipairs({ plugin.path, plugin.path .. PATHSEP .. "init.lua" }) do
+        local stat = system.get_file_info(path)
+        if stat and stat.type == "file" then
+          core.root_view:open_doc(core.open_doc(path))
+          opened = true
+        end
       end
+      if not opened then core.error("Can't find source for plugin.") end
     end
-    if not opened then core.error("Can't find source for plugin.") end
+    if plugin_view.hovered_plugin.path then
+      open_source(plugin_view.hovered_plugin)
+    else
+      local plugin_id = plugin_view.hovered_plugin.id
+      plugin_view:unstub(plugin_view.hovered_plugin):done(function()
+        plugin_view.plugin_manager:get_addons():done(function()
+          for _, addon in ipairs(plugin_view.plugin_manager.addons) do
+            if addon.id == plugin_id then open_source(addon) end
+          end
+        end)
+      end)
+    end
   end,
   ["plugin-manager:view-readme-hovered"] = function()
     local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
     local opened = false
-    plugin_view.hovered_plugin:unstub(plugin_view.hovered_plugin):done(function(plugin)
-      for i, path in ipairs({ plugin_view.hovered_plugin.path .. PATHSEP .. "README.md" }) do
+    local open_readme = function(plugin)
+      for i, path in ipairs({ plugin.path .. PATHSEP .. "README.md", plugin.path .. PATHSEP .. "readme.md" }) do
         local stat = system.get_file_info(path)
         if stat and stat.type == "file" then
           core.root_view:open_doc(core.open_doc(path))
@@ -351,7 +365,19 @@ end, {
         end
       end
       if not opened then core.error("Can't find README for plugin.") end
-    end)
+    end
+    if plugin_view.hovered_plugin.path then
+      open_readme(plugin_view.hovered_plugin)
+    else
+      local plugin_id = plugin_view.hovered_plugin.id
+      plugin_view:unstub(plugin_view.hovered_plugin):done(function()
+        plugin_view.plugin_manager:get_addons():done(function()
+          for _, addon in ipairs(plugin_view.plugin_manager.addons) do
+            if addon.id == plugin_id then open_readme(addon) end
+          end
+        end)
+      end)
+    end
   end
 })
 
@@ -372,7 +398,7 @@ keymap.add {
 }
 
 
-PluginView.menu:register(nil, {
+PluginView.menu:register(function() return core.active_view:is(PluginView) end, {
   { text = "Install", command = "plugin-manager:install-hovered" },
   { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
   { text = "View Source", command = "plugin-manager:view-source-hovered" },
