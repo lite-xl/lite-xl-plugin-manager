@@ -347,7 +347,7 @@ end, {
       plugin_view:unstub(plugin_view.hovered_plugin):done(function()
         plugin_view.plugin_manager:get_addons():done(function()
           for _, addon in ipairs(plugin_view.plugin_manager.addons) do
-            if addon.id == plugin_id then open_source(addon) end
+            if addon.id == plugin_id then open_source(addon) break end
           end
         end)
       end)
@@ -373,7 +373,7 @@ end, {
       plugin_view:unstub(plugin_view.hovered_plugin):done(function()
         plugin_view.plugin_manager:get_addons():done(function()
           for _, addon in ipairs(plugin_view.plugin_manager.addons) do
-            if addon.id == plugin_id then open_readme(addon) end
+            if addon.id == plugin_id then open_readme(addon) break end
           end
         end)
       end)
