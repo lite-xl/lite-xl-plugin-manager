@@ -1025,7 +1025,7 @@ end
 
 function Repository:parse_manifest(repo_id)
   if self.manifest then return self.manifest, self.remotes end
-  if system.stat(self.local_path)  then
+  if system.stat(self.local_path) then
     self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then
       log_warning("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
@@ -2009,9 +2009,11 @@ It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, or from the lite-xl `plugin_manager` addon.
 
-LPM will always use ]] .. DEFAULT_REPO_URL .. [[
+LPM will always use
+]] .. DEFAULT_REPO_URL .. [[
+
 as its base repository, if none are present, and the cache directory
-does't exist, but others can be added, and this base one can be removed.
+doesn't exist, but others can be added, and this base one can be removed.
 
 It has the following commands:
 
@@ -2065,7 +2067,7 @@ It has the following commands:
                                            path can be specified.
   lpm lite-xl list [name pattern]          Lists all installed versions of
      [...filters]                          lite-xl. Can specify the flags listed
-                                           in the filtering seciton.
+                                           in the filtering section.
   lpm run <version> [...addons]            Sets up a "bottle" to run the specified
                                            lite version, with the specified addons
                                            and then opens it.
@@ -2106,7 +2108,7 @@ Flags have the following effects:
                            to all.
   --no-install-optional    On install, anything marked as optional
                            won't prompt.
-  --trace                  Dumps to STDERR useful debugging information, in
+  --trace                  Dumps to stderr useful debugging information, in
                            particular information relating to SSL connections,
                            and other network activity.
   --progress               For JSON mode, lines of progress as JSON objects.
