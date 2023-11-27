@@ -1798,7 +1798,7 @@ local function print_addon_info(type, addons, filters)
       remote = addon.remote,
       description = addon.description,
       author = addon.author or (addon:is_core(system_bottle) and "lite-xl") or nil,
-      mod_version = addon.mod_version,
+      mod_version = addon.mod_version or LATEST_MOD_VERSION,
       tags = addon.tags,
       type = addon.type,
       organization = addon.organization,
