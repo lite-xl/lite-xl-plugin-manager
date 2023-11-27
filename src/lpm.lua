@@ -1374,7 +1374,9 @@ end
 function Bottle:run(args)
   args = args or {}
   if self.is_system then error("system bottle cannot be run") end
-  os.execute(self.local_path .. PATHSEP .. "lite-xl" .. (#args > 0 and " " or "") .. table.concat(args, " "))
+  local path = self.local_path .. PATHSEP .. "lite-xl"
+  if not system.stat(path) then error("cannot find bottle executable " .. path) end
+  os.execute(path .. (#args > 0 and " " or "") .. table.concat(args, " "))
 end
 
 local function get_repository_addons()
