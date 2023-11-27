@@ -185,7 +185,7 @@ function PluginManager:purge(options)
 end
 
 
-function PluginManager:get_addons()
+function PluginManager:get_addons(options)
   local prom = Promise.new()
   if self.addons then
     prom:resolve(self.addons)
@@ -228,9 +228,9 @@ function PluginManager:unstub(addon, options)
 end
 
 
-function PluginManager:get_addon(name_and_version)
+function PluginManager:get_addon(name_and_version, options)
   local promise = Promise.new()
-  PluginManager:get_addons():done(function()
+  PluginManager:get_addons(options):done(function()
     local s = name_and_version:find(":")
     local name, version = name_and_version, nil
     if s then
@@ -255,10 +255,10 @@ PluginManager.view = require "plugins.plugin_manager.plugin_view"
 
 command.add(nil, {
   ["plugin-manager:install"] = function()
-    PluginManager:get_addons()
+    PluginManager:get_addons({ progress = PluginManager.view.progress_callback })
     core.command_view:enter("Enter plugin name",
       function(name)
-        PluginManager:get_addon(name):done(function(addon)
+        PluginManager:get_addon(name, { progress = PluginManager.view.progress_callback }):done(function(addon)
           core.log("Attempting to install plugin " .. name .. "...")
           PluginManager:install(addon, { progress = PluginManager.view.progress_callback }):done(function()
             core.log("Successfully installed plugin " .. addon.id .. ".")
@@ -280,10 +280,10 @@ command.add(nil, {
     )
   end,
   ["plugin-manager:uninstall"] = function()
-    PluginManager:get_addons()
+    PluginManager:get_addons({ progress = PluginManager.view.progress_callback })
     core.command_view:enter("Enter plugin name",
       function(name)
-        PluginManager:get_addon(name):done(function(addon)
+        PluginManager:get_addon(name, { progress = PluginManager.view.progress_callback }):done(function(addon)
           core.log("Attempting to uninstall plugin " .. addon.id .. "...")
           PluginManager:uninstall(addon, { progress = PluginManager.view.progress_callback }):done(function()
             core.log("Successfully uninstalled plugin " .. addon.id .. ".")
@@ -314,7 +314,7 @@ command.add(nil, {
     )
   end,
   ["plugin-manager:remove-repository"] = function()
-    PluginManager:get_plugins()
+    PluginManager:get_addons({ progress = PluginManager.view.progress_callback })
     core.command_view:enter("Enter repository url",
       function(url)
         PluginManager:remove(url):done(function()
