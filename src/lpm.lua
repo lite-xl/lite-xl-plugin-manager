@@ -473,7 +473,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
@@ -1027,7 +1027,7 @@ end
 
 function Repository:parse_manifest(repo_id)
   if self.manifest then return self.manifest, self.remotes end
-  if system.stat(self.local_path) then
+  if system.stat(self.local_path)  then
     self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then
       log_warning("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
@@ -1721,6 +1721,7 @@ local function lpm_lite_xl_run(version, ...)
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
     bottle:run(common.slice(arguments, i + 1))
+    if EPHEMERAL then bottle:destruct() end
   end
 end
 
@@ -2000,7 +2001,7 @@ xpcall(function()
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
-    repository = "string",
+    repository = "string", ephemeral = "flag",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
@@ -2024,11 +2025,9 @@ It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, or from the lite-xl `plugin_manager` addon.
 
-LPM will always use
-]] .. DEFAULT_REPO_URL .. [[
-
+LPM will always use ]] .. DEFAULT_REPO_URL .. [[
 as its base repository, if none are present, and the cache directory
-doesn't exist, but others can be added, and this base one can be removed.
+does't exist, but others can be added, and this base one can be removed.
 
 It has the following commands:
 
@@ -2082,7 +2081,7 @@ It has the following commands:
                                            path can be specified.
   lpm lite-xl list [name pattern]          Lists all installed versions of
      [...filters]                          lite-xl. Can specify the flags listed
-                                           in the filtering section.
+                                           in the filtering seciton.
   lpm run <version> [...addons]            Sets up a "bottle" to run the specified
                                            lite version, with the specified addons
                                            and then opens it.
@@ -2123,7 +2122,7 @@ Flags have the following effects:
                            to all.
   --no-install-optional    On install, anything marked as optional
                            won't prompt.
-  --trace                  Dumps to stderr useful debugging information, in
+  --trace                  Dumps to STDERR useful debugging information, in
                            particular information relating to SSL connections,
                            and other network activity.
   --progress               For JSON mode, lines of progress as JSON objects.
@@ -2143,6 +2142,8 @@ Flags have the following effects:
   --repository             For the duration of this command, do not load default
                            repositories, simply act as if the only repositories
                            are those specified in this option.
+  --ephemeral              Designates a bottle as 'ephemeral', meaning that it
+                           is fully cleaned up when lpm exits.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2189,6 +2190,7 @@ not commonly used publically.
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
+  EPHEMERAL = ARGS["ephemeral"] or os.getenv("LPM_EPHEMERAL")
   if ARGS["table"] then
     local offset,s,e,i = 1, 1, 0, 1
     TABLE = {}
