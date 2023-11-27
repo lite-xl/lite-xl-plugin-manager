@@ -1704,6 +1704,7 @@ local function lpm_lite_xl_run(version, ...)
     local str = arguments[i]
     if is_argument_repo(str) then
       table.insert(repositories, 1, Repository.url(str):add(AUTO_PULL_REMOTES))
+      system_bottle:invalidate_cache()
     else
       local id, version = common.split(":", str)
       local potentials = { system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version }) }
@@ -1739,6 +1740,7 @@ local function lpm_install(type, ...)
     else
       if is_argument_repo(identifier) then
         table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
+        system_bottle:invalidate_cache()
       else
         local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version, type = type }) }
         local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
@@ -1854,6 +1856,7 @@ local function lpm_unstub(type, ...)
     if not identifier then error('unrecognized identifier ' .. identifier) end
     if is_argument_repo(identifier) then
       table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
+      system_bottle:invalidate_cache()
     else
       local potential_addons = { system_bottle:get_addon(identifier, nil, { mod_version = system_bottle.lite_xl.mod_version }) }
       addons = common.grep(potential_addons, function(e) return e:is_stub() end)
