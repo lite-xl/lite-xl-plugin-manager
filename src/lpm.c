@@ -746,7 +746,7 @@ static int lpm_extract(lua_State* L) {
     }
     if (strstr(src, ".tar")) {
       mtar_t tar = {0};
-      /* It's increidbly slow to do it this way, probably because of all the seeking.
+      /* It's incredibly slow to do it this way, probably because of all the seeking.
       For now, just gunzip the whole file at once, and then untar it.
       tar.read = gzip_read;
       tar.seek = gzip_seek;
