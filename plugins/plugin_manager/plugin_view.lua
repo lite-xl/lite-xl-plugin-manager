@@ -345,7 +345,7 @@ end, {
       local directories = { plugin.path }
       if plugin.repo_path then
         table.insert(directories, plugin.repo_path)
-        table.insert(directories, plugin.repo_path:gsub(PATHSEP .. "plugins" .. PATHSEP .. plugin.id .. "$", ""))
+        table.insert(directories, ("" .. plugin.repo_path:gsub(PATHSEP .. "plugins" .. PATHSEP .. plugin.id .. "$", "")))
       end
       for _, directory in ipairs(directories) do
         for i, path in ipairs({ directory .. PATHSEP .. "README.md", directory .. PATHSEP .. "readme.md" }) do
