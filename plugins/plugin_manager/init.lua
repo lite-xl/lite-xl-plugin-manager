@@ -153,7 +153,7 @@ function PluginManager:refresh(options)
     for i, addon in ipairs(self.addons) do
       if addon.status ~= "incompatible" then
         table.insert(self.valid_addons, addon)
-        if addon.id == "plugin_manager" and addon.status == "installed" then
+        if (addon.id == "plugin_manager" or addon.id == "json") and addon.status == "installed" then
           addon.status = "special"
         end
       end
