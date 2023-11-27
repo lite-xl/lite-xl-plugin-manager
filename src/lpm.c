@@ -620,9 +620,7 @@ static int lpm_certs(lua_State* L) {
       if (status < 0)
         return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s", path);
       if (status > 0 && print_trace) {
-        char err[256];
-        mbedtls_snprintf(1, err, sizeof(err), status, "failed to parse %d certificates in %s", status, path);
-        fprintf(stderr, "[ssl] mbedtls_x509_crt_parse_file %s: %s.\n", path, err);
+        fprintf(stderr, "[ssl] mbedtls_x509_crt_parse_file on %s failed to parse %d certificates, but still still succeeded.\n", path, status);
         fflush(stderr);
       }
       mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
