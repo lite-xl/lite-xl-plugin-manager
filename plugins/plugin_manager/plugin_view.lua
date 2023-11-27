@@ -204,7 +204,7 @@ end
 
 function PluginView:install(plugin)
   self.loading = true
-  self.plugin_manager:install(plugin, { progress = self.progress_callback }):done(function()
+  return self.plugin_manager:install(plugin, { progress = self.progress_callback }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -212,7 +212,7 @@ end
 
 function PluginView:uninstall(plugin)
   self.loading = true
-  self.plugin_manager:uninstall(plugin, { progress = self.progress_callback }):done(function()
+  return self.plugin_manager:uninstall(plugin, { progress = self.progress_callback }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -221,15 +221,14 @@ end
 
 function PluginView:unstub(plugin)
   self.loading = true
-  self.plugin_manager:unstub(plugin, { progress = self.progress_callback }):done(function()
+  return self.plugin_manager:unstub(plugin, { progress = self.progress_callback }):done(function()
     self.loading = false
-    self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
 end
 
 function PluginView:reinstall(plugin)
   self.loading = true
-  self.plugin_manager:reinstall(plugin, { progress = self.progress_callback }):done(function()
+  return self.plugin_manager:reinstall(plugin, { progress = self.progress_callback }):done(function()
     self.loading = false
     self.selected_plugin, plugin_view.selected_plugin_idx = nil, nil
   end)
@@ -328,26 +327,33 @@ command.add(function()
   return core.active_view and core.active_view:is(PluginView) and plugin_view.hovered_plugin
 end, {
   ["plugin-manager:view-source-hovered"] = function()
-    local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
-    local opened = false
-    for i, path in ipairs({ plugin_view.hovered_plugin.path, plugin_view.hovered_plugin.path .. PATHSEP .. "init.lua" }) do
-      local stat = system.get_file_info(path)
-      if stat and stat.type == "file" then
-        core.root_view:open_doc(core.open_doc(path))
-        opened = true
-      end
-    end
-    if not opened then core.error("Can't find source for plugin.") end
-  end,
-  ["plugin-manager:view-readme-hovered"] = function()
-    local directory = plugin_view.hovered_plugin.type == "library" and "libraries" or "plugins"
-    local opened = false
-    plugin_view.hovered_plugin:unstub(plugin_view.hovered_plugin):done(function(plugin)
-      for i, path in ipairs({ plugin_view.hovered_plugin.path .. PATHSEP .. "README.md" }) do
+    plugin_view:unstub(plugin_view.hovered_plugin):done(function(plugin)
+      local opened = false
+      for i, path in ipairs({ plugin.path, plugin.path .. PATHSEP .. "init.lua" }) do
         local stat = system.get_file_info(path)
         if stat and stat.type == "file" then
           core.root_view:open_doc(core.open_doc(path))
           opened = true
+        end
+      end
+      if not opened then core.error("Can't find source for plugin.") end
+    end)
+  end,
+  ["plugin-manager:view-readme-hovered"] = function()
+    plugin_view:unstub(plugin_view.hovered_plugin):done(function(plugin)
+      local opened = false
+      local directories = { plugin.path }
+      if plugin.repo_path then
+        table.insert(directories, plugin.repo_path)
+        table.insert(directories, plugin.repo_path:gsub(PATHSEP .. "plugins" .. PATHSEP .. plugin.id .. "$", "")
+      end
+      for _, directory in ipairs(directories) do
+        for i, path in ipairs({ directory .. PATHSEP .. "README.md", directory .. PATHSEP .. "readme.md" }) do
+          local stat = system.get_file_info(path)
+          if stat and stat.type == "file" then
+            core.root_view:open_doc(core.open_doc(path))
+            opened = true
+          end
         end
       end
       if not opened then core.error("Can't find README for plugin.") end
@@ -372,7 +378,7 @@ keymap.add {
 }
 
 
-PluginView.menu:register(nil, {
+PluginView.menu:register(function() return core.active_view:is(PluginView) end, {
   { text = "Install", command = "plugin-manager:install-hovered" },
   { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
   { text = "View Source", command = "plugin-manager:view-source-hovered" },

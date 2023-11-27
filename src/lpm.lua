@@ -667,6 +667,7 @@ function Addon:unstub()
     local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == self.id end)[1]
     if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
     local addon = Addon.new(repo, remote_entry)
+
     -- merge in attribtues that are probably more accurate than the stub
     if addon.version ~= self.version then log_warning(self.id .. " stub on " .. self.repository:url() .. " has differing version from remote (" .. self.version .. " vs " .. addon.version .. "); may lead to install being inconsistent") end
     -- if addon.mod_version ~= self.mod_version then log_warning(self.id .. " stub on " .. self.repository:url() .. " has differing mod_version from remote (" .. self.mod_version .. " vs " .. addon.mod_version .. ")") end
@@ -1423,7 +1424,8 @@ function Bottle:all_addons()
             local_path = path,
             mod_version = self.lite_xl.mod_version,
             path = addon_type .. PATHSEP .. v,
-            description = (hash[id] and hash[id][1].description or nil)
+            description = (hash[id] and hash[id][1].description or nil),
+            repo_path = (hash[id] and hash[id][1].local_path or nil)
           }))
         end
       end
@@ -1788,6 +1790,7 @@ local function print_addon_info(type, addons, filters)
       organization = addon.organization,
       repository = addon.repository and addon.repository:url(),
       path = addon:get_path(system_bottle),
+      repo_path = addon.repo_path,
       url = url
     }
     if addon_matches_filter(hash, filters or {}) then
@@ -1955,7 +1958,7 @@ local function run_command(ARGS)
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "unstub" then lpm_unstub(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "unstub" then return lpm_unstub(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "reinstall" then lpm_addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "describe" then lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))

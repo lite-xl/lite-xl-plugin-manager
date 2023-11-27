@@ -103,13 +103,13 @@ local function run(cmd, progress)
         while i < #running_processes + 1 do
           local v = running_processes[i]
           local still_running = true
+          local progress_line
           while true do
             local chunk = v[1]:read_stdout(2048)
             if config.plugins.plugin_manager.debug and chunk ~= nil then io.stdout:write(chunk) io.stdout:flush() end
             if chunk and v[1]:running() and #chunk == 0 then break end
             if chunk ~= nil and #chunk > 0 then
               v[3] = v[3] .. chunk
-              local progress_line
               progress_line, v[3] = extract_progress(v[3])
               if progress and progress_line then
                 progress_line = json.decode(progress_line)
@@ -119,10 +119,12 @@ local function run(cmd, progress)
             else
               still_running = false
               if v[1]:returncode() == 0 then
+                progress_line, v[3] = extract_progress(v[3])
                 v[2]:resolve(v[3])
               else
                 local err = v[1]:read_stderr(2048)
                 core.error("error running " .. join(" ", cmd) .. ": " .. (err or "?"))
+                progress_line, v[3] = extract_progress(v[3])
                 v[2]:reject(v[3])
               end
               break
@@ -211,7 +213,19 @@ end
 function PluginManager:install(addon, options) return run_stateful_plugin_command(self, "install", { addon.id .. (addon.version and (":" .. addon.version) or "") }, options) end
 function PluginManager:reinstall(addon, options) return run_stateful_plugin_command(self, "install", { addon.id .. (addon.version and (":" .. addon.version) or ""), "--reinstall" }, options) end
 function PluginManager:uninstall(addon, options) return run_stateful_plugin_command(self, "uninstall", { addon.id }, options) end
-function PluginManager:unstub(addon, options) return run_stateful_plugin_command(self, "unstub", { addon.id }, options) end
+function PluginManager:unstub(addon, options)
+  local promise = Promise.new()
+  if addon.path and system.get_file_info(addon.path) then
+    promise:resolve(addon)
+  else
+    run({ "unstub", addon.id }, options.progress):done(function(result)
+      local unstubbed_addon = json.decode(result).addons[1]
+      for k,v in pairs(unstubbed_addon) do addon[k] = v end
+      promise:resolve(addon)
+    end)
+  end
+  return promise
+end
 
 
 function PluginManager:get_addon(name_and_version)
