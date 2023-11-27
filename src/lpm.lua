@@ -1060,7 +1060,7 @@ local CORE_PLUGINS = {
   projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true
 }
 function Repository:generate_manifest(repo_id)
-  if not self.commit and not self.branch then error("requires an instantiation") end
+  if not self.local_path and not self.commit and not self.branch then error("requires an instantiation") end
   local path = self.local_path
   local addons, addon_map = {}, {}
   for _, folder in ipairs({ "plugins", "colors", "libraries" }) do
@@ -1096,7 +1096,7 @@ function Repository:generate_manifest(repo_id)
         if file:find("%.lua$") then
           local filename = common.basename(file):gsub("%.lua$", "")
           local name = filename
-          if name == "init" then name = repo_id or common.basename(self.remote) end
+          if name == "init" then name = repo_id or common.basename(self.remote or self.local_path) end
           if name ~= "init" then
             local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
             local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. PATHSEP .. file) or nil), type = type }
