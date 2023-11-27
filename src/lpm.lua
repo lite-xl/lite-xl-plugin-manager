@@ -373,6 +373,7 @@ function common.sort(t, f) table.sort(t, f) return t end
 function common.write(path, contents) local f, err = io.open(path, "wb") if not f then error("can't write to " .. path .. ": " .. err) end f:write(contents) f:flush() f:close() end
 function common.read(path) local f, err = io.open(path, "rb") if not f then error("can't read from " .. path .. ": " .. err) end return f:read("*all") end
 function common.uniq(l) local t = {} local k = {} for i,v in ipairs(l) do if not k[v] then table.insert(t, v) k[v] = true end end return t end
+function common.delete(h, d) local t = {} for k,v in pairs(h) do if k ~= d then t[k] = v end end return t end
 function common.split(splitter, str)
   local o = 1
   local res = {}
@@ -1095,15 +1096,26 @@ function Repository:generate_manifest(repo_id)
         if file:find("%.lua$") then
           local filename = common.basename(file):gsub("%.lua$", "")
           local name = filename
-          if repo_id and name == "init" then name = repo_id end
+          if name == "init" then name = repo_id or common.basename(self.remote) end
           if name ~= "init" then
             local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
             local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. PATHSEP .. file) or nil), type = type }
             for line in io.lines(path .. PATHSEP .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
-              local _, _, required_addon = line:find("require [\"']plugins.([%w_-]+)")
-              if required_addon and not CORE_PLUGINS[required_addon] then if required_addon ~= addon.id then if not addon.dependencies then addon.dependencies = {} end addon.dependencies[required_addon] = ">=0.1" end end
+              local _, _, required_addon = line:find("require [\"']plugins%.([%w_-]+)")
+              if required_addon and not CORE_PLUGINS[required_addon] then
+                if required_addon ~= addon.id then
+                  if not addon.dependencies then addon.dependencies = {} end
+                  addon.dependencies[required_addon] = ">=0.1"
+                end
+              end
+              local _, _, name_override = line:find("config%.plugins%.([%w_-]+)%s*=%s*common%.merge")
+              if not repo_id and name_override then
+                addon.name = name_override
+                addon.id = name_override:lower():gsub("[^a-z0-9%-_]", "")
+                addon.dependencies = common.delete(addon.dependencies, addon.id)
+              end
             end
             if addon_map[addon.id] then
               addon = common.merge(addon, addon_map[addon.id])
