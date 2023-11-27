@@ -304,11 +304,25 @@ static const char* git_error_last_string() {
 
 static int git_get_id(git_oid* commit_id, git_repository* repository, const char* name) {
   int length = strlen(name);
-  int is_hex = length == 40;
+  int is_hex = 1;
   for (int i = 0; is_hex && i < length; ++i)
     is_hex = isxdigit(name[i]);
-  if (!is_hex)
+  if (!is_hex || length < 3)
     return git_reference_name_to_id(commit_id, repository, name);
+  if (length < GIT_OID_SHA1_SIZE*2) {
+    if (length % 2 != 0)
+      return -1;
+    git_commit* commit;
+    git_oid oid = {0};
+    for (int i = 0; i < length/2; ++i)
+      oid.id[i] |= (name[i] - '0') << ((i % 2) * 4);
+    int ret = git_commit_lookup_prefix(&commit, repository, &oid, length/2);
+    if (ret)
+      return ret;
+    git_oid_cpy(commit_id, git_commit_id(commit));
+    git_commit_free(commit);
+    return 0;
+  }
   return git_oid_fromstr(commit_id, name);
 }
 
@@ -602,8 +616,15 @@ static int lpm_certs(lua_State* L) {
       if (git_initialized)
         git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
       strncpy(git_cert_path, path, MAX_PATH);
-      if ((status = mbedtls_x509_crt_parse_file(&x509_certificate, path)) != 0)
+      status = mbedtls_x509_crt_parse_file(&x509_certificate, path);
+      if (status < 0)
         return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_file failed to parse CA certificate %s", path);
+      if (status > 0 && print_trace) {
+        char err[256];
+        mbedtls_snprintf(1, err, sizeof(err), status, "failed to parse %d certificates in %s", status, path);
+        fprintf(stderr, "[ssl] mbedtls_x509_crt_parse_file %s: %s.\n", path, err);
+        fflush(stderr);
+      }
       mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
       if (print_trace) {
         fprintf(stderr, "[ssl] SSL file set to %s.\n", path);
