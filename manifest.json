@@ -3,7 +3,7 @@
     {
       "id": "plugin_manager",
       "version": "0.1",
-      "description": "A GUI interface to the Adam's lite plugin manager.",
+      "description": "A GUI interface to Adam's lite-xl plugin manager.",
       "path": "plugins/plugin_manager",
       "mod_version": 3,
       "files": [
