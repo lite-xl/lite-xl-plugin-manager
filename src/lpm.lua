@@ -1488,7 +1488,8 @@ function Bottle:get_addon(id, version, filter)
     if (common.first(addon.replaces or {}, function(replaces) return replaces == id end) or
       common.first(addon.provides or {}, function(provides) return provides == id end) or
       (addon.id == id or (wildcard and addon.id:find("^" .. id:sub(1, #id - 1))))) and
-      match_version(addon.version, version) and (not filter.mod_version or not addon.mod_version or compatible_modversion(filter.mod_version, addon.mod_version))
+      match_version(addon.version, version) and (not filter.mod_version or not addon.mod_version or compatible_modversion(filter.mod_version, addon.mod_version)) and
+      (not filter.type or addon.type == filter.type)
     then
       table.insert(candidates, addon)
     end
@@ -1739,7 +1740,7 @@ local function lpm_install(type, ...)
       if is_argument_repo(identifier) then
         table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
       else
-        local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version }) }
+        local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version, type = type }) }
         local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
         if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
         if #addons == 0 then
@@ -1869,7 +1870,7 @@ end
 
 local function lpm_addon_uninstall(type, ...)
   for i, id in ipairs({ ... }) do
-    local addons = { system_bottle:get_addon(id) }
+    local addons = { system_bottle:get_addon(id, nil, { type = type }) }
     if #addons == 0 then error("can't find addon " .. id) end
     local installed_addons = common.grep(addons, function(e) return e:is_installed(system_bottle) and not e:is_core(system_bottle) end)
     if #installed_addons == 0 then error("addon " .. id .. " not installed") end
