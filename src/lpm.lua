@@ -1808,7 +1808,7 @@ local function print_addon_info(type, addons, filters)
       organization = addon.organization,
       repository = addon.repository and addon.repository:url(),
       path = addon:get_path(system_bottle),
-      repo_path = addon.repo_path,
+      repo_path = addon.repo_path or addon.repository.local_path,
       url = url
     }
     if addon_matches_filter(hash, filters or {}) then
