@@ -353,9 +353,8 @@ function json.decode(str)
 end
 
 -- End JSON library.
-local function is_commit_hash(hash)
-  return #hash == 40 and not hash:find("[^a-z0-9]")
-end
+local function is_commit_hash(hash) return #hash == 40 and not hash:find("[^a-f0-9]") end
+local function is_probably_commit_hash(hash) return #hash > 5 and not hash:find("[^a-f0-9]") end
 
 
 
@@ -452,10 +451,12 @@ function common.rename(src, dst)
   end
 end
 function common.reset(path, ref, type)
+  print("RESET", path, ref)
   if is_commit_hash(ref) then
     system.reset(path, ref, type)
   else
-    if not pcall(system.reset, path, "refs/tags/" .. ref, type) then system.reset(path, "refs/remotes/origin/" .. ref, type) end
+    --if not pcall(system.reset, path, "refs/tags/" .. ref, type) then system.reset(path, "refs/remotes/origin/" .. ref, type) end
+    system.reset(path, ref, type)
   end
 end
 function common.chdir(dir, callback)
@@ -1174,7 +1175,17 @@ function Repository:fetch()
         if self.commit then
           system.fetch(temporary_path or path, write_progress_bar, self.commit)
         elseif self.branch then
-          system.fetch(temporary_path or path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
+          if is_probably_commit_hash(self.branch) then
+            print("BRANCH", self.branch)
+            system.fetch(temporary_path or path, write_progress_bar, "+refs/heads/*:refs/remotes/origin/*")
+            self.commit = system.revparse(temporary_path or path, self.branch)
+            self.branch = nil
+            self.local_path = self.repo_path .. PATHSEP .. self.commit
+            path = self.local_path
+          else
+            print("OTHERWISE", self.branch)
+            system.fetch(temporary_path or path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
+          end
         end
         common.reset(temporary_path or path, self.commit or self.branch, "hard")
       end
@@ -1183,6 +1194,7 @@ function Repository:fetch()
     if temporary_path then
       common.mkdirp(common.dirname(path))
       common.rename(temporary_path, path)
+      self.local_path = path
     end
   end)
   if not status then

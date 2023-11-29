@@ -307,16 +307,31 @@ static int git_get_id(git_oid* commit_id, git_repository* repository, const char
   int is_hex = 1;
   for (int i = 0; is_hex && i < length; ++i)
     is_hex = isxdigit(name[i]);
+  git_reference* ref;
+  if (!git_reference_dwim(&ref, repository, name)) {
+    git_object* object;
+    fprintf(stderr, "WAT\n");
+    if (!git_reference_peel(&object, ref, GIT_OBJ_ANY)) {
+      if (git_object_type(object) == GIT_OBJ_COMMIT) {
+        git_oid_cpy(commit_id, git_object_id(object));
+        git_object_free(object);
+        git_reference_free(ref);
+        return 0;
+      }
+    }
+    git_object_free(object);
+    git_reference_free(ref);
+  } else {
+    fprintf(stderr, "WATA: %s\n", git_error_last_string());
+  }
   if (!is_hex || length < 3)
     return git_reference_name_to_id(commit_id, repository, name);
   if (length < GIT_OID_SHA1_SIZE*2) {
-    if (length % 2 != 0)
-      return -1;
     git_commit* commit;
     git_oid oid = {0};
-    for (int i = 0; i < length/2; ++i)
-      oid.id[i] |= (name[i] - '0') << ((i % 2) * 4);
-    int ret = git_commit_lookup_prefix(&commit, repository, &oid, length/2);
+    if (git_oid_fromstrp(&oid, name) != 0)
+      return -1;
+    int ret = git_commit_lookup_prefix(&commit, repository, &oid, length);
     if (ret)
       return ret;
     git_oid_cpy(commit_id, git_commit_id(commit));
@@ -387,8 +402,9 @@ static int lpm_reset(lua_State* L) {
 static int lpm_revparse(lua_State* L) {
   git_init();
   git_repository* repository = luaL_checkgitrepo(L, 1);
+  const char* ref = luaL_optstring(L, 2, "HEAD");
   git_oid commit_id;
-  int got_commit = git_get_id(&commit_id, repository, "HEAD");
+  int got_commit = git_get_id(&commit_id, repository, ref);
   git_repository_free(repository);
   if (got_commit)
     return luaL_error(L, "git retrieve commit error: %s", git_error_last_string());
