@@ -1320,7 +1320,7 @@ function Bottle.new(lite_xl, addons, config, is_system)
   }, Bottle)
   if not is_system then
     table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
-    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return p.id .. ":" .. p.version end)) .. (config or ""))
+    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version end)) .. (config or ""))
     self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
   end
   return self
@@ -2031,7 +2031,7 @@ It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, or from the lite-xl `plugin_manager` addon.
 
-LPM will always use 
+LPM will always use
 ]] .. DEFAULT_REPO_URL .. [[
 as its base repository, if none are present, and the cache directory
 doesn't exist, but others can be added, and this base one can be removed.
