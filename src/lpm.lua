@@ -464,7 +464,7 @@ function common.chdir(dir, callback)
   system.chdir(dir)
   local status, err = pcall(callback)
   system.chdir(wd)
-  if not status then error(err) end
+  if not status then error(err, 0) end
 end
 function common.stat(path)
   local stat = system.stat(path)
@@ -536,7 +536,8 @@ end
 
 local status = 0
 local function error_handler(err)
-  local s, e = err and err:find(":%d+")
+  local s, e 
+  if err then s, e = err:find("%:%d+") end
   local message = e and err:sub(e + 3) or err
   if JSON then
     if VERBOSE then
@@ -892,7 +893,7 @@ function Addon:install(bottle, installing)
   bottle:invalidate_cache()
   if not status then
     common.rmrf(temporary_install_path)
-    error(err)
+    error(err, 0)
   elseif self.type ~= "meta" then
     if POST and self.post then
       common.chdir(temporary_install_path, function()
@@ -1202,7 +1203,7 @@ function Repository:fetch()
       local dir = common.dirname(path)
       if system.stat(dir) and #system.ls(dir) == 0 then common.rmrf(dir) end
     end
-    error(err)
+    error(err, 0)
   end
   return self
 end
