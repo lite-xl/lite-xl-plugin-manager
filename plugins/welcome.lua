@@ -9,7 +9,11 @@ local common = require "core.common"
 local EmptyView = require "core.emptyview"
 local Node = require "core.node"
 
+local PluginManager = require "plugins.plugin_manager"
+local PluginView = require "plugins.plugin_manager.plugin_view"
+
 local welcomed = system.get_file_info(USERDIR .. PATHSEP .. "welcomed") ~= nil
+local loading = nil
 
 local hovered_button = nil
 local function draw_button(view, x, y, w, button)
@@ -38,9 +42,15 @@ function EmptyView:get_name() if welcomed then return old_get_name(self) end ret
 
 local old_draw = EmptyView.draw
 function EmptyView:draw()
-   old_draw(self)
+  if loading then
+    local y = self.position.y + self.size.y / 2
+    self:draw_background(style.background)
+    PluginView.draw_loading_screen(self, loading.label, loading.percent)
+    -- common.draw_text(style.big_font, style.dim, "Installing addons package. Please wait...", "center", self.position.x, y, self.size.x, style.font:get_height())
+    return
+  end
+  old_draw(self)
   if welcomed then return end
-
   local x, y, w, h = self.position.x + self.size.x / 2
 
   local button_width = math.min(self.size.x / 2 - 80, 300)
@@ -53,14 +63,14 @@ function EmptyView:draw()
     y = y + v.h + style.padding.y * 2
   end
 
-  -- if hovered_button then
-  --   for i, v in ipairs(hovered_button.tooltip) do
-  --     common.draw_text(style.font, style.dim, v, "center", x, y, self.size.x / 2, style.font:get_height())
-  --     y = y + style.font:get_height()
-  --   end
-  -- else
-  --   common.draw_text(style.font, style.dim, "Hover over one of the options below to get started.", "center", x, y, self.size.x / 2, style.font:get_height())
-  -- end
+  if hovered_button then
+    for i, v in ipairs(hovered_button.tooltip) do
+      common.draw_text(style.font, style.dim, v, "center", self.position.x, y, self.size.x, style.font:get_height())
+      y = y + style.font:get_height()
+    end
+  else
+    common.draw_text(style.font, style.dim, "Hover over one of the options below to get started.", "center", self.position.x, y, self.size.x, style.font:get_height())
+  end
 end
 
 function EmptyView:on_mouse_moved(x, y)
@@ -83,16 +93,18 @@ local function terminate_welcome()
   welcomed = true
 end
 
-local PluginManager = require "plugins.plugin_manager"
-
 command.add(EmptyView, {
   ["welcome:install-addons"] = function()
     core.log("Installing addons...")
-    PluginManager:install({ id = "meta_addons" }, { progress = function() end, restart = false }):done(function()
-      core.log("Addons installed.")
+    loading = { percent = 0, label = "Initializing..." }
+    core.redraw = true
+    PluginManager:install({ id = "meta_addons" }, { progress = function(progress) loading = progress end, restart = false }):done(function()
+      loading = false
+      core.log("Addons installed!")
       terminate_welcome()
       command.perform("core:restart")
     end):fail(function(err)
+      loading = true
       core.error(err)
     end)
   end,
