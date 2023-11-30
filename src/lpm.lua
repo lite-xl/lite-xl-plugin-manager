@@ -2031,8 +2031,9 @@ It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, or from the lite-xl `plugin_manager` addon.
 
-LPM will always use
+LPM will always use 
 ]] .. DEFAULT_REPO_URL .. [[
+
 as its base repository, if none are present, and the cache directory
 doesn't exist, but others can be added, and this base one can be removed.
 
