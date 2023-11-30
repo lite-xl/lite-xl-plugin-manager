@@ -1144,7 +1144,7 @@ function Repository:generate_manifest(repo_id)
 end
 
 function Repository:fetch_if_not_present() 
-  if system.stat(self.local_path) then return end
+  if system.stat(self.local_path) then return self end
   return self:fetch()
 end
 
