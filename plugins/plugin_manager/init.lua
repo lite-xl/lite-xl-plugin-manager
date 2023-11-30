@@ -5,6 +5,7 @@ local common = require "core.common"
 local config = require "core.config"
 local command = require "core.command"
 local json = require "libraries.json"
+local keymap = require "core.keymap"
 
 
 local PluginManager = {
@@ -128,7 +129,11 @@ local function run(cmd, progress)
                 local err = v[1]:read_stderr(2048)
                 core.error("error running " .. join(" ", cmd) .. ": " .. (err or "?"))
                 progress_line, v[3] = extract_progress(v[3])
-                v[2]:reject(v[3])
+                if err then
+                  v[2]:reject(json.decode(err).error)
+                else 
+                  v[2]:reject(err)
+                end
               end
               break
             end
@@ -208,6 +213,8 @@ local function run_stateful_plugin_command(plugin_manager, cmd, args, options)
     else
       plugin_manager:refresh(options):forward(promise)
     end
+  end):fail(function(arg)
+    promise:reject(arg)
   end)
   return promise
 end
@@ -347,7 +354,7 @@ command.add(nil, {
 if pcall(require, "plugins.terminal") then
   local terminal = require "plugins.terminal"
   command.add(nil, {
-    ["plugin-manager:session"] = function()
+    ["plugin-manager:open-session"] = function()
       local arguments = { "-" }
       for i,v in ipairs(default_arguments) do table.insert(arguments, v) end
       local tv = terminal.class(common.merge(config.plugins.terminal, {
@@ -358,5 +365,10 @@ if pcall(require, "plugins.terminal") then
     end
   })
 end
+
+keymap.add({
+  ['ctrl+shift+1'] = 'plugin-manager:show',
+  ['ctrl+shift+2'] = 'plugin-manager:open-session'
+})
 
 return PluginManager

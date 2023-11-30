@@ -98,14 +98,18 @@ command.add(EmptyView, {
     core.log("Installing addons...")
     loading = { percent = 0, label = "Initializing..." }
     core.redraw = true
-    PluginManager:install({ id = "meta_addons" }, { progress = function(progress) loading = progress end, restart = false }):done(function()
+    PluginManager:install({ id = "meta_addons" }, { progress = function(progress) 
+      loading = progress 
+      core.redraw = true
+    end, restart = false }):done(function()
       loading = false
       core.log("Addons installed!")
       terminate_welcome()
       command.perform("core:restart")
     end):fail(function(err)
-      loading = true
-      core.error(err)
+      loading = false
+      core.redraw = true
+      core.error(err or "Error installing addons.")
     end)
   end,
   ["welcome:open-plugin-manager"] = function()
