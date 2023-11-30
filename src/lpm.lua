@@ -664,7 +664,7 @@ function Addon:unstub()
   if not self:is_stub() or self.inaccessible then return end
   local repo
   local status, err = pcall(function()
-    repo = Repository.url(self.remote):fetch()
+    repo = Repository.url(self.remote):fetch_if_not_present()
     local manifest = repo:parse_manifest(self.id)
     local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == self.id end)[1]
     if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
@@ -1140,6 +1140,11 @@ function Repository:generate_manifest(repo_id)
   end
   table.sort(addons, function(a,b) return a.id:lower() < b.id:lower() end)
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ addons = addons }))
+end
+
+function Repository:fetch_if_not_present() 
+  if system.stat(self.local_path) then return end
+  return self:fetch()
 end
 
 -- useds to fetch things from a generic place
