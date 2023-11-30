@@ -374,6 +374,7 @@ function common.write(path, contents) local f, err = io.open(path, "wb") if not 
 function common.read(path) local f, err = io.open(path, "rb") if not f then error("can't read from " .. path .. ": " .. err) end return f:read("*all") end
 function common.uniq(l) local t = {} local k = {} for i,v in ipairs(l) do if not k[v] then table.insert(t, v) k[v] = true end end return t end
 function common.delete(h, d) local t = {} for k,v in pairs(h) do if k ~= d then t[k] = v end end return t end
+function common.canonical_order(hash) local t = {} for k,v in pairs(hash) do table.insert(t, k) end table.sort(t) return t end
 function common.split(splitter, str)
   local o = 1
   local res = {}
@@ -742,7 +743,9 @@ end
 function Addon:get_compatibilities(bottle)
   local compatible_addons, incompatible_addons = {}, {}
   local installed_addons = bottle:installed_addons()
-  for addon, v in pairs(self.dependencies) do
+  local dependency_list = common.canonical_order(self.dependencies)
+  for _, addon in ipairs(dependency_list) do
+    local v = self.dependencies[addon]
     local potential_addons = { bottle:get_addon(addon, v.version, { mod_version = bottle.lite_xl.mod_version }) }
     for i, potential_addon in ipairs(potential_addons) do
       local incomaptibilities = common.grep(installed_addons, function(p) return p:is_incompatible(potential_addon) end)
@@ -774,10 +777,12 @@ function Addon:install(bottle, installing)
     installing = installing or {}
     installing[self.id] = true
     local compatible, incompatible = self:get_compatibilities(bottle)
-    for addon, version in pairs(self.dependencies) do
+    local dependency_list = common.canonical_order(self.dependencies)
+    for _, addon in ipairs(dependency_list) do
       if incompatible[addon] then error("can't install " .. self.id .. ": incompatible with " .. incompatible[addon][1].id .. ":" .. incompatible[addon][1].version) end
     end
-    for addon, v in pairs(self.dependencies) do
+    for _, addon in ipairs(dependency_list) do
+      local v = self.dependencies[addon]
       if not compatible[addon] then
         if not v.optional then
           error("can't find dependency " .. addon .. (v.version and (":" .. v.version) or ""))
@@ -786,7 +791,8 @@ function Addon:install(bottle, installing)
         end
       end
     end
-    for addon, v in pairs(self.dependencies) do
+    for _, addon in ipairs(dependency_list) do
+      local v = self.dependencies[addon]
       if compatible[addon] and not compatible[addon]:is_core(bottle) and not compatible[addon]:is_installed(bottle) then
         if installing[addon] then
           error("circular dependency detected in " .. self.id .. ": requires " .. addon .. " but, " .. addon .. " requires " .. self.id)
