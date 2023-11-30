@@ -200,7 +200,7 @@ function PluginManager:get_addons(options)
   else
     self:refresh(options):done(function()
       prom:resolve(self.addons)
-    end)
+    end):fail(function(arg) promise:reject(arg) end)
   end
   return prom
 end
@@ -232,7 +232,7 @@ function PluginManager:unstub(addon, options)
       local unstubbed_addon = json.decode(result).addons[1]
       for k,v in pairs(unstubbed_addon) do addon[k] = v end
       promise:resolve(addon)
-    end)
+    end):fail(function(arg) promise:reject(arg) end)
   end
   return promise
 end
@@ -256,7 +256,7 @@ function PluginManager:get_addon(name_and_version, options)
       end
     end
     if not match then promise:reject() end
-  end)
+  end):fail(function(arg) promise:reject(arg) end)
   return promise
 end
 
