@@ -67,6 +67,15 @@ function Promise:forward(promise) self:done(function(data) promise:resolve(data)
 local function join(joiner, t) local s = "" for i,v in ipairs(t) do if i > 1 then s = s .. joiner end s = s .. v end return s end
 
 local running_processes = {}
+local default_arguments = {
+  "--mod-version=" .. (rawget(_G, "MOD_VERSION") or MOD_VERSION_STRING), -- #workaround hack for new system.
+  "--userdir=" .. USERDIR,
+  "--datadir=" .. DATADIR,
+  "--binary=" .. EXEFILE,
+  "--assume-yes"
+}
+if config.plugins.plugin_manager.ssl_certs then table.insert(default_arguments, "--ssl_certs") table.insert(cmd, config.plugins.plugin_manager.ssl_certs) end
+if config.plugins.plugin_manager.force then table.insert(default_arguments, "--force") end
 
 local function extract_progress(chunk)
   local newline = chunk:find("\n")
@@ -81,15 +90,9 @@ end
 local function run(cmd, progress)
   table.insert(cmd, 1, config.plugins.plugin_manager.lpm_binary_path)
   table.insert(cmd, "--json")
-  table.insert(cmd, "--mod-version=" .. (rawget(_G, "MOD_VERSION") or MOD_VERSION_STRING)) -- #workaround hack for new system.
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--progress")
-  table.insert(cmd, "--userdir=" .. USERDIR)
-  table.insert(cmd, "--datadir=" .. DATADIR)
-  table.insert(cmd, "--binary=" .. EXEFILE)
-  table.insert(cmd, "--assume-yes")
-  if config.plugins.plugin_manager.ssl_certs then table.insert(cmd, "--ssl_certs") table.insert(cmd, config.plugins.plugin_manager.ssl_certs) end
-  if config.plugins.plugin_manager.force then table.insert(cmd, "--force") end
+  for i,v in ipairs(default_arguments) do table.insert(cmd, v) end
   local proc = process.start(cmd)
   if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") io.stdout:flush() end
   local promise = Promise.new()
@@ -338,7 +341,22 @@ command.add(nil, {
   ["plugin-manager:show"] = function()
     local node = core.root_view:get_active_node_default()
     node:add_view(PluginManager.view(PluginManager))
-  end
+  end,
 })
+
+if pcall(require, "plugins.terminal") then
+  local terminal = require "plugins.terminal"
+  command.add(nil, {
+    ["plugin-manager:session"] = function()
+      local arguments = { "-" }
+      for i,v in ipairs(default_arguments) do table.insert(arguments, v) end
+      local tv = terminal.class(common.merge(config.plugins.terminal, {
+        shell = config.plugins.plugin_manager.lpm_binary_path,
+        arguments = arguments
+      }))
+      core.root_view:get_active_node_default():add_view(tv)
+    end
+  })
+end
 
 return PluginManager
