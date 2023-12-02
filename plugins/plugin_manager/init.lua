@@ -131,7 +131,7 @@ local function run(cmd, progress)
                 progress_line, v[3] = extract_progress(v[3])
                 if err then
                   v[2]:reject(json.decode(err).error)
-                else 
+                else
                   v[2]:reject(err)
                 end
               end
@@ -365,10 +365,5 @@ if pcall(require, "plugins.terminal") then
     end
   })
 end
-
-keymap.add({
-  ['ctrl+shift+1'] = 'plugin-manager:show',
-  ['ctrl+shift+2'] = 'plugin-manager:open-session'
-})
 
 return PluginManager
