@@ -76,7 +76,7 @@ function EmptyView:draw()
 
 
   local x1, y1 = x, y + ((dh - th) / #buttons)
-  local xv
+  local xv = x1
   if version_width > title_width then
     version = VERSION
     version_width = style.font:get_width(version)
