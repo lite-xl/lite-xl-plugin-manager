@@ -5,6 +5,7 @@ local common = require "core.common"
 local config = require "core.config"
 local command = require "core.command"
 local json = require "libraries.json"
+local keymap = require "core.keymap"
 
 
 local PluginManager = {
@@ -128,7 +129,11 @@ local function run(cmd, progress)
                 local err = v[1]:read_stderr(2048)
                 core.error("error running " .. join(" ", cmd) .. ": " .. (err or "?"))
                 progress_line, v[3] = extract_progress(v[3])
-                v[2]:reject(v[3])
+                if err then
+                  v[2]:reject(json.decode(err).error)
+                else
+                  v[2]:reject(err)
+                end
               end
               break
             end
@@ -195,7 +200,7 @@ function PluginManager:get_addons(options)
   else
     self:refresh(options):done(function()
       prom:resolve(self.addons)
-    end)
+    end):fail(function(arg) promise:reject(arg) end)
   end
   return prom
 end
@@ -208,6 +213,8 @@ local function run_stateful_plugin_command(plugin_manager, cmd, args, options)
     else
       plugin_manager:refresh(options):forward(promise)
     end
+  end):fail(function(arg)
+    promise:reject(arg)
   end)
   return promise
 end
@@ -225,7 +232,7 @@ function PluginManager:unstub(addon, options)
       local unstubbed_addon = json.decode(result).addons[1]
       for k,v in pairs(unstubbed_addon) do addon[k] = v end
       promise:resolve(addon)
-    end)
+    end):fail(function(arg) promise:reject(arg) end)
   end
   return promise
 end
@@ -249,7 +256,7 @@ function PluginManager:get_addon(name_and_version, options)
       end
     end
     if not match then promise:reject() end
-  end)
+  end):fail(function(arg) promise:reject(arg) end)
   return promise
 end
 
@@ -347,7 +354,7 @@ command.add(nil, {
 if pcall(require, "plugins.terminal") then
   local terminal = require "plugins.terminal"
   command.add(nil, {
-    ["plugin-manager:session"] = function()
+    ["plugin-manager:open-session"] = function()
       local arguments = { "-" }
       for i,v in ipairs(default_arguments) do table.insert(arguments, v) end
       local tv = terminal.class(common.merge(config.plugins.terminal, {

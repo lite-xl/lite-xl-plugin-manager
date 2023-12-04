@@ -145,20 +145,25 @@ local function draw_loading_bar(x, y, width, height, percent)
   renderer.draw_rect(x, y, width * percent, height, style.caret)
 end
 
+function PluginView:draw_loading_screen(label, percent)
+  common.draw_text(style.big_font, style.dim, "Loading...", "center", self.position.x, self.position.y, self.size.x, self.size.y)
+  local width = self.size.x / 2
+  local offset_y = self.size.y / 2
+  if label or percent then
+    local th = style.font:get_height()
+    local lh = th + style.padding.y
+    common.draw_text(style.font, style.dim, label, "center", self.position.x, self.position.y + offset_y + lh, self.size.x, lh)
+    draw_loading_bar(self.position.x + (self.size.x / 2) - (width / 2), self.position.y + self.size.y / 2 + (lh * 2), width, lh, percent)
+  end
+end
+
 function PluginView:draw()
   self:draw_background(style.background)
   local th = style.font:get_height()
   local lh = th + style.padding.y
 
   if not self.initialized or not self.widths then
-    common.draw_text(style.big_font, style.dim, "Loading...", "center", self.position.x, self.position.y, self.size.x, self.size.y)
-    local width = self.size.x / 2
-    local offset_y = self.size.y / 2
-    if self.progress then
-      common.draw_text(style.font, style.dim, self.progress.label, "center", self.position.x, self.position.y + offset_y + lh, self.size.x, lh)
-      draw_loading_bar(self.position.x + (self.size.x / 2) - (width / 2), self.position.y + self.size.y / 2 + (lh * 2), width, lh, self.progress.percent)
-    end
-    return
+    return self:draw_loading_screen(self.progress and self.progress.label, self.progress and self.progress.percent)
   end
 
 

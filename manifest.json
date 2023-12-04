@@ -61,6 +61,16 @@
       }
     },
     {
+      "id": "welcome",
+      "description": "A welcome screen for lite-xl, that on first start, invites a user to install the meta_addons package, or access the plugin manager.",
+      "type": "plugin",
+      "path": "plugins/welcome.lua",
+      "version": "0.1",
+      "dependencies": {
+        "plugin_manager": {}
+      }
+    },
+    {
       "id": "json",
       "version": "1.0",
       "description": "JSON support plugin, provides encoding/decoding.",
