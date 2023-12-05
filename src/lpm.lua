@@ -536,7 +536,7 @@ end
 
 local status = 0
 local function error_handler(err)
-  local s, e 
+  local s, e
   if err then s, e = err:find("%:%d+") end
   local message = e and err:sub(e + 3) or err
   if JSON then
@@ -1143,7 +1143,7 @@ function Repository:generate_manifest(repo_id)
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ addons = addons }))
 end
 
-function Repository:fetch_if_not_present() 
+function Repository:fetch_if_not_present()
   if system.stat(self.local_path) then return self end
   return self:fetch()
 end
@@ -1369,7 +1369,9 @@ function Bottle:construct()
   else
     common.copy(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
   end
-  for i,addon in ipairs(self.addons) do addon:install(self) end
+  for i,addon in ipairs(self.addons) do
+    addon:install(self)
+  end
   -- atomically move things
   common.rmrf(local_path)
   common.mkdirp(local_path)
@@ -1722,14 +1724,19 @@ local function lpm_lite_xl_run(version, ...)
     else
       local id, version = common.split(":", str)
       local potentials = { system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version }) }
-      if #potentials == 0 then error("can't find addon " .. str) end
       local uniq = {}
+      local found_one = false
       for i, addon in ipairs(potentials) do
-        if not addon:is_core(system_bottle) and not addon:is_orphan(system_bottle) and not uniq[addon.id] then
+        if addon:is_core(system_bottle) then
+          uniq[addon.id] = true
+          found_one = true
+        elseif not addon:is_orphan(system_bottle) and not uniq[addon.id] then
           table.insert(addons, addon)
           uniq[addon.id] = true
+          found_one = true
         end
       end
+      if not found_one then error("can't find addon " .. str) end
     end
     i = i + 1
   end
@@ -2043,7 +2050,7 @@ It's designed to install packages from our central github repository (and
 affiliated repositories), directly into your lite-xl user directory. It can
 be called independently, or from the lite-xl `plugin_manager` addon.
 
-LPM will always use 
+LPM will always use
 ]] .. DEFAULT_REPO_URL .. [[
 
 as its base repository, if none are present, and the cache directory
