@@ -46,7 +46,7 @@ jobs:
         env: { GITHUB_TOKEN: "${{ github.token }}", ARTIFACTS: "lpm.x86_64-linux lpm.riscv64-linux lpm.x86_64-windows.exe lpm.arm-android lpm.aarch64-android lpm.x86-android lpm.x86_64-android" }
         run: |
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous $ARTIFACTS
-          if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
+          if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
             gh release delete -y v$VERSION || true;
             gh release create -t v$VERSION v$VERSION $ARTIFACTS
             gh release delete -y latest || true;
@@ -72,7 +72,7 @@ jobs:
           ./build.sh clean && BIN=lpm.x86_64-darwin ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-darwin'"'
           ./build.sh clean && BIN=lpm.aarch64-darwin CC=clang CFLAGS="-arch arm64" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-aarch64-darwin'"'
           gh release upload continuous lpm.x86_64-darwin lpm.aarch64-darwin
-          if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
+          if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
             gh release upload v$VERSION lpm.x86_64-darwin
             gh release upload latest lpm.x86_64-darwin
             gh release upload v$VERSION lpm.aarch64-darwin
