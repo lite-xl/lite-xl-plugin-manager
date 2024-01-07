@@ -668,7 +668,7 @@ function Addon:unstub()
     repo = Repository.url(self.remote):fetch_if_not_present()
     local manifest = repo:parse_manifest(self.id)
     local remote_entry = common.grep(manifest['addons'] or manifest['plugins'], function(e) return e.id == self.id end)[1]
-    if not remote_entry then error("can't find " .. self.type .. " on " .. self.remote) end
+    if not remote_entry then error("can't find " .. self.type .. " " .. self.id .. " on " .. self.remote) end
     local addon = Addon.new(repo, remote_entry)
 
     -- merge in attribtues that are probably more accurate than the stub
@@ -770,7 +770,7 @@ end
 function Addon:install(bottle, installing)
   if self:is_installed(bottle) and not REINSTALL then error("addon " .. self.id .. " is already installed") return end
   if self:is_stub() then self:unstub() end
-  if self.inaccessible then error("addon " .. self.id .. " is inacessible: " .. self.inaccessible) end
+  if self.inaccessible then error("addon " .. self.id .. " is inaccessible: " .. self.inaccessible) end
   local install_path = self:get_install_path(bottle)
   if install_path:find(USERDIR, 1, true) ~= 1 and install_path:find(TMPDIR, 1, true) ~= 1 then error("invalid install path: " .. install_path) end
   local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(((install_path:find(TMPDIR, 1, true) == 1) and #TMPDIR or #USERDIR) + 2)

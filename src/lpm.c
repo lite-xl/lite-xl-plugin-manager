@@ -570,6 +570,14 @@ static int lpm_certs(lua_State* L) {
       if (git_initialized)
         git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
       strncpy(git_cert_path, path, MAX_PATH);
+      status = mbedtls_x509_crt_parse_path(&x509_certificate, path);
+      if (status < 0)
+        return luaL_mbedtls_error(L, status, "mbedtls_x509_crt_parse_path failed to parse all CA certificates in %s", path);
+      if (status > 0 && print_trace) {
+        fprintf(stderr, "[ssl] mbedtls_x509_crt_parse_path on %s failed to parse %d certificates, but still succeeded.\n", path, status);
+        fflush(stderr);
+      }
+      mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
       if (print_trace) {
         fprintf(stderr, "[ssl] SSL directory set to %s.\n", git_cert_path);
         fflush(stderr);
