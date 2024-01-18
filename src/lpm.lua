@@ -650,8 +650,9 @@ function Addon.new(repository, metadata)
   end
   if not self.local_path and repository then
     if self.remote then
-      local local_path = (Repository.url(self.remote).local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or ""))
-      self.local_path = system.stat(local_path) and (Repository.url(self.remote).local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or "")) or nil
+      local repo = Repository.url(self.remote)
+      local local_path = repo.local_path and (repo.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or ""))
+      self.local_path = local_path and system.stat(local_path) or nil
     else
       self.local_path = (repository.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or "")) or nil
     end
@@ -1144,7 +1145,7 @@ function Repository:generate_manifest(repo_id)
 end
 
 function Repository:fetch_if_not_present()
-  if system.stat(self.local_path) then return self end
+  if self.local_path and system.stat(self.local_path) then return self end
   return self:fetch()
 end
 
