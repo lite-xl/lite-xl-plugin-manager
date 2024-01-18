@@ -461,8 +461,8 @@ static int lpm_fetch(lua_State* L) {
   if (!error) {
     git_buf branch_name = {0};
     if (!git_remote_default_branch(&branch_name, remote)) {
-      // We specifically do not dispose of the branch buffer here; it causes a segfault if we do.
       lua_pushlstring(L, branch_name.ptr, branch_name.size);
+      git_buf_dispose(&branch_name);
     } else {
       lua_pushnil(L);
     }
