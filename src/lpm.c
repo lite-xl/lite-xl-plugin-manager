@@ -98,6 +98,15 @@ static FILE* lua_fopen(lua_State* L, const char* path, const char* mode) {
 }
 
 static char hex_digits[] = "0123456789abcdef";
+static void lua_pushhexstring(lua_State* L, const unsigned char* buffer, size_t length) {
+  char hex_buffer[length * 2 + 1];
+  for (size_t i = 0; i < length; ++i) {
+    hex_buffer[i*2+0] = hex_digits[buffer[i] >> 4];
+    hex_buffer[i*2+1] = hex_digits[buffer[i] & 0xF];
+  }
+  lua_pushlstring(L, hex_buffer, length * 2);
+}
+
 static int lpm_hash(lua_State* L) {
   size_t len;
   const char* data = luaL_checklstring(L, 1, &len);
@@ -126,12 +135,7 @@ static int lpm_hash(lua_State* L) {
   }
   mbedtls_sha256_finish_ret(&hash_ctx, buffer);
   mbedtls_sha256_free(&hash_ctx);
-  char hex_buffer[digest_length * 2 + 1];
-  for (size_t i = 0; i < digest_length; ++i) {
-    hex_buffer[i*2+0] = hex_digits[buffer[i] >> 4];
-    hex_buffer[i*2+1] = hex_digits[buffer[i] & 0xF];
-  }
-  lua_pushlstring(L, hex_buffer, digest_length * 2);
+  lua_pushhexstring(L, buffer, digest_length);
   return 1;
 }
 
@@ -384,23 +388,6 @@ static int lpm_reset(lua_State* L) {
   return 0;
 }
 
-static int lpm_revparse(lua_State* L) {
-  git_init();
-  git_repository* repository = luaL_checkgitrepo(L, 1);
-  git_oid commit_id;
-  int got_commit = git_get_id(&commit_id, repository, "HEAD");
-  git_repository_free(repository);
-  if (got_commit)
-    return luaL_error(L, "git retrieve commit error: %s", git_error_last_string());
-  int digest_length = sizeof(commit_id.id);
-  char hex_buffer[digest_length * 2];
-  for (size_t i = 0; i < digest_length; ++i) {
-    hex_buffer[i*2+0] = hex_digits[commit_id.id[i] >> 4];
-    hex_buffer[i*2+1] = hex_digits[commit_id.id[i] & 0xF];
-  }
-  lua_pushlstring(L, hex_buffer, digest_length * 2);
-  return 1;
-}
 
 static int lpm_init(lua_State* L) {
   git_init();
@@ -447,7 +434,7 @@ static int lpm_git_transfer_progress_cb(const git_transfer_progress *stats, void
 }
 
 static int lpm_fetch(lua_State* L) {
-  git_init();
+   git_init();
   git_repository* repository = luaL_checkgitrepo(L, 1);
   git_remote* remote;
   if (git_remote_lookup(&remote, repository, "origin")) {
@@ -466,19 +453,32 @@ static int lpm_fetch(lua_State* L) {
   if (lua_type(L, 2) == LUA_TFUNCTION)
     fetch_opts.callbacks.transfer_progress = lpm_git_transfer_progress_cb;
   git_strarray array = { (char**)&refspec, 1 };
-  if (git_remote_fetch(remote, refspec ? &array : NULL, &fetch_opts, NULL)) {
-    git_remote_free(remote);
-    git_repository_free(repository);
-    return luaL_error(L, "git remote fetch error: %s", git_error_last_string());
+  //
+  int error = git_remote_connect(remote, GIT_DIRECTION_FETCH, &fetch_opts.callbacks, NULL, NULL) ||
+      git_remote_download(remote, refspec ? &array : NULL, &fetch_opts) ||
+      git_remote_update_tips(remote, &fetch_opts.callbacks, fetch_opts.update_fetchhead, fetch_opts.download_tags, NULL);
+
+  if (!error) {
+    git_buf branch_name = {0};
+    if (!git_remote_default_branch(&branch_name, remote)) {
+      // We specifically do not dispose of the branch buffer here; it causes a segfault if we do.
+      lua_pushlstring(L, branch_name.ptr, branch_name.size);
+    } else {
+      lua_pushnil(L);
+    }
   }
+  git_remote_disconnect(remote);
   git_remote_free(remote);
   git_repository_free(repository);
+  if (error)
+    return luaL_error(L, "git remote fetch error: %s", git_error_last_string());
   if (lua_type(L, 2) == LUA_TFUNCTION) {
     lua_pushvalue(L, 2);
     lua_pushboolean(L, 1);
-    lua_call(L, 1, 0);
+    lua_pushvalue(L, -3);
+    lua_call(L, 2, 0);
   }
-  return 0;
+  return 1;
 }
 
 static int mbedtls_snprintf(int mbedtls, char* buffer, int len, int status, const char* str, ...) {
@@ -1145,7 +1145,6 @@ static const luaL_Reg system_lib[] = {
   { "init",      lpm_init },     // Initializes a git repository with the specified remote.
   { "fetch",     lpm_fetch },    // Updates a git repository with the specified remote.
   { "reset",     lpm_reset },    // Updates a git repository to the specified commit/hash/branch.
-  { "revparse",  lpm_revparse }, // Gets a commit id.
   { "get",       lpm_get },      // HTTP(s) GET request.
   { "extract",   lpm_extract },  // Extracts .tar.gz, and .zip files.
   { "trace",     lpm_trace },    // Sets trace bit.

@@ -1088,7 +1088,7 @@ function Repository:generate_manifest(repo_id)
               addon_map[id].remote = path
               pcall(function()
                 local repo = Repository.url(path):add()
-                addon_map[id].remote = path .. ":" .. system.revparse(repo.local_path)
+                addon_map[id].remote = path .. ":" .. (repo.branch or repo.commit)
               end)
             end
           else
@@ -1159,19 +1159,10 @@ function Repository:fetch()
       path = self.repo_path .. PATHSEP .. "master"
       common.rmrf(temporary_path)
       common.mkdirp(temporary_path)
-      log_progress_action("Fetching " .. self.remote .. ":master/main...")
+      log_progress_action("Fetching " .. self.remote .. "...")
       system.init(temporary_path, self.remote)
-      system.fetch(temporary_path, write_progress_bar)
-      if not pcall(system.reset, temporary_path, "refs/remotes/origin/master", "hard") then
-        if pcall(system.reset, temporary_path, "refs/remotes/origin/main", "hard") then
-          path = self.repo_path .. PATHSEP .. "main"
-          self.branch = "main"
-        else
-          error("can't find master or main.")
-        end
-      else
-        self.branch = "master"
-      end
+      self.branch = system.fetch(temporary_path, write_progress_bar)
+      if not self.branch then error("Can't find remote branch for " .. self.remote) end
       self.local_path = path
     else
       path = self.local_path
