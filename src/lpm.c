@@ -453,11 +453,9 @@ static int lpm_fetch(lua_State* L) {
   if (lua_type(L, 2) == LUA_TFUNCTION)
     fetch_opts.callbacks.transfer_progress = lpm_git_transfer_progress_cb;
   git_strarray array = { (char**)&refspec, 1 };
-  //
   int error = git_remote_connect(remote, GIT_DIRECTION_FETCH, &fetch_opts.callbacks, NULL, NULL) ||
-      git_remote_download(remote, refspec ? &array : NULL, &fetch_opts) ||
-      git_remote_update_tips(remote, &fetch_opts.callbacks, fetch_opts.update_fetchhead, fetch_opts.download_tags, NULL);
-
+    git_remote_download(remote, refspec ? &array : NULL, &fetch_opts) ||
+    git_remote_update_tips(remote, &fetch_opts.callbacks, fetch_opts.update_fetchhead, fetch_opts.download_tags, NULL);
   if (!error) {
     git_buf branch_name = {0};
     if (!git_remote_default_branch(&branch_name, remote)) {
