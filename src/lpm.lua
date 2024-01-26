@@ -2092,7 +2092,7 @@ It has the following commands:
   lpm lite-xl add <version> <path>         Adds a local version of lite-xl to
                                            the managed list, allowing it to be
                                            easily bottled.
-  lpm lite-xl remove <path>                Removes a local version of lite-xl
+  lpm lite-xl rm <path>                    Removes a local version of lite-xl
                                            from the managed list.
   lpm [lite-xl] switch <version> [<path>]  Sets the active version of lite-xl
                                            to be the specified version. Auto-detects
