@@ -175,8 +175,8 @@ that any version greater than `0.1` can be used.
       "files": [ # Downloads all files listed here to USERDIR/fonts.
 
         {
-          "url": "https://github.com/chrissimpkins/codeface/raw/master/fonts/roboto-mono/RobotoMono-Regular.ttf",
-          "checksum": "c7ab2d73cf7d538face08bcdde95b928ce609a970237c8811ca3c76059c8bb2f"
+          "url": "https://github.com/googlefonts/RobotoMono/raw/26adf5193624f05ba1743797d00bcf0e6bfe624f/fonts/ttf/RobotoMono-Regular.ttf",
+          "checksum": "7432e74ff02682c6e207be405f00381569ec96aa247d232762fe721ae41b39e2"
         }
       ]
     },
