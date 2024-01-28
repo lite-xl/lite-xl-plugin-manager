@@ -27,6 +27,7 @@ installed. Currently three types are supported:
 * `library`
 * `plugin`
 * `color`
+* `font`
 * `meta`
 
 Addons are further classified into two organizational categories.
@@ -48,7 +49,7 @@ Fields that are required are bolded.
 * **`mod_version`**: The mod_version this addon is compatible with.
   A string that can contain `[0-9\.]`. If `type` is `library`, this field is optional.
 * `type`: An optional string that specifies the addon type. Valid values are `"plugin"`
-  `"library"`, `"color"`, or `"meta"`. Defaults to `"plugin"`.
+  `"library"`, `"color"`,`"font"`, or `"meta"`. Defaults to `"plugin"`.
 * `name`: The optional name of the addon.
 * `description`: An optional english-language description of the addon.
 * `provides`: An optional array of strings that are a shorthand of functionality
@@ -165,6 +166,19 @@ that any version greater than `0.1` can be used.
       "dependencies": {
         "json": {} # Depeneds on `json`, can be a plugin's name or one of its `provides`.
       }
+    },
+    {
+      "id": "RobotoMono",
+      "version": "0.1",
+      "type": "font",
+      "description": "Roboto Mono font.",
+      "files": [ # Downloads all files listed here to USERDIR/fonts.
+
+        {
+          "url": "https://github.com/chrissimpkins/codeface/raw/master/fonts/roboto-mono/RobotoMono-Regular.ttf",
+          "checksum": "c7ab2d73cf7d538face08bcdde95b928ce609a970237c8811ca3c76059c8bb2f"
+        }
+      ]
     },
     {
       "id": "json",

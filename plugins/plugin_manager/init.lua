@@ -167,6 +167,7 @@ function PluginManager:refresh(options)
       end
     end
     self.last_refresh = os.time()
+    core.redraw = true
     prom:resolve(addons)
     run({ "repo", "list" }, options.progress):done(function(repositories)
       self.repositories = json.decode(repositories)["repositories"]
@@ -249,7 +250,7 @@ function PluginManager:get_addon(name_and_version, options)
     end
     local match = false
     for i, addon in ipairs(PluginManager.addons) do
-      if not addon.mod_version or tostring(addon.mod_version) == tostring(MOD_VERSION_MAJOR) and (addon.version == version or version == nil) then
+      if not addon.mod_version or tostring(addon.mod_version) == tostring(rawget(_G, MOD_VERSION_MAJOR) or rawget(_G, MOD_VERSION)) and (addon.version == version or version == nil) then
         promise:resolve(addon)
         match = true
         break

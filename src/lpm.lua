@@ -661,6 +661,7 @@ function Addon.new(repository, metadata)
 end
 
 function Addon:is_stub() return self.remote end
+function Addon:is_asset() return self.type == "font" end
 
 function Addon:unstub()
   if not self:is_stub() or self.inaccessible then return end
@@ -703,9 +704,14 @@ function Addon.is_addon_different(downloaded_path, installed_path)
 end
 
 function Addon:get_install_path(bottle)
-  local folder = self.type == "color" and "colors" or (self.type == "library" and "libraries" or "plugins")
-  local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder .. PATHSEP .. self.id
-  if self.organization == "singleton" then path = path .. ".lua" end
+  local folder = self.type == "library" and "libraries" or (self.type .. "s")
+  local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder
+  if self:is_asset() and self.organization == "singleton" then
+    path = path .. PATHSEP .. (self.path or (self.url and common.basename(self.url) or self.id))
+  else
+    path = path .. PATHSEP .. self.id
+    if self.organization == "singleton" then path = path .. ".lua" end
+  end
   return path
 end
 
@@ -717,6 +723,7 @@ function Addon:is_installed(bottle)
   if self.type == "meta" and self:is_explicitly_installed(bottle) then return true end
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
+  if self:is_asset() then return true end
   local installed_addons = common.grep({ bottle:get_addon(self.id, nil, {  }) }, function(addon) return not addon.repository end)
   if #installed_addons > 0 then return false end
   return self.local_path and not Addon.is_addon_different(self.local_path, install_path)
@@ -818,12 +825,12 @@ function Addon:install(bottle, installing)
       log_action("Installing " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
     end
     if self.organization == "complex" and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
-    if self.url then -- remote simple plugin
+    if self.url then -- remote simple addon
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, path, self.checksum, write_progress_bar)
       if VERBOSE then log_action("Downloaded file " .. self.url .. " to " .. path) end
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
-    elseif self.path then -- local plugin that has a local path
+    elseif self.path then -- local addon that has a local path
       local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
@@ -834,7 +841,7 @@ function Addon:install(bottle, installing)
         if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path) end
         common.copy(self.local_path, temporary_path)
       end
-    elseif self.organization == 'complex' then -- complex plugin without local path
+    elseif self.organization == 'complex' then -- complex addon without local path
       local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if SYMLINK then
         if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path) end
@@ -1071,7 +1078,7 @@ function Repository:generate_manifest(repo_id)
   if not self.local_path and not self.commit and not self.branch then error("requires an instantiation") end
   local path = self.local_path
   local addons, addon_map = {}, {}
-  for _, folder in ipairs({ "plugins", "colors", "libraries" }) do
+  for _, folder in ipairs({ "plugins", "colors", "libraries", "fonts" }) do
     if system.stat(path .. PATHSEP .. "README.md") then -- If there's a README, parse it for a table like in our primary repository.
       for line in io.lines(path .. PATHSEP .. "README.md") do
         local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
@@ -1106,7 +1113,7 @@ function Repository:generate_manifest(repo_id)
           local name = filename
           if name == "init" then name = repo_id or common.basename(self.remote or self.local_path) end
           if name ~= "init" then
-            local type = folder == "colors" and "color" or (folder == "libraries" and "library" or "plugin")
+            local type = folder == "libraries" and "library" or folder:sub(1, #folder - 1)
             local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. PATHSEP .. file) or nil), type = type }
             for line in io.lines(path .. PATHSEP .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
@@ -1394,6 +1401,11 @@ local function get_repository_addons()
       hash[id] = p
       if not hash[p.id] then hash[p.id] = {} end
       table.insert(hash[p.id], p)
+      if p:is_asset() and p.organization == "singleton" then
+        local filename = (p.path or (p.url and common.basename(p.url) or p.id)):lower():gsub("[^a-z0-9%-_]", "")
+        if not hash[filename] then hash[filename] = {} end
+        table.insert(hash[filename], p)
+      end
     elseif hash[id].remote and not p.remote then
       for k,v in ipairs(t) do
         if v == hash[id] then
@@ -1420,7 +1432,7 @@ end
 function Bottle:all_addons()
   if self.all_addons_cache then return self.all_addons_cache end
   local t, hash = get_repository_addons()
-  for _, addon_type in ipairs({ "plugins", "libraries" }) do
+  for _, addon_type in ipairs({ "plugins", "libraries", "fonts", "colors" }) do
     local addon_paths = {
       (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. addon_type,
       self.lite_xl.datadir_path .. PATHSEP .. addon_type
@@ -1982,10 +1994,10 @@ local function run_command(ARGS)
   elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_repo_list()
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "unstub" then return lpm_unstub(nil, table.unpack(common.slice(ARGS, 3)))
@@ -2000,6 +2012,7 @@ local function run_command(ARGS)
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm_lite_xl_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "rm" then return lpm_lite_xl_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" then error("unknown lite-xl command: " .. ARGS[3])
   elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm_bottle_purge(common.slice(ARGS, 4))
   elseif ARGS[2] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
