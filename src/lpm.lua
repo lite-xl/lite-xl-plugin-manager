@@ -2208,6 +2208,9 @@ not commonly used publically.
                                      interpreter.
   lpm download <url> [target]        Downloads the specified URL to stdout,
                                      or to the specified target file.
+  lpm hash [file]                    Returns the sha256sum of the file.
+  lpm update-checksums [manifest]    Pulls all remote files, computes their
+                                     checksums, and updates them in the file.
   lpm extract <file.[tar.gz|zip]>    Extracts the specified archive at
     [target]                         target, or the current working directory.
 ]]
@@ -2369,6 +2372,32 @@ not commonly used publically.
   end
   if ARGS[2] == "extract" then
     system.extract(ARGS[3], ARGS[4] or ".")
+    os.exit(0)
+  end
+  if ARGS[2] == "update-checksums" then
+    local contents = common.read(ARGS[3])
+    local m = json.decode(contents)
+    local computed = {}
+    local filter
+    if #ARGS > 3 then
+      filter = {}
+      for i, arg in ipairs(ARGS) do
+        if i > 3 then filter[arg] = true end
+      end
+    end
+    for _, section in ipairs(common.concat(m.addons or {}, m["lite-xls"] or {})) do
+      for _, file in ipairs(section.files or {}) do
+        if (not filter or (section.id and filter[section.id])) and file.url and file.checksum ~= "SKIP" and type(file.checksum) == "string" then
+          local checksum = system.hash(common.get(file.url))
+          if computed[file.checksum] and computed[file.checksum] ~= checksum then
+            error("can't update manifest; existing checksum " .. file.checksum .. " exists in two separate places that now have disparate checksum values")
+          end
+          computed[file.checksum] = checksum
+          contents = contents:gsub(file.checksum, checksum)
+        end
+      end
+    end
+    common.write(ARGS[3], contents)
     os.exit(0)
   end
   if ARGS[2] == "manifest" then
