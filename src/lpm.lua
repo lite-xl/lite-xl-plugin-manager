@@ -1610,9 +1610,12 @@ local function lpm_lite_xl_add(version, path)
   if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " lite-xl already exists") end
   local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
   local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
-  if not system.stat(binary_path) then error("can't find " .. binary_path) end
-  if not system.stat(data_path) then error("can't find " .. data_path) end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_path }, datadir_path = data_path, path = path:gsub(PATHSEP .. "$", ""), mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
+  local binary_stat, data_stat = system.stat(binary_path), system.stat(data_path)
+  if not binary_stat then error("can't find " .. binary_path) end
+  if not data_stat then error("can't find " .. data_path) end
+  local path_stat = system.stat(path:gsub(PATHSEP .. "$", ""))
+  if not path_stat then error("can't find " .. path) end
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
   lpm_lite_xl_save()
 end
 
