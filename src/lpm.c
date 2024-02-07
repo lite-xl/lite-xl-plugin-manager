@@ -46,6 +46,8 @@
   #include <Security/Security.h>
 #endif
 
+#define HTTPS_RESPONSE_HEADER_BUFFER_LENGTH 8192
+
 
 #if _WIN32
 static LPCWSTR lua_toutf16(lua_State* L, const char* str) {
@@ -922,7 +924,7 @@ static int lpm_get(lua_State* L) {
   }
 
   const char* rest = luaL_checkstring(L, 4);
-  char buffer[4096];
+  char buffer[HTTPS_RESPONSE_HEADER_BUFFER_LENGTH];
   int buffer_length = snprintf(buffer, sizeof(buffer), "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", rest, hostname);
   buffer_length = lpm_socket_write(s, buffer, buffer_length, ssl_ctx);
   if (buffer_length < 0) {
@@ -930,17 +932,19 @@ static int lpm_get(lua_State* L) {
   }
   int bytes_read = 0;
   const char* header_end = NULL;
-  while (!header_end && bytes_read < sizeof(buffer)) {
+  while (!header_end && bytes_read < sizeof(buffer) - 1) {
     buffer_length = lpm_socket_read(s, &buffer[bytes_read], sizeof(buffer) - bytes_read - 1, ssl_ctx);
     if (buffer_length < 0) {
       mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? buffer_length : errno, "can't read from socket %s", hostname); goto cleanup;
+    } else if (buffer_length > 0) {
+      bytes_read += buffer_length;
+      buffer[bytes_read] = 0;
+      header_end = strstr(buffer, "\r\n\r\n");
     }
-    bytes_read += buffer_length;
-    buffer[bytes_read] = 0;
-    header_end = strstr(buffer, "\r\n\r\n");
   }
   if (!header_end) {
-    snprintf(err, sizeof(err), "can't parse response headers for %s%s", hostname, rest); goto cleanup;
+    snprintf(err, sizeof(err), "can't parse response headers for %s%s: %s", hostname, rest, bytes_read >= sizeof(buffer) - 1 ? "response header buffer length exceeded" : "malformed response");
+    goto cleanup;
   }
   header_end += 4;
   const char* protocol_end = strstr(buffer, " ");

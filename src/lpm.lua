@@ -2386,8 +2386,9 @@ not commonly used publically.
       end
     end
     for _, section in ipairs(common.concat(m.addons or {}, m["lite-xls"] or {})) do
-      for _, file in ipairs(section.files or {}) do
+      for _, file in ipairs(common.concat({ section }, section.files or {})) do
         if (not filter or (section.id and filter[section.id])) and file.url and file.checksum ~= "SKIP" and type(file.checksum) == "string" then
+          log_action("Computing checksum for " .. (section.id or section.version) .. " (" .. file.url .. ")...")
           local checksum = system.hash(common.get(file.url))
           if computed[file.checksum] and computed[file.checksum] ~= checksum then
             error("can't update manifest; existing checksum " .. file.checksum .. " exists in two separate places that now have disparate checksum values")
