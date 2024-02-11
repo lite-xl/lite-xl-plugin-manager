@@ -1,3 +1,29 @@
+# 1.1.0
+
+* Added in `font` as a new `type` for addons.
+* Fixed a bug that made it so that complex plugins that didn't specify a path would clone their repos, instead of just downloading the listed files.
+* Fixed bugs around specifying a lite-xl to add to the system.
+* Added documentation for `lpm hash`.
+* Added in ability to automatically update checksums in manifests under certain circumstances with `lpm update-checksums`.
+* Improved handling around adding disparate versions of lite-xl with binary, data and user directories in different places.
+
+# 1.0.14
+
+* Fixed some spelling errors.
+* Removed `system.revparse`.
+* Allowed fetch to automatically determine the default branch of a remote; returns as part of `fetch`.
+* Fixed an error that prevented SSL certificates present in a directory from working.
+
+# 1.0.13
+
+* Merged in `welcome.lua` as a plugin.
+* Added in ability to specify `--ephemeral` when running bottles; cleans up the bottle when lite-xl exits.
+* Improved error handling by removing unecessary line numbers.
+* Made running of `lpm` more deterministic.
+* Made it so that we only `fetch` when necessary in order to speed things up.
+* Fixed some errors where cache wasn't being invaldiated approprirately.
+* Allowed for short looks up when referencing commit ids.
+
 # 1.0.12
 
 * Updated meson to properly retrieve mbedtls2 when compiling.

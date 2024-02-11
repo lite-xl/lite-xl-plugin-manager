@@ -2374,6 +2374,7 @@ not commonly used publically.
     os.exit(0)
   end
   if ARGS[2] == "update-checksums" then
+    if #ARGS == 2 then error("usage: lpm update-checksums manifest.json") end
     local contents = common.read(ARGS[3])
     local m = json.decode(contents)
     local computed = {}
