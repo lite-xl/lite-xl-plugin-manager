@@ -624,6 +624,7 @@ function Addon.__index(self, idx) return rawget(self, idx) or Addon[idx] end
 function Addon.new(repository, metadata)
   if type(metadata.id) ~= 'string' or metadata.id:find("[^a-z0-9%-_]") then error("addon requires a valid id " .. (metadata.id and "(" .. metadata.id .. " is invalid)" or "")) end
   local type = metadata.type or "plugin"
+  if metadata.type ~= "meta" and not metadata.path and not metadata.files and not metadata.url then metadata.path = "." end
   if metadata.path then metadata.path = metadata.path:gsub("/", PATHSEP) end
   local self = setmetatable(common.merge({
     repository = repository,
@@ -651,10 +652,10 @@ function Addon.new(repository, metadata)
   if not self.local_path and repository then
     if self.remote then
       local repo = Repository.url(self.remote)
-      local local_path = repo.local_path and (repo.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or ""))
+      local local_path = repo.local_path and (repo.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", ""):gsub("%.$", "")) or ""))
       self.local_path = local_path and system.stat(local_path) or nil
     else
-      self.local_path = (repository.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", "")) or "")) or nil
+      self.local_path = (repository.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", ""):gsub("%.$", "")) or "")) or nil
     end
   end
   return self
@@ -830,25 +831,18 @@ function Addon:install(bottle, installing)
       common.get(self.url, path, self.checksum, write_progress_bar)
       if VERBOSE then log_action("Downloaded file " .. self.url .. " to " .. path) end
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
-    elseif self.path then -- local addon that has a local path
-      local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+    else -- local addon that has a local path
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
-      if SYMLINK then
-        if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path) end
-        system.symlink(self.local_path, temporary_path)
-      else
-        if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path) end
-        common.copy(self.local_path, temporary_path)
-      end
-    elseif self.organization == 'complex' then -- complex addon without local path
-      local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
-      if SYMLINK then
-        if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path) end
-        system.symlink(self.local_path, temporary_install_path)
-      else
-        if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path) end
-        common.copy(self.local_path, temporary_install_path)
+      if self.path then
+        local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
+        if SYMLINK then
+          if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path) end
+          system.symlink(self.local_path, temporary_path)
+        else
+          if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path) end
+          common.copy(self.local_path, temporary_path)
+        end
       end
     end
 
@@ -1147,6 +1141,7 @@ function Repository:generate_manifest(repo_id)
       table.insert(addons, common.merge({ mod_version = LATEST_MOD_VERSION, version = "0.1" }, v))
     end
   end
+  if #addons == 1 and not addons[1].path then addons[1].path = "." end
   table.sort(addons, function(a,b) return a.id:lower() < b.id:lower() end)
   common.write(path .. PATHSEP .. "manifest.json", json.encode({ addons = addons }))
 end
@@ -1611,10 +1606,10 @@ local function lpm_lite_xl_add(version, path)
   local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
   local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
   local binary_stat, data_stat = system.stat(binary_path), system.stat(data_path)
-  if not binary_stat then error("can't find " .. binary_path) end
-  if not data_stat then error("can't find " .. data_path) end
+  if not binary_stat then error("can't find binary path " .. binary_path) end
+  if not data_stat then error("can't find data path " .. data_path) end
   local path_stat = system.stat(path:gsub(PATHSEP .. "$", ""))
-  if not path_stat then error("can't find " .. path) end
+  if not path_stat then error("can't find lite-xl path " .. path) end
   table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
   lpm_lite_xl_save()
 end
