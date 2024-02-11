@@ -863,6 +863,7 @@ function Addon:install(bottle, installing)
             local stripped_local_path = local_path:find("%.[^%.]+%-[^%.]+%.[^%.]*$") and local_path:gsub("%.[^%.]+%-[^%.]+", "") or local_path
 
             if not system.stat(temporary_path) then
+              common.mkdirp(common.dirname(temporary_path))
               if SYMLINK and self.repository:is_local() and system.stat(local_path) then
                 log_action("Symlinking " .. local_path .. " to " .. target_path)
                 system.symlink(local_path, temporary_path)
