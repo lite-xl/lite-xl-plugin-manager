@@ -1,6 +1,6 @@
 # Manifest Specification
 
-A lite-xl manifest is a JSON file contains three different keys:
+A lite-xl manifest is a JSON file containing three different keys:
 
 * Remotes
 * Addons
