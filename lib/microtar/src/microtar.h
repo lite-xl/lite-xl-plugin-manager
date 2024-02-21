@@ -39,7 +39,11 @@ enum {
   MTAR_TCHR   = '3',
   MTAR_TBLK   = '4',
   MTAR_TDIR   = '5',
-  MTAR_TFIFO  = '6'
+  MTAR_TFIFO  = '6',
+  MTAR_TEHR   = 'x', //  PAX file format
+  MTAR_TEHRA  = 'g', //  PAX file format
+  MTAR_TGFP   = 'K', //  GNU file format
+  MTAR_TGLP   = 'L'  //  GNU file format
 };
 
 typedef struct {
@@ -48,10 +52,8 @@ typedef struct {
   unsigned size;
   unsigned mtime;
   unsigned type;
-  char name[100];
-  char linkname[100];
-
-  char prefix[155];
+  char name[4096];
+  char linkname[4096];
 } mtar_header_t;
 
 
@@ -79,8 +81,8 @@ int mtar_rewind(mtar_t *tar);
 int mtar_next(mtar_t *tar);
 int mtar_find(mtar_t *tar, const char *name, mtar_header_t *h);
 int mtar_read_header(mtar_t *tar, mtar_header_t *h);
+int mtar_update_header(mtar_header_t *h, mtar_header_t *oh);
 int mtar_read_data(mtar_t *tar, void *ptr, unsigned size);
-int mtar_read_filename(char *dest, mtar_header_t *h);
 
 int mtar_write_header(mtar_t *tar, const mtar_header_t *h);
 int mtar_write_file_header(mtar_t *tar, const char *name, unsigned size);

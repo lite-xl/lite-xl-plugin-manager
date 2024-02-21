@@ -98,6 +98,23 @@ static int write_null_bytes(mtar_t *tar, int n) {
   return MTAR_ESUCCESS;
 }
 
+static int read_filename(char *dest, const char *name, const char *prefix) {
+  // If there's no prefix, use name directly
+  if (prefix[0] == '\0') {
+    strcpy(dest, name);
+    dest[100] = '\0';
+    return MTAR_ESUCCESS;
+  }
+
+  // If there is a prefix, the path is: <prefix> '/' <path>
+  strcpy(dest, prefix);
+  strcat(dest, "/");
+  strcat(dest, name);
+  dest[256] = '\0';
+
+  return MTAR_ESUCCESS;
+}
+
 
 static int raw_to_header(mtar_header_t *h, const mtar_raw_header_t *rh) {
   unsigned chksum1, chksum2;
@@ -120,9 +137,8 @@ static int raw_to_header(mtar_header_t *h, const mtar_raw_header_t *rh) {
   sscanf(rh->file_size, "%o", &h->size);
   sscanf(rh->file_mtime, "%o", &h->mtime);
   h->type = rh->file_type;
-  strcpy(h->name, rh->file_path);
-  strcpy(h->linkname, rh->link_path);
-  strcpy(h->prefix, rh->prefix);
+  read_filename(h->name, rh->file_path, rh->prefix);
+  read_filename(h->linkname, rh->link_path, rh->prefix);
 
   return MTAR_ESUCCESS;
 }
@@ -140,7 +156,6 @@ static int header_to_raw(mtar_raw_header_t *rh, const mtar_header_t *h) {
   rh->file_type = h->type ? h->type : MTAR_TREG;
   strcpy(rh->file_path, h->name);
   strcpy(rh->link_path, h->linkname);
-  strcpy(rh->prefix, h->prefix);
 
 
   /* Calculate and write checksum */
@@ -302,6 +317,33 @@ int mtar_read_header(mtar_t *tar, mtar_header_t *h) {
 }
 
 
+int mtar_update_header(mtar_header_t *h, mtar_header_t *oh) {
+  if (oh->mode) h->mode = oh->mode;
+  if (oh->owner) h->owner = oh->owner;
+  if (oh->size) h->size = oh->size;
+  if (oh->mtime) h->mtime = oh->mtime;
+  if (oh->type) h->type = oh->type;
+  
+  if (oh->name[0] != '\0') strcpy(h->name, oh->name);
+  if (oh->linkname[0] != '\0') strcpy(h->linkname, oh->linkname);
+
+  return MTAR_ESUCCESS;
+}
+
+
+int mtar_clear_header(mtar_header_t *h){
+  h->mode = 0;
+  h->owner = 0;
+  h->size = 0;
+  h->mtime = 0;
+  h->type = 0;
+  bzero(h->name, strlen(h->name));
+  bzero(h->linkname, strlen(h->linkname));
+  
+  return MTAR_ESUCCESS;
+}
+
+
 int mtar_read_data(mtar_t *tar, void *ptr, unsigned size) {
   int err;
   /* If we have no remaining data then this is the first read, we get the size,
@@ -331,23 +373,6 @@ int mtar_read_data(mtar_t *tar, void *ptr, unsigned size) {
   if (tar->remaining_data == 0) {
     return mtar_seek(tar, tar->last_header);
   }
-  return MTAR_ESUCCESS;
-}
-
-int mtar_read_filename(char *dest, mtar_header_t *h){
-  // If there's no prefix, use name directly
-  if (h->prefix[0] == '\0') {
-    strcpy(dest, h->name);
-    dest[100] = '\0';
-    return MTAR_ESUCCESS;
-  }
-
-  // If there is a prefix, the path is: <prefix> '/' <path>
-  strcpy(dest, h->prefix);
-  strcat(dest, "/");
-  strcat(dest, h->name);
-  dest[256] = '\0';
-
   return MTAR_ESUCCESS;
 }
 

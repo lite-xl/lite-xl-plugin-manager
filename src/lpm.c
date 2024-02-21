@@ -815,14 +815,24 @@ static int lpm_extract(lua_State* L) {
         return luaL_error(L, "can't open tar archive %s: %s", src, mtar_strerror(err));
         
       mtar_header_t h;
+      mtar_header_t before_h;
+      mtar_header_t allways_h;
+      int has_ext_before = 0;
+      int has_ext_allways = 0;
+      
       while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD ) {
         if (h.type == MTAR_TREG) {
-          char filename[257];
-          mtar_read_filename(filename, &h);
-          printf("%s %s\n", filename, h.name);
-	
+        
+          if (has_ext_before) {
+            mtar_update_header(&h, &before_h);
+            has_ext_before = 0;
+            mtar_clear_header(&before_h);
+          }
+          if (has_ext_allways)
+            mtar_update_header(&h, &before_h);
+          
           char target[MAX_PATH];
-          int target_length = snprintf(target, sizeof(target), "%s/%s", dst, filename);
+          int target_length = snprintf(target, sizeof(target), "%s/%s", dst, h.name);
           
           if (mkdirp(target, target_length)) {
             mtar_close(&tar);
@@ -855,6 +865,11 @@ static int lpm_extract(lua_State* L) {
           
           fclose(file);
         }
+        
+        else if (h.type == MTAR_TEHR) {
+          
+        }
+        
         mtar_next(&tar);
       }
       mtar_close(&tar);
