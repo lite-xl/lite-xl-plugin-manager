@@ -798,6 +798,7 @@ static int lpm_extract(lua_State* L) {
       
       if (error[0])
         return luaL_error(L, "can't unzip gzip archive %s: %s", src, error);
+      
     } else 
       strcpy(actual_src, src);
     
@@ -816,8 +817,12 @@ static int lpm_extract(lua_State* L) {
       mtar_header_t h;
       while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD ) {
         if (h.type == MTAR_TREG) {
+          char filename[257];
+          mtar_read_filename(filename, &h);
+          printf("%s %s\n", filename, h.name);
+	
           char target[MAX_PATH];
-          int target_length = snprintf(target, sizeof(target), "%s/%s", dst, h.name);
+          int target_length = snprintf(target, sizeof(target), "%s/%s", dst, filename);
           
           if (mkdirp(target, target_length)) {
             mtar_close(&tar);
