@@ -873,7 +873,7 @@ function Addon:install(bottle, installing)
               else
                 common.get(file.url, temporary_path, file.checksum, write_progress_bar)
                 local basename = common.basename(target_path)
-                local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
+                local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$") or basename.find("%.tgz$")
                 local target = temporary_path
                 if is_archive or basename:find("%.gz$") then
                   log_action("Extracting file " .. basename .. " in " .. install_path)
