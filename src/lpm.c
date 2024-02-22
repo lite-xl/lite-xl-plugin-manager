@@ -831,9 +831,6 @@ static int lpm_extract(lua_State* L) {
           if (has_ext_allways)
             mtar_update_header(&h, &allways_h);
           
-          
-            
-          
           char target[MAX_PATH];
           int target_length = snprintf(target, sizeof(target), "%s/%s", dst, h.name);
           
@@ -879,9 +876,8 @@ static int lpm_extract(lua_State* L) {
           
           char buffer[4096];
           char curent_read[8192]; // If a line is more than 8192 char long, will not work!
-          char last_read[4096];
+          char last_read[4096] = {0};
           int remaining = h.size;
-          
           
           has_ext_before = 1;
           
@@ -909,11 +905,10 @@ static int lpm_extract(lua_State* L) {
               char *header_key = strtok_r(line, "=", &in_line_ptr);
               char *header_val = strtok_r(line, "=", &in_line_ptr);
               
-              if (header_key == "path") strcpy(h_to_change->name, header_val);
-              if (header_key == "linkpath") strcpy(h_to_change->linkname, header_val);
+              if (header_key == "path")      strcpy(h_to_change->name, header_val);
+              if (header_key == "linkpath")  strcpy(h_to_change->linkname, header_val);
                 // possibility to add more later
               
-              printf("%s\n", line);
               l_line_ptr = &n_line_ptr;
               line = strtok_r(curent_read, "\n", &n_line_ptr);
             }
@@ -944,6 +939,7 @@ static int lpm_extract(lua_State* L) {
             return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
           }          
         }
+        
         mtar_next(&tar);
       }
       mtar_close(&tar);
