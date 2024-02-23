@@ -932,10 +932,15 @@ function Addon:get_orphaned_dependencies(bottle)
   local installed_addons = system_bottle:installed_addons()
   for id, options in pairs(self.dependencies) do
     local dependency = bottle:get_addon(id, options.version)
-    if dependency and (dependency.type == "meta" or dependency:is_installed(bottle)) and not dependency:is_explicitly_installed(bottle) and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0 then
-      table.insert(t, dependency)
-      if dependency.type == "meta" then
-        t = common.concat(t, dependency:get_orphaned_dependencies(bottle))
+    if dependency then
+      local is_dependency_installed = dependency.type == "meta" or dependency:is_installed(bottle)
+      local is_dependency_important = dependency:is_explicitly_installed(bottle) or dependency:is_core(bottle)
+      local will_dependency_orphan  = #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0
+      if is_dependency_installed and will_dependency_orphan and not is_dependency_important then
+        table.insert(t, dependency)
+        if dependency.type == "meta" then
+          t = common.concat(t, dependency:get_orphaned_dependencies(bottle))
+        end
       end
     end
   end
