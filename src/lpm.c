@@ -874,7 +874,7 @@ static int lpm_extract(lua_State* L) {
             h_to_change = &allways_h;
           
           char buffer[4096] = {0};
-          char curent_read[8192] = {0}; // If a line is more than 8192 char long, will not work!
+          char current_read[8192] = {0}; // If a line is more than 8192 char long, will not work!
           char last_read[4096] = {0};
           int remaining = h.size;
           
@@ -889,14 +889,14 @@ static int lpm_extract(lua_State* L) {
               return luaL_error(L, "Error while reading extended: %s", strerror(errno));
             }
             
-            strcpy(curent_read, last_read);
-            curent_read[strlen(last_read)] = '\0';
-            strcat(curent_read, buffer);
-            curent_read[strlen(last_read) + read_size] = '\0';
+            strcpy(current_read, last_read);
+            current_read[strlen(last_read)] = '\0';
+            strcat(current_read, buffer);
+            current_read[strlen(last_read) + read_size] = '\0';
             
             char *n_line_ptr = NULL;
             char **l_line_ptr = NULL;
-            char *line = strtok_r(curent_read, "\n", &n_line_ptr);
+            char *line = strtok_r(current_read, "\n", &n_line_ptr);
             
             while (line != NULL) {
               char *in_line_ptr = NULL;
@@ -912,8 +912,8 @@ static int lpm_extract(lua_State* L) {
               line = strtok_r(NULL, "\n", &n_line_ptr);
             }
             
-            if (curent_read[strlen(last_read) + read_size - 1] != '\n')
-              strcpy(last_read, strtok_r(curent_read, "\n", l_line_ptr));
+            if (current_read[strlen(last_read) + read_size - 1] != '\n')
+              strcpy(last_read, strtok_r(current_read, "\n", l_line_ptr));
             else
               bzero(last_read, strlen(last_read));
           }
