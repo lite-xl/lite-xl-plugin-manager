@@ -866,7 +866,6 @@ static int lpm_extract(lua_State* L) {
           fclose(file);
         }
         
-        // !!! NOT REALLY TESTED !!!
         else if (h.type == MTAR_TEHR || h.type == MTAR_TEHRA) {
           mtar_header_t *h_to_change;
           if (h.type == MTAR_TEHR)
@@ -874,8 +873,8 @@ static int lpm_extract(lua_State* L) {
           else
             h_to_change = &allways_h;
           
-          char buffer[4096];
-          char curent_read[8192]; // If a line is more than 8192 char long, will not work!
+          char buffer[4096] = {0};
+          char curent_read[8192] = {0}; // If a line is more than 8192 char long, will not work!
           char last_read[4096] = {0};
           int remaining = h.size;
           
@@ -902,15 +901,15 @@ static int lpm_extract(lua_State* L) {
             while (line != NULL) {
               char *in_line_ptr = NULL;
               strtok_r(line, " ", &in_line_ptr);
-              char *header_key = strtok_r(line, "=", &in_line_ptr);
-              char *header_val = strtok_r(line, "=", &in_line_ptr);
+              char *header_key = strtok_r(NULL, "=", &in_line_ptr);
+              char *header_val = strtok_r(NULL, "=", &in_line_ptr);
               
-              if (header_key == "path")      strcpy(h_to_change->name, header_val);
-              if (header_key == "linkpath")  strcpy(h_to_change->linkname, header_val);
+              if (!strcmp(header_key, "path"))      strcpy(h_to_change->name, header_val); 
+              if (!strcmp(header_key, "linkpath"))  strcpy(h_to_change->linkname, header_val);
                 // possibility to add more later
               
               l_line_ptr = &n_line_ptr;
-              line = strtok_r(curent_read, "\n", &n_line_ptr);
+              line = strtok_r(NULL, "\n", &n_line_ptr);
             }
             
             if (curent_read[strlen(last_read) + read_size - 1] != '\n')
