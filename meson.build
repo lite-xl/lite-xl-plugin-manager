@@ -1,6 +1,5 @@
 project('lpm',
     ['c'],
-    version : '1.0.4',
     license : 'LPM',
     meson_version : '>= 0.56',
 )
