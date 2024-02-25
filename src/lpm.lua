@@ -1379,7 +1379,7 @@ function Bottle:construct()
   end
   -- atomically move things
   common.rmrf(local_path)
-  common.mkdirp(local_path)
+  common.mkdirp(common.dirname(local_path))
   common.rename(self.local_path, local_path)
   self.local_path = local_path
 end
@@ -1393,7 +1393,7 @@ end
 function Bottle:run(args)
   args = args or {}
   if self.is_system then error("system bottle cannot be run") end
-  local path = self.local_path .. PATHSEP .. "lite-xl"
+  local path = self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION
   if not system.stat(path) then error("cannot find bottle executable " .. path) end
   os.execute(path .. (#args > 0 and " " or "") .. table.concat(args, " "))
 end
