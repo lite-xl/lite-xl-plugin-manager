@@ -1758,6 +1758,7 @@ end
 
 
 local function lpm_install(type, ...)
+  local repo_only = nil
   local to_install = {}
   local to_explicitly_install = {}
   for i, identifier in ipairs({ ... }) do
@@ -1770,7 +1771,9 @@ local function lpm_install(type, ...)
       if is_argument_repo(identifier) then
         table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
         system_bottle:invalidate_cache()
+        if repo_only == nil then repo_only = true end
       else
+        repo_only = false
         local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version, type = type }) }
         local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
         if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
@@ -1786,6 +1789,7 @@ local function lpm_install(type, ...)
       end
     end
   end
+  if #to_install == 0 and repo_only == true then error("no addons specified for install") end
   common.each(to_install, function(e) e:install(system_bottle) end)
   settings.installed = common.concat(settings.installed, to_explicitly_install)
   lpm_settings_save()
