@@ -1369,7 +1369,7 @@ function Bottle:construct()
   end
   -- atomically move things
   common.rmrf(local_path)
-  common.mkdirp(local_path)
+  common.mkdirp(common.dirname(local_path))
   common.rename(self.local_path, local_path)
   self.local_path = local_path
 end
