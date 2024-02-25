@@ -1,3 +1,12 @@
+# 1.2.0
+
+* Vendored `libmicrotar`, so that it can be used to open POSIX tar archives, as well as tar archives that have > 100 character filenames. Thank you @Gaspartcho!
+* Fixed bug that tried to uninstall core depednencies. Thanks @Gaspartcho!
+* Fixed issue with `lpm` not correctly renaming bottles, or moving files around.
+* Added in ability to `--mask`, so that you can explicitly cut out dependencies that you think aren't requried on install/uninstall.
+* Made `--ephemeral` bottles have distinct hashes from non-epehemeral ones.
+* Fixed a bug where we tried to double-install depdendencies if they were explicitly specified in the install command.
+
 # 1.1.0
 
 * Added in `font` as a new `type` for addons.
