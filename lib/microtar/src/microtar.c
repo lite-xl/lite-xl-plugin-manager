@@ -338,8 +338,8 @@ int mtar_clear_header(mtar_header_t *h){
   h->mtime = 0;
   h->type = 0;
   
-  bzero(h->name, sizeof(h->name));
-  bzero(h->linkname, sizeof(h->linkname));
+  memset(h->name, 0, sizeof(h->name));
+  memset(h->linkname, 0, sizeof(h->linkname));
   
   return MTAR_ESUCCESS;
 }

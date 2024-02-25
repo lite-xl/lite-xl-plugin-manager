@@ -918,7 +918,7 @@ static int lpm_extract(lua_State* L) {
             if (current_read[strlen(last_read) + read_size - 1] != '\n')
               strcpy(last_read, strtok_r(current_read, "\n", l_line_ptr));
             else
-              bzero(last_read, strlen(last_read));
+              memset(last_read, 0, strlen(last_read));
           }
         }
 
