@@ -1,6 +1,5 @@
 project('lpm',
     ['c'],
-    version : '1.0.4',
     license : 'LPM',
     meson_version : '>= 0.56',
 )
@@ -12,7 +11,6 @@ mbedtls_dep = dependency('mbedtls', version: '<3', required: false)
 libgit2_dep = dependency('libgit2')
 libzip_dep = dependency('libzip')
 lua_dep = dependency('lua')
-microtar_dep = dependency('microtar', required: false)
 
 if not mbedtls_dep.found()
     # Using has_headers to distinguish between mbedtls2 and mbedtls3
@@ -33,16 +31,11 @@ if not mbedtls_dep.found()
     endif
 endif
 
-if not microtar_dep.found()
-    microtar_lib = static_library('microtar', files('lib/microtar/src/microtar.c'))
-
-    microtar_dep = declare_dependency(
-        link_whole: [microtar_lib],
-        include_directories: ['lib/microtar/src']
-    )
-
-    message('Using git module for microtar')
-endif
+microtar_lib = static_library('microtar', files('lib/microtar/src/microtar.c'))
+microtar_dep = declare_dependency(
+    link_whole: [microtar_lib],
+    include_directories: ['lib/microtar/src']
+)
 
 lpm_source = files('src/lpm.c')
 cflags = []
