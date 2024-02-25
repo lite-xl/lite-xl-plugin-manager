@@ -1369,8 +1369,11 @@ function Bottle:construct()
   else
     common.copy(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
   end
+  local installing = {}
   for i,addon in ipairs(self.addons) do
-    addon:install(self)
+    if not installing[addon.id] then
+      addon:install(self, installing)
+    end
   end
   -- atomically move things
   common.rmrf(local_path)
@@ -1790,7 +1793,12 @@ local function lpm_install(type, ...)
     end
   end
   if #to_install == 0 and repo_only == true then error("no addons specified for install") end
-  common.each(to_install, function(e) e:install(system_bottle) end)
+  local installing = {}
+  common.each(to_install, function(e)
+    if not installing[e.id] then
+      e:install(system_bottle, installing)
+    end
+  end)
   settings.installed = common.concat(settings.installed, to_explicitly_install)
   lpm_settings_save()
 end
