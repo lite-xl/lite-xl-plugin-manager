@@ -1398,7 +1398,7 @@ function Bottle:run(args)
   local line = path .. (#args > 0 and " " or "") .. table.concat(common.map(args, function(arg)
     return "'" .. arg:gsub("'", "'\"'\"'"):gsub("\\", "\\\\") .. "'"
   end), " ")
-  log_action("Running " .. line)
+  if VERBOSE then log_action("Running " .. line) end
   return os.execute(line)
 end
 
