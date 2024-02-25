@@ -474,7 +474,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, MASK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
@@ -777,6 +777,7 @@ end
 
 
 function Addon:install(bottle, installing)
+  if MASK[self.id] then return end
   if self:is_installed(bottle) and not REINSTALL then error("addon " .. self.id .. " is already installed") return end
   if self:is_stub() then self:unstub() end
   if self.inaccessible then error("addon " .. self.id .. " is inaccessible: " .. self.inaccessible) end
@@ -949,6 +950,7 @@ end
 
 
 function Addon:uninstall(bottle, uninstalling)
+  if MASK[self.id] then return end
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
   local orphans = common.sort(common.grep(self:get_orphaned_dependencies(bottle), function(e) return not uninstalling or not uninstalling[e.id] end), function(a, b) return a.id < b.id end)
@@ -2047,7 +2049,7 @@ xpcall(function()
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
-    repository = "string", ephemeral = "flag",
+    repository = "string", ephemeral = "flag", mask = "array",
     -- filtration flags
     author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
     type = "string", name = "string"
@@ -2188,6 +2190,9 @@ Flags have the following effects:
                            are those specified in this option.
   --ephemeral              Designates a bottle as 'ephemeral', meaning that it
                            is fully cleaned up when lpm exits.
+  --mask                   Excludes the specified addons from the operation
+                           you're performing. Can break packages if you exclude
+                           dependencies that the addon actually requires to run.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2282,6 +2287,14 @@ not commonly used publically.
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
   if ARGS["trace"] then system.trace(true) end
+
+  MASK = {}
+  if ARGS["mask"] then
+    if type(ARGS["mask"]) ~= "table" then ARGS["mask"] = { ARGS["mask"] } end
+    for i,v in ipairs(ARGS["mask"]) do
+      MASK[v] = true
+    end
+  end
 
   if (not JSON and not QUIET and (TTY or PROGRESS)) or (JSON and PROGRESS) then
     local start_time, last_read
