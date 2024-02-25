@@ -120,6 +120,12 @@ local tests = {
     assert_not_exists(userdir .. "/plugins/lsp")
     assert_not_exists(userdir .. "/plugins/lintplus")
     assert_not_exists(userdir .. "/plugins/settings.lua")
+  end,
+  ["12_masking"] = function()
+    lpm("install lsp --mask settings")
+    assert_exists(userdir .. "/plugins/lsp")
+    assert_exists(userdir .. "/plugins/lintplus")
+    assert_not_exists(userdir .. "/plugins/settings.lua")
   end
 }
 

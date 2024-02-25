@@ -2193,6 +2193,7 @@ Flags have the following effects:
   --mask                   Excludes the specified addons from the operation
                            you're performing. Can break packages if you exclude
                            dependencies that the addon actually requires to run.
+                           Ensure you know what you're doing if you use this.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
