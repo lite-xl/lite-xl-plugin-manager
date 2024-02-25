@@ -1332,7 +1332,7 @@ function Bottle.new(lite_xl, addons, config, is_system)
   }, Bottle)
   if not is_system then
     table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
-    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version end)) .. (config or "") .. (EPHEMERAL and "E" or "P"))
+    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version end)) .. (config or "") .. (EPHEMERAL and "E" or ""))
     self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
   end
   return self
