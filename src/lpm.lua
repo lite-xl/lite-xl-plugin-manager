@@ -1396,7 +1396,7 @@ function Bottle:run(args)
   local path = self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION
   if not system.stat(path) then error("cannot find bottle executable " .. path) end
   local line = path .. (#args > 0 and " " or "") .. table.concat(common.map(args, function(arg)
-    return "'" .. arg:gsub("'", "'\"'\"'") .. "'"
+    return "'" .. arg:gsub("'", "'\"'\"'"):gsub("\\", "\\\\") .. "'"
   end), " ")
   log_action("Running " .. line)
   return os.execute(line)
