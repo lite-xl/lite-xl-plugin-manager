@@ -777,7 +777,7 @@ end
 
 
 function Addon:install(bottle, installing)
-  if MASK[self.id] then return end
+  if MASK[self.id] then if not installing[self.id] then log_warning("won't install masked addon " .. self.id) end installing[self.id] = true return end
   if self:is_installed(bottle) and not REINSTALL then error("addon " .. self.id .. " is already installed") return end
   if self:is_stub() then self:unstub() end
   if self.inaccessible then error("addon " .. self.id .. " is inaccessible: " .. self.inaccessible) end
@@ -950,7 +950,7 @@ end
 
 
 function Addon:uninstall(bottle, uninstalling)
-  if MASK[self.id] then return end
+  if MASK[self.id] then if not uninstalling[self.id] then log_warning("won't uninstall masked addon " .. self.id) end uninstalling[self.id] = true return end
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
   local orphans = common.sort(common.grep(self:get_orphaned_dependencies(bottle), function(e) return not uninstalling or not uninstalling[e.id] end), function(a, b) return a.id < b.id end)
