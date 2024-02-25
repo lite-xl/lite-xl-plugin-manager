@@ -668,7 +668,7 @@ static int lpm_extract(lua_State* L) {
   if (strstr(src, ".zip")) {
     int zip_error_code;
     zip_t* archive = zip_open(src, ZIP_RDONLY, &zip_error_code);
-    
+
     if (!archive) {
       zip_error_t zip_error;
       zip_error_init_with_code(&zip_error, zip_error_code);
@@ -676,27 +676,27 @@ static int lpm_extract(lua_State* L) {
       zip_error_fini(&zip_error);
       return lua_error(L);
     }
-    
+
     zip_int64_t entries = zip_get_num_entries(archive, 0);
     for (zip_int64_t i = 0; i < entries; ++i) {
       zip_file_t* zip_file = zip_fopen_index(archive, i, 0);
       const char* zip_name = zip_get_name(archive, i, ZIP_FL_ENC_GUESS);
-      
+
       if (!zip_file) {
         lua_pushfstring(L, "can't read zip archive file %s: %s", zip_name, zip_strerror(archive));
         zip_close(archive);
         return lua_error(L);
       }
-      
+
       char target[MAX_PATH];
       int target_length = snprintf(target, sizeof(target), "%s/%s", dst, zip_name);
-      
+
       if (mkdirp(target, target_length)) {
         zip_fclose(zip_file);
         zip_close(archive);
         return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
       }
-      
+
       if (target[target_length-1] != '/') {
         FILE* file = lua_fopen(L, target, "wb");
         if (!file) {
@@ -708,7 +708,7 @@ static int lpm_extract(lua_State* L) {
         mode_t m = S_IRUSR | S_IRGRP | S_IROTH;
         zip_uint8_t os;
         zip_uint32_t attr;
-        
+
         zip_file_get_external_attributes(archive, i, 0, &os, &attr);
         if (os == ZIP_OPSYS_DOS) {
           if (0 == (attr & FA_RDONLY))
@@ -718,47 +718,47 @@ static int lpm_extract(lua_State* L) {
         } else {
           m = (attr >> 16);
         }
-        
+
         if (chmod(target, m)) {
           zip_fclose(zip_file);
           zip_close(archive);
           return luaL_error(L, "can't chmod file %s: %s", target, strerror(errno));
         }
-        
+
         while (1) {
           char buffer[8192];
           zip_int64_t length = zip_fread(zip_file, buffer, sizeof(buffer));
-          
+
           if (length == -1) {
             lua_pushfstring(L, "can't read zip archive file  %s: %s", zip_name, zip_file_strerror(zip_file));
             zip_fclose(zip_file);
             zip_close(archive);
             return lua_error(L);
           }
-          
+
           if (length == 0) break;
           fwrite(buffer, sizeof(char), length, file);
         }
-        
+
         fclose(file);
       }
       zip_fclose(zip_file);
     }
     zip_close(archive);
-  } 
-  
+  }
+
   else {
     char actual_src[PATH_MAX];
-    
+
     if (strstr(src, ".gz") || strstr(src, ".tgz")) {
       gzFile gzfile = gzopen(src, "rb");
-      
+
       if (!gzfile)
         return luaL_error(L, "can't open tar.gz archive %s: %s", src, strerror(errno));
-        
+
       char buffer[8192];
       int len = strlen(src) - 3;;
-      
+
       if (strstr(src, ".tar"))
         strncpy(actual_src, src, len < PATH_MAX ? len : PATH_MAX);
       else if (strstr(src, ".tgz")) {
@@ -769,22 +769,22 @@ static int lpm_extract(lua_State* L) {
       else{
         strcpy(actual_src, dst);
       }
-      
+
       actual_src[len] = 0;
       FILE* file = lua_fopen(L, actual_src, "wb");
-      
+
       if (!file) {
         gzclose(gzfile);
         return luaL_error(L, "can't open %s for writing: %s", actual_src, strerror(errno));
       }
-      
+
       while (1) {
         int length = gzread(gzfile, buffer, sizeof(buffer));
         if (length == 0)
           break;
         fwrite(buffer, sizeof(char), length, file);
       }
-      
+
       char error[128];
       error[0] = 0;
       if (!gzeof(gzfile)) {
@@ -792,40 +792,40 @@ static int lpm_extract(lua_State* L) {
         strncpy(error, gzerror(gzfile, &error_number), sizeof(error));
         error[sizeof(error)-1] = 0;
       }
-      
+
       fclose(file);
       gzclose(gzfile);
-      
+
       if (error[0])
         return luaL_error(L, "can't unzip gzip archive %s: %s", src, error);
-      
-    } else 
+
+    } else
       strcpy(actual_src, src);
-    
+
     if (strstr(src, ".tar") || strstr(src, ".tgz")) {
       /* It's incredibly slow to do it this way, probably because of all the seeking.
       For now, just gunzip the whole file at once, and then untar it.
       tar.read = gzip_read;
       tar.seek = gzip_seek;
       tar.close = gzip_close;*/
-      
+
       mtar_t tar = {0};
       int err;
       if ((err = mtar_open(&tar, actual_src, "r")))
         return luaL_error(L, "can't open tar archive %s: %s", src, mtar_strerror(err));
-        
+
       mtar_header_t h;
       mtar_header_t before_h;
       mtar_header_t allways_h;
       int has_ext_before = 0;
       int has_ext_allways = 0;
-      
+
       mtar_clear_header(&before_h);
       mtar_clear_header(&allways_h);
-      
+
       while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD ) {
         if (h.type == MTAR_TREG) {
-        
+
           if (has_ext_before) {
             mtar_update_header(&h, &before_h);
             has_ext_before = 0;
@@ -833,115 +833,115 @@ static int lpm_extract(lua_State* L) {
           }
           if (has_ext_allways)
             mtar_update_header(&h, &allways_h);
-          
+
           char target[MAX_PATH];
           int target_length = snprintf(target, sizeof(target), "%s/%s", dst, h.name);
-          
+
           if (mkdirp(target, target_length)) {
             mtar_close(&tar);
             return luaL_error(L, "can't extract tar archive file %s, can't create directory %s: %s", src, target, strerror(errno));
           }
-          
+
           FILE* file = fopen(target, "wb");
           if (!file) {
             mtar_close(&tar);
             return luaL_error(L, "can't extract tar archive file %s, can't create file %s: %s", src, target, strerror(errno));
           }
-          
+
           if (chmod(target, h.mode))
             return luaL_error(L, "can't extract tar archive file %s, can't chmod file %s: %s", src, target, strerror(errno));
-          
+
           char buffer[8192];
           int remaining = h.size;
           while (remaining > 0) {
             int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-            
+
             if (mtar_read_data(&tar, buffer, read_size) != MTAR_ESUCCESS) {
               fclose(file);
               mtar_close(&tar);
               return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
             }
-            
+
             fwrite(buffer, sizeof(char), read_size, file);
             remaining -= read_size;
           }
-          
+
           fclose(file);
         }
-        
+
         else if (h.type == MTAR_TEHR || h.type == MTAR_TEHRA) {
           mtar_header_t *h_to_change;
           if (h.type == MTAR_TEHR)
             h_to_change = &before_h;
           else
             h_to_change = &allways_h;
-          
+
           char buffer[4096] = {0};
           char current_read[8192] = {0}; // If a line is more than 8192 char long, will not work!
           char last_read[4096] = {0};
           int remaining = h.size;
-          
+
           has_ext_before = 1;
-          
+
           while (remaining > 0) {
             int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
             remaining -= read_size;
-            
+
             if (mtar_read_data(&tar, buffer, read_size) != MTAR_ESUCCESS) {
               mtar_close(&tar);
               return luaL_error(L, "Error while reading extended: %s", strerror(errno));
             }
-            
+
             strcpy(current_read, last_read);
             current_read[strlen(last_read)] = '\0';
             strcat(current_read, buffer);
             current_read[strlen(last_read) + read_size] = '\0';
-            
+
             char *n_line_ptr = NULL;
             char **l_line_ptr = NULL;
             char *line = strtok_r(current_read, "\n", &n_line_ptr);
-            
+
             while (line != NULL) {
               char *in_line_ptr = NULL;
               strtok_r(line, " ", &in_line_ptr);
               char *header_key = strtok_r(NULL, "=", &in_line_ptr);
               char *header_val = strtok_r(NULL, "=", &in_line_ptr);
-              
-              if (!strcmp(header_key, "path"))      strcpy(h_to_change->name, header_val); 
+
+              if (!strcmp(header_key, "path"))      strcpy(h_to_change->name, header_val);
               if (!strcmp(header_key, "linkpath"))  strcpy(h_to_change->linkname, header_val);
                 // possibility to add more later
-              
+
               l_line_ptr = &n_line_ptr;
               line = strtok_r(NULL, "\n", &n_line_ptr);
             }
-            
+
             if (current_read[strlen(last_read) + read_size - 1] != '\n')
               strcpy(last_read, strtok_r(current_read, "\n", l_line_ptr));
             else
               bzero(last_read, strlen(last_read));
           }
         }
-        
+
         else if (h.type == MTAR_TGFP) {
           has_ext_before = 1;
           int read_size = before_h.size < sizeof(before_h.name) ? before_h.size : sizeof(before_h.name);
-          
+
           if (mtar_read_data(&tar, before_h.name, read_size) != MTAR_ESUCCESS) {
             mtar_close(&tar);
             return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
           }
         }
-        
+
         else if (h.type == MTAR_TGLP) {
           has_ext_before = 1;
           int read_size = before_h.size < sizeof(before_h.linkname) ? before_h.size : sizeof(before_h.linkname);
-          
+
           if (mtar_read_data(&tar, before_h.linkname, read_size) != MTAR_ESUCCESS) {
             mtar_close(&tar);
             return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
           }
         }
-        
+
         mtar_next(&tar);
       }
       mtar_close(&tar);
@@ -1118,6 +1118,7 @@ static int lpm_get(lua_State* L) {
       if (length < 0) {
         mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full response for %s%s", hostname, rest); goto cleanup;
       }
+      total_downloaded += length;
       if (callback_function) {
         lua_pushvalue(L, callback_function);
         lua_pushinteger(L, total_downloaded);
@@ -1126,7 +1127,6 @@ static int lpm_get(lua_State* L) {
       }
       fwrite(buffer, sizeof(char), length, file);
       remaining -= length;
-      total_downloaded += length;
     }
     fclose(file);
     lua_pushnil(L);
@@ -1140,6 +1140,7 @@ static int lpm_get(lua_State* L) {
       if (length < 0) {
         mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full response for %s%s", hostname, rest); goto cleanup;
       }
+      total_downloaded += length;
       if (callback_function) {
         lua_pushvalue(L, callback_function);
         lua_pushinteger(L, total_downloaded);
@@ -1147,7 +1148,6 @@ static int lpm_get(lua_State* L) {
       }
       luaL_addlstring(&B, buffer, length);
       remaining -= length;
-      total_downloaded += length;
     }
     luaL_pushresult(&B);
   }
