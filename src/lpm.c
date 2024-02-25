@@ -820,6 +820,9 @@ static int lpm_extract(lua_State* L) {
       int has_ext_before = 0;
       int has_ext_allways = 0;
       
+      mtar_clear_header(&before_h);
+      mtar_clear_header(&allways_h);
+      
       while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD ) {
         if (h.type == MTAR_TREG) {
         
@@ -839,7 +842,6 @@ static int lpm_extract(lua_State* L) {
             return luaL_error(L, "can't extract tar archive file %s, can't create directory %s: %s", src, target, strerror(errno));
           }
           
-          char buffer[8192];
           FILE* file = fopen(target, "wb");
           if (!file) {
             mtar_close(&tar);
@@ -848,7 +850,8 @@ static int lpm_extract(lua_State* L) {
           
           if (chmod(target, h.mode))
             return luaL_error(L, "can't extract tar archive file %s, can't chmod file %s: %s", src, target, strerror(errno));
-            
+          
+          char buffer[8192];
           int remaining = h.size;
           while (remaining > 0) {
             int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
@@ -926,7 +929,7 @@ static int lpm_extract(lua_State* L) {
           if (mtar_read_data(&tar, before_h.name, read_size) != MTAR_ESUCCESS) {
             mtar_close(&tar);
             return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
-          }          
+          }
         }
         
         else if (h.type == MTAR_TGLP) {
@@ -936,7 +939,7 @@ static int lpm_extract(lua_State* L) {
           if (mtar_read_data(&tar, before_h.linkname, read_size) != MTAR_ESUCCESS) {
             mtar_close(&tar);
             return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
-          }          
+          }
         }
         
         mtar_next(&tar);
