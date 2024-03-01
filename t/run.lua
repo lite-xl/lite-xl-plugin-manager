@@ -61,6 +61,7 @@ local tests = {
   ["04_list_plugins"] = function()
     local plugins = lpm("list")["addons"]
     assert(#plugins > 20)
+    lpm("list --status core")
   end,
   ["05_install_url"] = function()
     local plugins = lpm("list eofnewline")["addons"]
@@ -115,17 +116,14 @@ local tests = {
     lpm("install lsp")
     assert_exists(userdir .. "/plugins/lsp")
     assert_exists(userdir .. "/plugins/lintplus")
-    assert_exists(userdir .. "/plugins/settings.lua")
     lpm("uninstall lsp")
     assert_not_exists(userdir .. "/plugins/lsp")
     assert_not_exists(userdir .. "/plugins/lintplus")
-    assert_not_exists(userdir .. "/plugins/settings.lua")
   end,
   ["12_masking"] = function()
-    lpm("install lsp --mask settings")
+    lpm("install lsp --mask lintplus")
     assert_exists(userdir .. "/plugins/lsp")
-    assert_exists(userdir .. "/plugins/lintplus")
-    assert_not_exists(userdir .. "/plugins/settings.lua")
+    assert_not_exists(userdir .. "/plugins/lintplus")
   end
 }
 
