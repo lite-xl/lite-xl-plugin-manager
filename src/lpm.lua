@@ -1229,7 +1229,12 @@ function Repository:update(pull_remotes)
   local manifest, remotes = self:parse_manifest()
   if self.branch then
     log_progress_action("Updating " .. self:url() .. "...")
-    system.fetch(self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
+    local status, err = pcall(system.fetch, self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
+    if not status then -- see https://github.com/lite-xl/lite-xl-plugin-manager/issues/85
+      if not err:find("object not found %- no match for id") then error(err, 0) end
+      common.rmrf(self.local_path)
+      return self:fetch()
+    end
     common.reset(self.local_path, self.branch, "hard")
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
