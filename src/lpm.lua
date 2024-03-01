@@ -474,7 +474,7 @@ end
 
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, MASK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, RAW, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, MASK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
 
 local function engage_locks(func, err, warn)
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
@@ -1482,22 +1482,25 @@ function Bottle:installed_addons()
 end
 
 local function filter_match(field, filter)
-  if not field and not filter then return true end
-  if not field and filter then return false end
+  if not filter then return true end
+  if not field then return false end
   local filters = type(filter) == "table" and filter or { filter }
   local fields = type(field) == "table" and field or { field }
-  local matches
+  local matches = false
   for i,v in ipairs(filters) do
-    local inverted = filter:find("^!")
-    local actual_filter = inverted and filter:sub(2) or filter
+    local inverted = v:find("^!")
+    local actual_filter = inverted and v:sub(2) or v
     for k, field in ipairs(fields) do
       matches = field:find("^" .. actual_filter .. "$")
-      if not inverted and matches then break end
+      if not inverted and matches then return true end
       if inverted and matches then return false end
     end
-    if not inverted and not matches then return false end
+    if inverted then
+      if matches then return false end
+      matches = true
+    end
   end
-  return true
+  return matches
 end
 
 local function addon_matches_filter(addon, filters)
@@ -1842,6 +1845,7 @@ local function print_addon_info(type, addons, filters)
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
       stub = addon:is_stub(),
+      name = addon.name or addon.id,
       version = "" .. addon.version,
       dependencies = addon.dependencies,
       remote = addon.remote,
@@ -1864,7 +1868,7 @@ local function print_addon_info(type, addons, filters)
     io.stdout:write(json.encode(result) .. "\n")
   elseif #result[plural] > 0 then
     local sorted = common.sort(result[plural], function(a,b) return a.id < b.id end)
-    if not VERBOSE and not TABLE then
+    if not VERBOSE and not TABLE and not RAW then
       TABLE = { "id", "version", "type", "mod_version", "status" }
     end
     if TABLE then
@@ -1872,13 +1876,18 @@ local function print_addon_info(type, addons, filters)
       print(get_table(HEADER or common.map(TABLE, function(header)
         return ("" .. header:gsub("^%l", string.upper):gsub("_", " "))
       end), common.map(result[plural], function(addon)
-        return common.map(TABLE, function(header) return _G.type(header) == "function" and header(addon) or addon[header] end)
+        return common.map(TABLE, function(header) return _G.type(header) == "function" and header(addon) or addon[header] or "" end)
+      end)))
+    elseif RAW then
+      local addons = common.grep(sorted, function(addon) return addon.status ~= "incompatible" end)
+      print(common.join("\n", common.map(result[plural], function(addon)
+        return common.join("\t", common.map(RAW, function(header) return _G.type(header) == "function" and header(addon) or addon[header] or "" end))
       end)))
     else
       for i, addon in ipairs(sorted) do
         if i ~= 0 then print("---------------------------") end
         print("ID:            " .. addon.id)
-        print("Name:          " .. (addon.name or addon.id))
+        print("Name:          " .. addon.name)
         print("Version:       " .. addon.version)
         print("Status:        " .. addon.status)
         print("Author:        " .. (addon.author or ""))
@@ -2053,9 +2062,9 @@ xpcall(function()
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
-    repository = "string", ephemeral = "flag", mask = "array",
+    repository = "string", ephemeral = "flag", mask = "array", raw = "string",
     -- filtration flags
-    author = "string", tag = "string", stub = "string", dependency = "string", status = "string",
+    author = "string", tag = "string", stub = "string", dependency = "string", status = "array",
     type = "string", name = "string"
   })
   if ARGS["version"] then
@@ -2189,15 +2198,13 @@ Flags have the following effects:
                            config.
   --table                  Outputs things a markdown table, specify the columns
                            you'd like.
+  --raw                    Outputs things in a raw format, separated by tabs
+                           and newlines; specify the columns you'd like.
   --repository             For the duration of this command, do not load default
                            repositories, simply act as if the only repositories
                            are those specified in this option.
   --ephemeral              Designates a bottle as 'ephemeral', meaning that it
                            is fully cleaned up when lpm exits.
-  --mask                   Excludes the specified addons from the operation
-                           you're performing. Can break packages if you exclude
-                           dependencies that the addon actually requires to run.
-                           Ensure you know what you're doing if you use this.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2225,17 +2232,21 @@ in any circumstance unless explicitly supplied.
                            repository to the end of the resolution list.
   --ssl-certs=noverify     Ignores SSL certificate validation. Opens you up to
                            man-in-the-middle attacks.
+  --mask                   Excludes the specified addons from the operation
+                           you're performing. Can break packages if you exclude
+                           dependencies that the addon actually requires to run.
+                           Ensure you know what you're doing if you use this.
 
 There exist also other debug commands that are potentially useful, but are
 not commonly used publically.
 
-  lpm test [test file]               Runs the specified test suite.
-  lpm exec [file]                    Runs the specified lua file with the internal
+  lpm test <test file>               Runs the specified test suite.
+  lpm exec <file>                    Runs the specified lua file with the internal
                                      interpreter.
   lpm download <url> [target]        Downloads the specified URL to stdout,
                                      or to the specified target file.
-  lpm hash [file]                    Returns the sha256sum of the file.
-  lpm update-checksums [manifest]    Pulls all remote files, computes their
+  lpm hash <file>                    Returns the sha256sum of the file.
+  lpm update-checksums <manifest>    Pulls all remote files, computes their
                                      checksums, and updates them in the file.
   lpm extract <file.[tar.gz|zip]>    Extracts the specified archive at
     [target]                         target, or the current working directory.
@@ -2248,25 +2259,31 @@ not commonly used publically.
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
   EPHEMERAL = ARGS["ephemeral"] or os.getenv("LPM_EPHEMERAL")
-  if ARGS["table"] then
+  local arg = ARGS["table"] or ARGS["raw"]
+  if arg then
     local offset,s,e,i = 1, 1, 0, 1
-    TABLE = {}
+    local result = {}
     while true do
-      if ARGS["table"]:sub(offset, offset) == "{" then
-        s,e = ARGS["table"]:find("%b{}", offset)
-        if not e then error(string.format("no end to chunk %s", ARGS["table"]:sub(offset))) end
-        local chunk = ARGS["table"]:sub(s + 1, e - 1)
+      if arg:sub(offset, offset) == "{" then
+        s,e = arg:find("%b{}", offset)
+        if not e then error(string.format("no end to chunk %s", arg:sub(offset))) end
+        local chunk = arg:sub(s + 1, e - 1)
         local func, err = load("local addon = ... return " .. chunk)
         if err then error(string.format("can't parse chunk %s: %s", chunk, err)) end
-        TABLE[i] = func
+        result[i] = func
         offset = e + 1
       end
-      s,e = ARGS["table"]:find("%s*,%s*", offset)
-      if not e then s,e = #ARGS["table"]+1, #ARGS["table"] end
+      s,e = arg:find("%s*,%s*", offset)
+      if not e then s,e = #arg+1, #arg end
       if offset >= e then break end
-      TABLE[i] = ARGS["table"]:sub(offset, s - 1)
+      result[i] = arg:sub(offset, s - 1)
       offset = e + 1
       i = i + 1
+    end
+    if ARGS["table"] then
+      TABLE = result
+    else
+      RAW = result
     end
   end
   HEADER = ARGS["header"] and { common.split("%s*,%s*", ARGS["header"]) }
