@@ -2069,8 +2069,8 @@ xpcall(function()
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
     repository = "string", ephemeral = "flag", mask = "array", raw = "string",
     -- filtration flags
-    author = "string", tag = "string", stub = "string", dependency = "string", status = "array",
-    type = "string", name = "string"
+    author = "array", tag = "array", stub = "array", dependency = "array", status = "array",
+    type = "array", name = "array"
   })
   if ARGS["version"] then
     io.stdout:write(VERSION .. "\n")
