@@ -389,7 +389,7 @@ end
 
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
-function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) local s = system.stat(e) return s and s.type ~= "dir" and s.mode and s.mode & 73 end) end
+function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) local s = system.stat(e) return s and s.type ~= "dir" and s.mode and s.mode & 73 and (not s.symlink or system.stat(s.symlink)) end) end
 function common.normalize_path(path) if PLATFORM == "windows" and path then path = path:gsub("/", PATHSEP) end if not path or not path:find("^~") then return path end return os.getenv("HOME") .. path:sub(2) end
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
@@ -557,7 +557,9 @@ local function lock_warning()
 end
 
 
-function common.get(source, target, checksum, callback, depth)
+function common.get(source, options)
+  options = options or {}
+  local target, checksum, callback, depth = options.target, options.checksum or "SKIP", options.callback, options.depth
   if not source then error("requires url") end
   if (depth or 0) > 10 then error("too many redirects") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
@@ -565,19 +567,22 @@ function common.get(source, target, checksum, callback, depth)
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
   if not rest or rest == "" then rest = "/" end
+  local res, headers
   if not checksum then
-    local res, headers = system.get(protocol, hostname, port, rest, target, callback)
-    if headers.location then return common.get(headers.location, target, checksum, callback, (depth or 0) + 1) end
+    res, headers = system.get(protocol, hostname, port, rest, target, callback)
+    if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
     return res
   end
   if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
   local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. (checksum ~= "SKIP" and checksum or system.hash(source))
+  local res
   if not system.stat(cache_path) then
-    local res, headers = system.get(protocol, hostname, port, rest, cache_path, callback)
-    if headers.location then return common.get(headers.location, target, checksum, callback, (depth or 0) + 1) end
+    res, headers = system.get(protocol, hostname, port, rest, cache_path, callback)
+    if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
     if checksum ~= "SKIP" and system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
   end
   common.copy(cache_path, target)
+  return res
 end
 
 
@@ -588,7 +593,7 @@ function common.is_path_different(path1, path2)
   if not stat1 or not stat2 or stat1.type ~= stat2.type or (stat1 == "file" and stat1.size ~= stat2.size) then return true end
   if stat1.type == "dir" then
     for i, file in ipairs(system.ls(path1)) do
-      if not common.basename(file):find("^%.") and Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end
+      if not common.basename(file):find("^%.") and common.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end
     end
     return false
   end
@@ -830,7 +835,7 @@ function Addon:install(bottle, installing)
     if self.organization == "complex" and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
     if self.url then -- remote simple addon
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
-      common.get(self.url, path, self.checksum, write_progress_bar)
+      common.get(self.url, { target = path, checksum = self.checksum, callback = write_progress_bar })
       if VERBOSE then log_action("Downloaded file " .. self.url .. " to " .. path) end
       if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     else -- local addon that has a local path
@@ -873,7 +878,7 @@ function Addon:install(bottle, installing)
                 log_action("Symlinking " .. stripped_local_path .. " to " .. target_path)
                 system.symlink(stripped_local_path, temporary_path)
               else
-                common.get(file.url, temporary_path, file.checksum, write_progress_bar)
+                common.get(file.url, { target = temporary_path, checksum = file.checksum, callback = write_progress_bar })
                 local basename = common.basename(target_path)
                 local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$") or basename:find("%.tgz$")
                 local target = temporary_path
@@ -1091,7 +1096,7 @@ function Repository:generate_manifest(repo_id)
           if path:find("^http") then
             if path:find("%.lua") then
               addon_map[id].url = path
-              local file = common.get(path, nil, nil, write_progress_bar)
+              local file = common.get(path, { callback = write_progress_bar })
               addon_map[id].checksum = system.hash(file)
             else
               path = path:gsub("\\", "")
@@ -1311,7 +1316,7 @@ function LiteXL:install()
         local archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
         local path = self.local_path .. PATHSEP .. (archive and basename or "lite-xl")
         log_action("Downloading file " .. file.url .. "...")
-        common.get(file.url, path, file.checksum, write_progress_bar)
+        common.get(file.url, { target = path, checksum = file.checksum, callback = write_progress_bar })
         log_action("Downloaded file " .. file.url .. " to " .. path)
         if file.checksum ~= "SKIP" and system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
         if archive then
@@ -1985,11 +1990,11 @@ local function lpm_self_upgrade(release)
   local release_url = release and release:find("^https://") and release or (DEFAULT_RELEASE_URL:gsub("%%r", release or "latest"))
   local stat = system.stat(path)
   if not stat then error("can't find lpm at " .. path) end
-  local status, err = pcall(common.get, release_url, TMPDIR .. PATHSEP .. "lpm.upgrade", nil, write_progress_bar)
+  local status, err = pcall(common.get, release_url, { target = path .. ".upgrade", callback = write_progress_bar })
   if not status then error("can't find release for lpm at " .. release_url .. (VERBOSE and (": " .. err) or  "")) end
   if common.is_path_different(path .. ".new", path) then
     status, err = pcall(common.rename, path, path .. ".bak")
-    if not status then error("can't move lpm executable; do you need to " .. (PLATFOM == "windows" and "run as administrator" or "be root") .. "?" .. (VERBOSE and ": " .. err or "")) end
+    if not status then error("can't move lpm executable; do you need to " .. (PLATFORM == "windows" and "run as administrator" or "be root") .. "?" .. (VERBOSE and ": " .. err or "")) end
     common.rename(TMPDIR .. PATHSEP .. "lpm.upgrade", path)
     system.chmod(path, stat.mode)
     common.rmrf(path .. ".bak")
@@ -2056,7 +2061,6 @@ local function run_command(ARGS)
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "self-upgrade" then return lpm_self_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "unstub" then return lpm_unstub(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
@@ -2443,7 +2447,7 @@ not commonly used publically.
     os.exit(0)
   end
   if ARGS[2] == "download" then
-    local file = common.get(ARGS[3], ARGS[4]);
+    local file = common.get(ARGS[3], { target = ARGS[4] });
     if file then print(file) end
     os.exit(0)
   end
@@ -2487,6 +2491,10 @@ not commonly used publically.
     local repo = Repository.url(ARGS[3])
     repo.branch = "master"
     repo:generate_manifest()
+    os.exit(0)
+  end
+  if ARGS[2] == "self-upgrade" then
+    lpm_self_upgrade(table.unpack(common.slice(ARGS, 3)))
     os.exit(0)
   end
 
