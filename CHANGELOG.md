@@ -1,3 +1,16 @@
+# 1.2.1
+
+* Added in the `self-upgrade` command, automatically replacing the existing executable with the latest version.
+* Fixed some compiler warnings on windows.
+* Significantly better error handling on windows.
+* Simpler code on windows.
+* Fixed download progress bars not actually getting to 100%.
+* Fixed it so that dangling symlinks no longer cause issues with determining which executable is running.
+* Improved interface to `common.get`.
+* Improved escaping of arguments to running bottles, allowing `lpm run a\ b "c d"` to run correctly.
+* Fixed issue with filters not working correctly in lists.
+* Added in `--raw`, allowing you to easily dump lists to console, for manipulation with `awk` and `sed`.
+
 # 1.2.0
 
 * Vendored `libmicrotar`, so that it can be used to open POSIX tar archives, as well as tar archives that have > 100 character filenames. Thank you @Gaspartcho!
