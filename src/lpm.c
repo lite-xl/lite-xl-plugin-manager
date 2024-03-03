@@ -97,7 +97,7 @@ static const int luaL_win32_error(lua_State* L, DWORD error_id, const char* mess
     size_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                  NULL, error_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), message_buffer, 2048, NULL);
     lua_pushliteral(L, ": ");
-    lua_toutf8(L, messageBuffer);
+    lua_toutf8(L, message_buffer);
     lua_concat(L, 3);
     return lua_error(L);
 }
@@ -771,7 +771,7 @@ static int lpm_extract(lua_State* L) {
         return luaL_error(L, "can't open tar.gz archive %s: %s", src, strerror(errno));
 
       char buffer[8192];
-      int len = strlen(src) - 3;;
+      int len = strlen(src) - 3;
 
       if (strstr(src, ".tar"))
         strncpy(actual_src, src, len < PATH_MAX ? len : PATH_MAX);
