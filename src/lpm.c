@@ -77,7 +77,7 @@ static const char* lua_toutf8(lua_State* L, LPCWSTR str) {
     if (output) {
       len = WideCharToMultiByte(CP_UTF8, 0, str, -1, output, len, NULL, NULL);
       if (len) {
-        lua_pushlstring(L, output, len);
+        lua_pushlstring(L, output, len - 1);
         free(output);
         return lua_tostring(L, -1);
       }
