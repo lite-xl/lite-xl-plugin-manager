@@ -178,10 +178,10 @@ static int lpm_chmod(lua_State* L) {
 
 static int lpm_ls(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
-
+  int i = 1;
 #ifdef _WIN32
   lua_settop(L, 1);
-  lua_pushstring(L, path[0] == 0 || strchr("\\/", path[strlen(path) - 1]) != NULL ? "*" : "\\*");
+  lua_pushstring(L, path[0] == 0 || strchr("\\/", &path[strlen(path) - 1]) != NULL ? "*" : "\\*");
   lua_concat(L, 2);
   path = lua_tostring(L, -1);
 
@@ -189,42 +189,34 @@ static int lpm_ls(lua_State *L) {
   HANDLE find_handle = FindFirstFileExW(lua_toutf16(L, path), FindExInfoBasic, &fd, FindExSearchNameMatch, NULL, 0);
   if (find_handle == INVALID_HANDLE_VALUE)
     return luaL_win32_error(L, GetLastError(), "can't ls %s", path);
-  char mbpath[MAX_PATH * 4]; // utf-8 spans 4 bytes at most
-  int len, i = 1;
   lua_newtable(L);
 
   do {
-    if (wcscmp(fd.cFileName, L".") == 0) { continue; }
-    if (wcscmp(fd.cFileName, L"..") == 0) { continue; }
-
-    len = WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, mbpath, MAX_PATH * 4, NULL, NULL);
-    if (len == 0) { break; }
-    lua_pushlstring(L, mbpath, len - 1); // len includes \0
-    lua_rawseti(L, -2, i++);
+    const char* filename = lua_toutf8(L, fd.cFileName);
+    if (strcmp(filename, ".") != 0 && strcmp(filename, "..") != 0) {
+      lua_rawseti(L, -2, i++);
+    } else
+      lua_pop(L, 1);
   } while (FindNextFileW(find_handle, &fd));
-
   int err = GetLastError();
   FindClose(find_handle);
   if (err != ERROR_NO_MORE_FILES)
     return luaL_win32_error(L, err, "can't ls %s", path);
-  return 1;
 #else
   DIR *dir = opendir(path);
   if (!dir)
     return luaL_error(L, "can't ls %s: %s", path, strerror(errno));
   lua_newtable(L);
-  int i = 1;
   struct dirent *entry;
   while ( (entry = readdir(dir)) ) {
     if (strcmp(entry->d_name, "." ) == 0) { continue; }
     if (strcmp(entry->d_name, "..") == 0) { continue; }
     lua_pushstring(L, entry->d_name);
-    lua_rawseti(L, -2, i);
-    i++;
+    lua_rawseti(L, -2, i++);
   }
   closedir(dir);
-  return 1;
 #endif
+  return 1;
 }
 
 static int lpm_rmdir(lua_State *L) {
@@ -1383,6 +1375,7 @@ int main(int argc, char* argv[]) {
   #if _WIN32
     wchar_t tmpdir[MAX_PATH];
     DWORD length = GetTempPathW(MAX_PATH, tmpdir);
+    tmpdir[length - 1] = 0;
     lua_toutf8(L, tmpdir);
   #else
     lua_pushstring(L, getenv("TMPDIR") ? getenv("TMPDIR") : P_tmpdir);
