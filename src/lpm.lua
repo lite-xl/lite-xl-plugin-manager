@@ -581,6 +581,21 @@ function common.get(source, target, checksum, callback, depth)
 end
 
 
+-- Determines whether two addons located at different paths are actually different based on their contents.
+-- If path1 is a directory, will still return true if it's a subset of path2 (accounting for binary downloads).
+function common.is_path_different(path1, path2)
+  local stat1, stat2 = system.stat(path1), system.stat(path2)
+  if not stat1 or not stat2 or stat1.type ~= stat2.type or (stat1 == "file" and stat1.size ~= stat2.size) then return true end
+  if stat1.type == "dir" then
+    for i, file in ipairs(system.ls(path1)) do
+      if not common.basename(file):find("^%.") and Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end
+    end
+    return false
+  end
+  return system.hash(path1, "file") ~= system.hash(path2, "file")
+end
+
+
 
 local function compare_version(a, b) -- compares semver
   if not a or not b then return false end
@@ -683,25 +698,11 @@ function Addon:unstub()
   return repo
 end
 
--- Determines whether two addons located at different paths are actually different based on their contents.
--- If path1 is a directory, will still return true if it's a subset of path2 (accounting for binary downloads).
-function Addon.is_path_different(path1, path2)
-  local stat1, stat2 = system.stat(path1), system.stat(path2)
-  if not stat1 or not stat2 or stat1.type ~= stat2.type or (stat1 == "file" and stat1.size ~= stat2.size) then return true end
-  if stat1.type == "dir" then
-    for i, file in ipairs(system.ls(path1)) do
-      if not common.basename(file):find("^%.") and Addon.is_path_different(path1 .. PATHSEP .. file, path2 .. PATHSEP.. file) then return true end
-    end
-    return false
-  end
-  return system.hash(path1, "file") ~= system.hash(path2, "file")
-end
-
 function Addon.is_addon_different(downloaded_path, installed_path)
   local is_downloaded_single = downloaded_path:find("%.lua$")
   local is_installed_single = installed_path:find("%.lua$")
   local target = is_downloaded_single and not is_installed_single and installed_path .. PATHSEP .. "init.lua" or installed_path
-  return Addon.is_path_different(downloaded_path, target)
+  return common.is_path_different(downloaded_path, target)
 end
 
 function Addon:get_install_path(bottle)
@@ -1978,6 +1979,26 @@ local function lpm_addon_upgrade()
   end
 end
 
+local function lpm_self_upgrade(release)
+  local path = system.stat(ARGV[1]) and ARGV[1] or common.path(ARGV[1])
+  if not path then error("can't find path to lpm") end
+  local release_url = release and release:find("^https://") and release or (DEFAULT_RELEASE_URL:gsub("%%r", release or "latest"))
+  local stat = system.stat(path)
+  if not stat then error("can't find lpm at " .. path) end
+  local status, err = pcall(common.get, release_url, TMPDIR .. PATHSEP .. "lpm.upgrade", nil, write_progress_bar)
+  if not status then error("can't find release for lpm at " .. release_url .. (VERBOSE and (": " .. err) or  "")) end
+  if common.is_path_different(path .. ".new", path) then
+    status, err = pcall(common.rename, path, path .. ".bak")
+    if not status then error("can't move lpm executable; do you need to " .. (PLATFOM == "windows" and "run as administrator" or "be root") .. "?" .. (VERBOSE and ": " .. err or "")) end
+    common.rename(TMPDIR .. PATHSEP .. "lpm.upgrade", path)
+    system.chmod(path, stat.mode)
+    common.rmrf(path .. ".bak")
+  else
+    log_warning("aborting upgrade; remote executable is identical to current")
+    common.rmrf(path .. ".new")
+  end
+end
+
 local function lpm_bottle_purge()
   common.rmrf(CACHEDIR .. PATHSEP .. "bottles")
 end
@@ -2035,6 +2056,7 @@ local function run_command(ARGS)
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
   elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "self-upgrade" then return lpm_self_upgrade(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "unstub" then return lpm_unstub(nil, table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
@@ -2133,6 +2155,9 @@ It has the following commands:
 
   lpm upgrade                              Upgrades all installed addons
                                            to new version if applicable.
+  lpm self-upgrade [version]               Upgrades lpm to a new version,
+                                           if applicable. Defaults to
+                                           latest.
   lpm [lite-xl] install <version>          Installs lite-xl. Infers the
     [binary] [datadir]                     paths on your system if not
                                            supplied. Automatically
