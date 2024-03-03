@@ -154,6 +154,16 @@ CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER\ -DCMAKE_FIND_ROO
 
 To run the test suite, you can use `lpm` to execute the test by doing `./lpm test t/run.lua`. use `FAST=1 ./lpm test t/run.lua` to avoid the costs of tearing down and building up suites each time.
 
+## Extra Features
+
+### Bottles
+
+### Extra Fields
+
+* `addons.files.extra.chmod_executable`
+
+An array of files to be marked as executable (after extraction, if applicable).
+
 ## Bugs
 
 If you find a bug, please create an issue with the following information:

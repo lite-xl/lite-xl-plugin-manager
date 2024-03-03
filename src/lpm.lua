@@ -845,10 +845,10 @@ function Addon:install(bottle, installing)
       if self.path then
         local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
         if SYMLINK then
-          if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path) end
+          if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path .. ".") end
           system.symlink(self.local_path, temporary_path)
         else
-          if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path) end
+          if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path .. ".") end
           common.copy(self.local_path, temporary_path)
         end
       end
@@ -873,10 +873,10 @@ function Addon:install(bottle, installing)
             if not system.stat(temporary_path) then
               common.mkdirp(common.dirname(temporary_path))
               if SYMLINK and self.repository:is_local() and system.stat(local_path) then
-                log_action("Symlinking " .. local_path .. " to " .. target_path)
+                log_action("Symlinking " .. local_path .. " to " .. target_path .. ".")
                 system.symlink(local_path, temporary_path)
               elseif SYMLINK and self.repository:is_local() and system.stat(stripped_local_path) then
-                log_action("Symlinking " .. stripped_local_path .. " to " .. target_path)
+                log_action("Symlinking " .. stripped_local_path .. " to " .. target_path .. ".")
                 system.symlink(stripped_local_path, temporary_path)
               else
                 common.get(file.url, { target = temporary_path, checksum = file.checksum, callback = write_progress_bar })
@@ -884,12 +884,22 @@ function Addon:install(bottle, installing)
                 local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$") or basename:find("%.tgz$")
                 local target = temporary_path
                 if is_archive or basename:find("%.gz$") then
-                  log_action("Extracting file " .. basename .. " in " .. install_path)
+                  if VERBOSE then log_action("Extracting file " .. basename .. " in " .. install_path .. "...") end
                   target = temporary_install_path .. (not is_archive and (PATHSEP .. basename:gsub(".gz$", "")) or "")
                   system.extract(temporary_path, target)
                   os.remove(temporary_path)
                 end
                 if not is_archive and file.arch and file.arch ~= "*" then system.chmod(target, 448) end -- chmod any ARCH tagged file to rwx-------
+              end
+              if file.extra and file.extra.chmod_executable then
+                for _, executable in ipairs(file.extra.chmod_executable) do
+                  local path = common.dirname(temporary_path) .. PATHSEP .. executable:gsub("/", PATHSEP):gsub("^" .. PATHSEP, "")
+                  if path:find(PATHSEP .. "%.%.") then error("invalid chmod_executable value " .. executable) end
+                  local stat = system.stat(path)
+                  if not stat then error("can't find executable to chmod_executable " .. path) end
+                  if VERBOSE then log_action("Chmodding file " .. executable .. " to be executable.") end
+                  system.chmod(path, stat.mode | 73)
+                end
               end
             end
           end
