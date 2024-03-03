@@ -181,7 +181,7 @@ static int lpm_ls(lua_State *L) {
   int i = 1;
 #ifdef _WIN32
   lua_settop(L, 1);
-  lua_pushstring(L, path[0] == 0 || strchr("\\/", &path[strlen(path) - 1]) != NULL ? "*" : "\\*");
+  lua_pushstring(L, path[0] == 0 || strpbrk(&path[strlen(path) - 1], "\\/") != NULL ? "*" : "\\*");
   lua_concat(L, 2);
   path = lua_tostring(L, -1);
 
