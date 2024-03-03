@@ -87,6 +87,20 @@ static const char* lua_toutf8(lua_State* L, LPCWSTR str) {
   luaL_error(L, "can't convert utf16 string");
   return NULL;
 }
+
+static const int luaL_win32_error(lua_State* L, DWORD error_id, const char* message, ...) {
+    va_list va;
+    va_start(va, message);
+    lua_pushvfstring(L, message, va);
+    va_end(va);
+    wchar_t message_buffer[2048];
+    size_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                 NULL, error_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), message_buffer, 2048, NULL);
+    lua_pushliteral(L, ": ");
+    lua_toutf8(L, messageBuffer);
+    lua_concat(L, 3);
+    return lua_error(L);
+}
 #endif
 
 static FILE* lua_fopen(lua_State* L, const char* path, const char* mode) {
@@ -174,7 +188,7 @@ static int lpm_ls(lua_State *L) {
   WIN32_FIND_DATAW fd;
   HANDLE find_handle = FindFirstFileExW(lua_toutf16(L, path), FindExInfoBasic, &fd, FindExSearchNameMatch, NULL, 0);
   if (find_handle == INVALID_HANDLE_VALUE)
-    return luaL_error(L, "can't ls %s: %d", path, GetLastError());
+    return luaL_win32_error(L, GetLastError(), "can't ls %s", path);
   char mbpath[MAX_PATH * 4]; // utf-8 spans 4 bytes at most
   int len, i = 1;
   lua_newtable(L);
@@ -192,12 +206,12 @@ static int lpm_ls(lua_State *L) {
   int err = GetLastError();
   FindClose(find_handle);
   if (err != ERROR_NO_MORE_FILES)
-    return luaL_error(L, "can't ls %s: %d", path, GetLastError());
+    return luaL_win32_error(L, err, "can't ls %s", path);
   return 1;
 #else
   DIR *dir = opendir(path);
   if (!dir)
-    return luaL_error(L, "can't ls %s: %d", path, strerror(errno));
+    return luaL_error(L, "can't ls %s: %s", path, strerror(errno));
   lua_newtable(L);
   int i = 1;
   struct dirent *entry;
@@ -217,7 +231,7 @@ static int lpm_rmdir(lua_State *L) {
   const char *path = luaL_checkstring(L, 1);
 #ifdef _WIN32
   if (!RemoveDirectoryW(lua_toutf16(L, path)))
-    return luaL_error(L, "can't rmdir %s: %d", path, GetLastError());
+    return luaL_win32_error(L, GetLastError(), "can't rmdir %s", path);
 #else
   if (remove(path))
     return luaL_error(L, "can't rmdir %s: %s", path, strerror(errno));
@@ -1205,7 +1219,7 @@ static int lpm_flock(lua_State* L) {
   #ifdef _WIN32
     HANDLE file = CreateFileW(lua_toutf16(L, path), FILE_SHARE_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
     if (!file || file == INVALID_HANDLE_VALUE)
-      return luaL_error(L, "can't open for flock %s: %d", path, GetLastError());
+      return luaL_win32_error(L, GetLastError(), "can't open for flock %s", path);
     OVERLAPPED overlapped = {0};
     if (!LockFileEx(file, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, 0, 1, &overlapped)) {
       if (GetLastError() == ERROR_IO_PENDING && warning_handler) {
@@ -1214,7 +1228,7 @@ static int lpm_flock(lua_State* L) {
       }
       if (!LockFileEx(file, LOCKFILE_EXCLUSIVE_LOCK, 0, 0, 1, &overlapped)) {
         CloseHandle(file);
-        return luaL_error(L, "can't flock %s: %d", path, GetLastError());
+        return luaL_win32_error(L, GetLastError(), "can't flock %s", path);
       }
     }
   #else
