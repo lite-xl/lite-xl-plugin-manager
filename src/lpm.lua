@@ -1992,20 +1992,24 @@ local function lpm_self_upgrade(release)
   local release_url = release and release:find("^https://") and release or (DEFAULT_RELEASE_URL:gsub("%%r", release))
   local stat = system.stat(path)
   if not stat then error("can't find lpm at " .. path) end
-  local target = SYSTMPDIR ..  PATHSEP .. "lpm.upgrade"
-  common.rmrf(target)
-  local status, err = pcall(common.get, release_url, { cache = SYSTMPDIR, target = target, callback = write_progress_bar })
+  local new_temporary_file = SYSTMPDIR ..  PATHSEP .. "lpm.upgrade"
+  local old_temporary_file = SYSTMPDIR ..  PATHSEP .. "lpm.backup"
+  common.rmrf(new_temporary_file)
+  common.rmrf(old_temporary_file)
+  local status, err = pcall(common.get, release_url, { cache = SYSTMPDIR, target = new_temporary_file, callback = write_progress_bar })
   if not status then error("can't find release for lpm at " .. release_url .. (VERBOSE and (": " .. err) or  "")) end
-  if common.is_path_different(target, path) then
-    status, err = pcall(common.rename, path, path .. ".bak")
+  if common.is_path_different(new_temporary_file, path) then
+    status, err = pcall(common.rename, path, old_temporary_file)
     if not status then error("can't move lpm executable; do you need to " .. (PLATFORM == "windows" and "run as administrator" or "be root") .. "?" .. (VERBOSE and ": " .. err or "")) end
-    common.rename(target, path)
+    common.rename(new_temporary_file, path)
     system.chmod(path, stat.mode)
-    common.rmrf(path .. ".bak")
+    if PLATFORM ~= "windows" then -- because we can't delete the running executbale on windows
+      common.rmrf(old_temporary_file)
+    end
     log_action("Upgraded lpm to " .. release .. ".")
   else
     log_warning("aborting upgrade; remote executable is identical to current")
-    common.rmrf(target)
+    common.rmrf(new_temporary_file)
   end
 end
 
