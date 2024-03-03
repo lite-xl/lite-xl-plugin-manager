@@ -1366,6 +1366,15 @@ int main(int argc, char* argv[]) {
     lua_pushliteral(L, "/");
   #endif
   lua_setglobal(L, "PATHSEP");
+  #if _WIN32
+    wchar_t tmpdir[MAX_PATH];
+    DWORD length = GetTempPathW(MAX_PATH, tmpdir);
+    lua_toutf8(L, tmpdir);
+  #else
+    lua_pushstring(L, getenv("TMPDIR") ? getenv("TMPDIR") : P_tmpdir);
+  #endif
+  lua_setglobal(L, "SYSTMPDIR");
+
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
   lua_pushliteral(L, LPM_DEFAULT_REPOSITORY);

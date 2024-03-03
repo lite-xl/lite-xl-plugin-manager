@@ -573,8 +573,9 @@ function common.get(source, options)
     if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
     return res
   end
-  if not system.stat(CACHEDIR .. PATHSEP .. "files") then common.mkdirp(CACHEDIR .. PATHSEP .. "files") end
-  local cache_path = CACHEDIR .. PATHSEP .. "files" .. PATHSEP .. (checksum ~= "SKIP" and checksum or system.hash(source))
+  local cache_dir = options.cache or CACHEDIR
+  if not system.stat(cache_dir .. PATHSEP .. "files") then common.mkdirp(cache_dir .. PATHSEP .. "files") end
+  local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. (checksum ~= "SKIP" and checksum or system.hash(source))
   local res
   if not system.stat(cache_path) then
     res, headers = system.get(protocol, hostname, port, rest, cache_path, callback)
@@ -1985,22 +1986,26 @@ local function lpm_addon_upgrade()
 end
 
 local function lpm_self_upgrade(release)
-  local path = system.stat(ARGV[1]) and ARGV[1] or common.path(ARGV[1])
+  local path = ARGV[1]:find(PATHSEP) and system.stat(ARGV[1]) and ARGV[1] or common.path(ARGV[1])
   if not path then error("can't find path to lpm") end
-  local release_url = release and release:find("^https://") and release or (DEFAULT_RELEASE_URL:gsub("%%r", release or "latest"))
+  release = release or "latest"
+  local release_url = release and release:find("^https://") and release or (DEFAULT_RELEASE_URL:gsub("%%r", release))
   local stat = system.stat(path)
   if not stat then error("can't find lpm at " .. path) end
-  local status, err = pcall(common.get, release_url, { target = path .. ".upgrade", callback = write_progress_bar })
+  local target = SYSTMPDIR ..  PATHSEP .. "lpm.upgrade"
+  common.rmrf(target)
+  local status, err = pcall(common.get, release_url, { cache = SYSTMPDIR, target = target, callback = write_progress_bar })
   if not status then error("can't find release for lpm at " .. release_url .. (VERBOSE and (": " .. err) or  "")) end
-  if common.is_path_different(path .. ".new", path) then
+  if common.is_path_different(target, path) then
     status, err = pcall(common.rename, path, path .. ".bak")
     if not status then error("can't move lpm executable; do you need to " .. (PLATFORM == "windows" and "run as administrator" or "be root") .. "?" .. (VERBOSE and ": " .. err or "")) end
-    common.rename(TMPDIR .. PATHSEP .. "lpm.upgrade", path)
+    common.rename(target, path)
     system.chmod(path, stat.mode)
     common.rmrf(path .. ".bak")
+    log_action("Upgraded lpm to " .. release .. ".")
   else
     log_warning("aborting upgrade; remote executable is identical to current")
-    common.rmrf(path .. ".new")
+    common.rmrf(target)
   end
 end
 
