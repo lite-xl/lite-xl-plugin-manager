@@ -1986,6 +1986,7 @@ local function lpm_addon_upgrade()
 end
 
 local function lpm_self_upgrade(release)
+  if not DEFAULT_RELEASE_URL or #DEFAULT_RELEASE_URL == 0 then error("self-upgrade has been disabled on lpm version " .. VERSION .. "; please upgrade it however you installed it") end
   local path = ARGV[1]:find(PATHSEP) and system.stat(ARGV[1]) and ARGV[1] or common.path(ARGV[1])
   if not path then error("can't find path to lpm") end
   release = release or "latest"

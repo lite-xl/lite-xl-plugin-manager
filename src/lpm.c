@@ -1336,6 +1336,7 @@ static const luaL_Reg system_lib[] = {
 #ifndef LPM_DEFAULT_REPOSITORY
   #define LPM_DEFAULT_REPOSITORY "https://github.com/lite-xl/lite-xl-plugin-manager.git:latest"
 #endif
+// If this is defined as empty string, we disable self-upgrading.
 #ifndef LPM_DEFAULT_RELEASE
   #if _WIN32
     #define LPM_DEFAULT_RELEASE "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/%r/lpm." LITE_ARCH_TUPLE ".exe"
