@@ -94,7 +94,7 @@ static const int luaL_win32_error(lua_State* L, DWORD error_id, const char* mess
     lua_pushvfstring(L, message, va);
     va_end(va);
     wchar_t message_buffer[2048];
-    size_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+    size_t size = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                  NULL, error_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), message_buffer, 2048, NULL);
     lua_pushliteral(L, ": ");
     lua_toutf8(L, message_buffer);
