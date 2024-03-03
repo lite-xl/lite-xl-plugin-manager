@@ -1,3 +1,8 @@
+# 1.2.2
+
+* Added in ability to disallow `self-upgrade` at compile time with `-DLPM_DEFAULT_RELEASE=''`.
+* Added in the ability to specify which files to chmod executable with `addons.files.extra.chmod_executable`.
+
 # 1.2.1
 
 * Added in the `self-upgrade` command, automatically replacing the existing executable with the latest version.
