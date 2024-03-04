@@ -524,7 +524,6 @@ local function log_progress_action(message)
   end
 end
 local function prompt(message)
-  io.stdin:flush()
   if not ASSUME_YES or not JSON then
     io.stderr:write(colorize(message .. " [Y/n]: ", "cyan"))
     if ASSUME_YES then io.stderr:write("Y\n") end
@@ -583,7 +582,7 @@ function common.get(source, options)
     if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
     if checksum ~= "SKIP" and system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
   end
-  common.copy(cache_path, target)
+  if target then common.copy(cache_path, target) else res = io.open(cache_path, "rb"):read("*all") end
   return res
 end
 
