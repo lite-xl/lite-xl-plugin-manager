@@ -45,7 +45,7 @@ jobs:
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}", ARTIFACTS: "lpm.x86_64-linux lpm.riscv64-linux lpm.x86_64-windows.exe lpm.arm-android lpm.aarch64-android lpm.x86-android lpm.x86_64-android" }
         run: |
-          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md > NOTES.md
+          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md | tail -n +2 > NOTES.md
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' -F NOTES.md continuous $ARTIFACTS
           if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
             gh release delete -y v$VERSION || true;
