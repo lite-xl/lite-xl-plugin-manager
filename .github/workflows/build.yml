@@ -45,7 +45,7 @@ jobs:
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}", ARTIFACTS: "lpm.x86_64-linux lpm.riscv64-linux lpm.x86_64-windows.exe lpm.arm-android lpm.aarch64-android lpm.x86-android lpm.x86_64-android" }
         run: |
-          perl -MFile::Slurp -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md > NOTES.md
+          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md > NOTES.md
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' -F NOTES.md continuous $ARTIFACTS
           if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
             gh release delete -y v$VERSION || true;
@@ -57,7 +57,7 @@ jobs:
         env: { DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}" }
         run: |
           if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
-            perl -MFile::Slurp -e 'use JSON qw(encode_json from_json); print encode_json({ content => "## Lite XL Plugin Manager $ENV{VERSION} has been released!\nhttps://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/v$ENV{VERSION}\n\n### Changes in $ENV{VERSION}:\n" . read_file("NOTES.md") })' |
+            perl -e 'use JSON qw(encode_json from_json); $/ = undef; print encode_json({ content => "## Lite XL Plugin Manager $ENV{VERSION} has been released!\nhttps://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/v$ENV{VERSION}\n\n### Changes in $ENV{VERSION}:\n" . <> })' < NOTES.md |
               curl -H 'Content-Type:application/json' $DISCORD_WEBHOOK -X POST -d "$(</dev/stdin)"
           fi
 
