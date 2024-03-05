@@ -5,8 +5,6 @@ local common = require "core.common"
 local config = require "core.config"
 local command = require "core.command"
 local json = require "libraries.json"
-local keymap = require "core.keymap"
-
 
 local PluginManager = {
   last_refresh = nil,
@@ -38,56 +36,7 @@ config.plugins.plugin_manager = common.merge({
 			path = "restart_on_change",
 			type = "toggle",
 			default = true,
-		},
-    {
-      label = "Force Install",
-      description = "Force install things.",
-      path = "force",
-      type = "toggle",
-      default = false,
-    },
-    {
-      label = "Debug",
-      description = "Dumps commands that run to stdout, as well as responses from lpm.",
-      path = "debug",
-      type = "toggle",
-      default = false,
-    },
-    {
-      label = "Binary Name",
-      description = "Name of the plugin manager binary.",
-      path = "lpm_binary_name",
-      type = "string",
-      default = "lpm." .. ARCH .. binary_extension,
-    },
-    {
-      label = "Binary Path",
-      description = "Path to the plugin manager binary. Nil will auto-detect.",
-      path = "lpm_binary_path",
-      type = "string",
-      default = nil,
-		},
-    {
-      label = "Cachdir",
-      description = "Path to a local copy of all repositories.",
-      path = "cachdir",
-      type = "string",
-      default = USERDIR  .. PATHSEP .. "lpm",
-    },
-    {
-      label = "Userdir",
-      description = "Path to the folder that holds user-specified plugins.",
-      path = "userdir",
-      type = "string",
-      default = USERDIR,
-    },
-    {
-      label = "SSL Certs",
-      description = "Path to ssl certificate directory or bunde. Nil will auto-detect.",
-      path = "ssl_certs",
-      type = "string",
-      default = nil,
-    }
+		}
   }
 }, config.plugins.plugin_manager)
 
