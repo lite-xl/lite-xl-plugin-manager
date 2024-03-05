@@ -1,9 +1,7 @@
 local core = require "core"
 local style = require "core.style"
 local common = require "core.common"
-local config = require "core.config"
 local command = require "core.command"
-local json = require "libraries.json"
 local View = require "core.view"
 local keymap = require "core.keymap"
 local RootView = require "core.rootview"
@@ -11,13 +9,11 @@ local ContextMenu = require "core.contextmenu"
 
 local PluginView = View:extend()
 
-
 local function join(joiner, t)
   local s = ""
   for i,v in ipairs(t) do if i > 1 then s = s .. joiner end s = s .. v end
   return s
 end
-
 
 local plugin_view = nil
 PluginView.menu = ContextMenu()
@@ -178,7 +174,11 @@ function PluginView:draw()
   end
 
   renderer.draw_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, 1, style.dim)
+  
+  local x = self.position.x + self.size.x - style.padding.x - style.font:get_width("Search")
+  common.draw_text(style.font, style.dim, "Search: Ctrl+F", "right", x, self.position.y, style.font:get_width("Ctrl+F"), lh)
   core.push_clip_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, self.size.y)
+
   for i, plugin in ipairs(self:get_plugins()) do
     local x, y = ox, oy
     if y + lh >= self.position.y and y <= self.position.y + self.size.y then
@@ -369,7 +369,6 @@ end, {
   end
 })
 
-
 keymap.add {
   ["up"]          = "plugin-manager:select-prev",
   ["down"]        = "plugin-manager:select-next",
@@ -384,7 +383,6 @@ keymap.add {
   ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
   ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
 }
-
 
 PluginView.menu:register(function() return core.active_view:is(PluginView) end, {
   { text = "Install", command = "plugin-manager:install-hovered" },
