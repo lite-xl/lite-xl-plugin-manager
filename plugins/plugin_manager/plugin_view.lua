@@ -1,4 +1,3 @@
-
 local core = require "core"
 local style = require "core.style"
 local common = require "core.common"
@@ -28,7 +27,7 @@ function PluginView:new()
   self.scrollable = true
   self.progress = nil
   self.show_incompatible_plugins = false
-  self.plugin_table_columns = { "Name", "Version", "Type", "Status", "Tags", "Author", "Description" }
+  self.plugin_table_columns = { "Name", "Version", "Type", "Status", "Tags", "Description" }
   self.hovered_plugin = nil
   self.hovered_plugin_idx = nil
   self.selected_plugin = nil
@@ -45,7 +44,7 @@ function PluginView:new()
 end
 
 local function get_plugin_text(plugin)
-  return (plugin.name or plugin.id), (plugin.status == "core" and VERSION or plugin.version), plugin.type, plugin.status, join(", ", plugin.tags), plugin.author or "unknown", plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
+  return (plugin.name or plugin.id), (plugin.status == "core" and VERSION or plugin.version), plugin.type, plugin.status, join(", ", plugin.tags), plugin.description-- (plugin.description or ""):gsub("%[[^]+%]%([^)]+%)", "")
 end
 
 
@@ -166,6 +165,7 @@ function PluginView:draw()
     return self:draw_loading_screen(self.progress and self.progress.label, self.progress and self.progress.percent)
   end
 
+  renderer.draw_rect(self.position.x, self.position.y, self.size.x, 1, style.dim)
 
   local ox, oy = self:get_content_offset()
   oy = oy + lh * self.offset_y
@@ -173,9 +173,11 @@ function PluginView:draw()
   local x, y = ox + style.padding.x, oy
   for i, v in ipairs(self.plugin_table_columns) do
     common.draw_text(style.font, style.accent, v, "left", x, self.position.y, self.widths[i], lh)
-    x = x + self.widths[i] + style.padding.x
+    renderer.draw_rect(x + self.widths[i], self.position.y, 1, self.size.y, style.dim)
+    x = x + self.widths[i] + style.padding.x + 2
   end
 
+  renderer.draw_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, 1, style.dim)
   core.push_clip_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, self.size.y)
   for i, plugin in ipairs(self:get_plugins()) do
     local x, y = ox, oy
@@ -185,6 +187,7 @@ function PluginView:draw()
       elseif plugin == self.hovered_plugin then
         renderer.draw_rect(x, y, self.max_width or self.size.x, lh, style.line_highlight)
       end
+
       x = x + style.padding.x
       for j, v in ipairs({ get_plugin_text(plugin) }) do
         local color = (plugin.status == "installed" or plugin.status == "bundled" or plugin.status == "orphan") and style.good or
