@@ -14,7 +14,9 @@ local PluginManager = {
 }
 local binary_extension = (PLATFORM == "Windows" and ".exe" or (PLATFORM == "Android" and ".so" or ""))
 config.plugins.plugin_manager = common.merge({
+  -- Name of the plugin manager binary.
   lpm_binary_name = "lpm." .. ARCH .. binary_extension,
+  -- Path to the plugin manager binary.
   lpm_binary_path = nil,
   -- Restarts the plugin manager on changes.
   restart_on_change = true,
@@ -27,7 +29,66 @@ config.plugins.plugin_manager = common.merge({
   -- Whether or not to force install things.
   force = false,
   -- Dumps commands that run to stdout, as well as responses from lpm.
-  debug = false
+  debug = false,
+  config_spec = {
+		name = "Plugin Manager",
+    {
+			label = "Restart On Change",
+			description = "Automatically restart the plugin manager on changes.",
+			path = "restart_on_change",
+			type = "toggle",
+			default = true,
+		},
+    {
+      label = "Force Install",
+      description = "Force install things.",
+      path = "force",
+      type = "toggle",
+      default = false,
+    },
+    {
+      label = "Debug",
+      description = "Dumps commands that run to stdout, as well as responses from lpm.",
+      path = "debug",
+      type = "toggle",
+      default = false,
+    },
+    {
+      label = "Binary Name",
+      description = "Name of the plugin manager binary.",
+      path = "lpm_binary_name",
+      type = "string",
+      default = "lpm." .. ARCH .. binary_extension,
+    },
+    {
+      label = "Binary Path",
+      description = "Path to the plugin manager binary. Nil will auto-detect.",
+      path = "lpm_binary_path",
+      type = "string",
+      default = nil,
+		},
+    {
+      label = "Cachdir",
+      description = "Path to a local copy of all repositories.",
+      path = "cachdir",
+      type = "string",
+      default = USERDIR  .. PATHSEP .. "lpm",
+    },
+    {
+      label = "Userdir",
+      description = "Path to the folder that holds user-specified plugins.",
+      path = "userdir",
+      type = "string",
+      default = USERDIR,
+    },
+    {
+      label = "SSL Certs",
+      description = "Path to ssl certificate directory or bunde. Nil will auto-detect.",
+      path = "ssl_certs",
+      type = "string",
+      default = nil,
+    }
+  }
 }, config.plugins.plugin_manager)
 
 package.path = package.path .. ";" .. USERDIR .. "/libraries/?.lua" .. ";" .. USERDIR .. "/libraries/?/init.lua" .. ";" .. DATADIR .. "/libraries/?.lua" .. ";" .. DATADIR .. "/libraries/?/init.lua"
