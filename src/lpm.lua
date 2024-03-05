@@ -524,6 +524,7 @@ local function log_progress_action(message)
   end
 end
 local function prompt(message)
+  system.tcflush(0)
   if not ASSUME_YES or not JSON then
     io.stderr:write(colorize(message .. " [Y/n]: ", "cyan"))
     if ASSUME_YES then io.stderr:write("Y\n") end

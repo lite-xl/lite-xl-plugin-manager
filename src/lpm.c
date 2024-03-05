@@ -8,6 +8,7 @@
   #include <sys/socket.h>
   #include <arpa/inet.h>
   #include <libgen.h>
+  #include <termios.h>
 
   #define MAX_PATH PATH_MAX
 #endif
@@ -153,6 +154,15 @@ static int lpm_hash(lua_State* L) {
   mbedtls_sha256_free(&hash_ctx);
   lua_pushhexstring(L, buffer, digest_length);
   return 1;
+}
+
+static int lpm_tcflush(lua_State* L) {
+  int stream = luaL_checkinteger(L, 1);
+  #ifndef _WIN32
+    if (isatty(stream))
+      tcflush(stream, TCIOFLUSH);
+  #endif
+  return 0;
 }
 
 
@@ -1279,6 +1289,7 @@ static const luaL_Reg system_lib[] = {
   { "mkdir",     lpm_mkdir },    // Makes a directory.
   { "rmdir",     lpm_rmdir },    // Removes a directory.
   { "hash",      lpm_hash  },    // Returns a hex sha256 hash.
+  { "tcflush",   lpm_tcflush },  // Flushes an terminal stream.
   { "symlink",   lpm_symlink },  // Creates a symlink.
   { "chmod",     lpm_chmod },    // Chmod's a file.
   { "init",      lpm_init },     // Initializes a git repository with the specified remote.
