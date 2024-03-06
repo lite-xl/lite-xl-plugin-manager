@@ -579,9 +579,10 @@ function common.get(source, options)
   local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. (checksum ~= "SKIP" and checksum or system.hash(source))
   local res
   if not system.stat(cache_path) then
-    res, headers = system.get(protocol, hostname, port, rest, cache_path, callback)
+    res, headers = system.get(protocol, hostname, port, rest, cache_path .. ".part", callback)
     if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
-    if checksum ~= "SKIP" and system.hash(cache_path, "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
+    if checksum ~= "SKIP" and system.hash(cache_path .. ".part", "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
+    common.rename(cache_path .. ".part", cache_path)
   end
   if target then common.copy(cache_path, target) else res = io.open(cache_path, "rb"):read("*all") end
   return res
@@ -2406,9 +2407,13 @@ not commonly used publically.
           return
         end
         if not start_time or not last_read or total_read < last_read then start_time = system.time() end
-        local status_line = string.format("%s [%s/s][%03d%%]: %s", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100), progress_bar_label)
+        local status_line = string.format("%s [%s/s][%03d%%]: ", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100))
+        local terminal_width = system.tcwidth(1)
+        if not terminal_width then terminal_width = #status_line + #progress_bar_label end
+        local characters_remaining = terminal_width - #status_line
+        local message = progress_bar_label:sub(1, characters_remaining)
         io.stdout:write("\r")
-        io.stdout:write(status_line)
+        io.stdout:write(status_line .. message)
         io.stdout:flush()
         last_read = total_read
       end

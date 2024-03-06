@@ -6,6 +6,7 @@
 #else
   #include <netdb.h>
   #include <sys/socket.h>
+  #include <sys/ioctl.h>
   #include <arpa/inet.h>
   #include <libgen.h>
   #include <termios.h>
@@ -165,6 +166,25 @@ static int lpm_tcflush(lua_State* L) {
   return 0;
 }
 
+static int lpm_tcwidth(lua_State* L) {
+  int stream = luaL_checkinteger(L, 1);
+  #ifndef _WIN32
+    if (isatty(stream)) {
+      struct winsize ws={0};
+      ioctl(stream, TIOCGWINSZ, &ws);
+      lua_pushinteger(L, ws.ws_col);
+      return 1;
+    }
+  #else
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    int columns, rows;
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi)) {
+      lua_pushinteger(L, csbi.srWindow.Right - csbi.srWindow.Left + 1);
+      return 1;
+    }
+  #endif
+  return 0;
+}
 
 static int lpm_symlink(lua_State* L) {
   #ifndef _WIN32
@@ -872,10 +892,11 @@ static int lpm_extract(lua_State* L) {
           while (remaining > 0) {
             int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
 
-            if (mtar_read_data(&tar, buffer, read_size) != MTAR_ESUCCESS) {
+            int err = mtar_read_data(&tar, buffer, read_size);
+            if (err != MTAR_ESUCCESS) {
               fclose(file);
               mtar_close(&tar);
-              return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
+              return luaL_error(L, "can't read file %s: %s", target, mtar_strerror(err));
             }
 
             fwrite(buffer, sizeof(char), read_size, file);
@@ -1290,6 +1311,7 @@ static const luaL_Reg system_lib[] = {
   { "rmdir",     lpm_rmdir },    // Removes a directory.
   { "hash",      lpm_hash  },    // Returns a hex sha256 hash.
   { "tcflush",   lpm_tcflush },  // Flushes an terminal stream.
+  { "tcwidth",   lpm_tcwidth },  // Gets the terminal width in columns.
   { "symlink",   lpm_symlink },  // Creates a symlink.
   { "chmod",     lpm_chmod },    // Chmod's a file.
   { "init",      lpm_init },     // Initializes a git repository with the specified remote.
