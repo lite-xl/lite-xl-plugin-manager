@@ -3,6 +3,7 @@ on: { push: { branches: [master] } }
 jobs:
   build_linux_android_windows:
     runs-on: ubuntu-latest
+    environment: Release
     defaults: { run: { shell: bash } }
     steps:
       - name: Checkout Code
