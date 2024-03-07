@@ -676,7 +676,7 @@ function Addon.new(repository, metadata)
     if self.remote then
       local repo = Repository.url(self.remote)
       local local_path = repo.local_path and (repo.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", ""):gsub("%.$", "")) or ""))
-      self.local_path = local_path and system.stat(local_path) or nil
+      self.local_path = local_path and system.stat(local_path) and local_path or nil
     else
       self.local_path = (repository.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", ""):gsub("%.$", "")) or "")) or nil
     end
