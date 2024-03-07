@@ -1,3 +1,12 @@
+# 1.2.3
+
+* STDIN flushing was added for prompts.
+* Partially downloading files, then cancelling no longer causes lpm to break on subsequent operations.
+* Fixed a bug relating to local paths not being computed directly under some cirstumances leading to errors on install.
+* Small terminals will no longer spew huge amounts of output into the console when downloading things; we'll now truncate download status prompts when attached to a small TTY.
+* Improved error handlings of tar extracting.
+* Added discord release notifications to CI.
+
 # 1.2.2
 
 * Added in ability to disallow `self-upgrade` at compile time with `-DLPM_DEFAULT_RELEASE=''`.
