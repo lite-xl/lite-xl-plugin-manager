@@ -857,7 +857,7 @@ function Addon:install(bottle, installing)
     end
 
 
-    local has_arched_files = #common.grep(self.files or {}, function(e) return e.arch end) > 0
+    local has_nonoptional_arched_files = #common.grep(self.files or {}, function(e) return e.arch and not e.optional end) > 0
     for _, arch in ipairs(ARCH) do
       local has_one_file = false
       for _, file in ipairs(self.files or {}) do
@@ -908,7 +908,7 @@ function Addon:install(bottle, installing)
         end
       end
 
-      if has_arched_files and not has_one_file and (not self.arch or (self.arch ~= "*" and #common.grep(self.arch, function(a) return a == arch end) == 0)) then
+      if has_nonoptional_arched_files and not has_one_file and (not self.arch or (self.arch ~= "*" and #common.grep(self.arch, function(a) return a == arch end) == 0)) then
         error("Addon " .. self.id .. " does not support arch " .. arch)
       end
     end
