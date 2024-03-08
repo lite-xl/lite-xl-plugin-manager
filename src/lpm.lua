@@ -840,7 +840,6 @@ function Addon:install(bottle, installing)
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, { target = path, checksum = self.checksum, callback = write_progress_bar })
       if VERBOSE then log_action("Downloaded file " .. self.url .. " to " .. path) end
-      if system.hash(path, "file") ~= self.checksum then fatal_warning("checksum doesn't match for " .. path) end
     else -- local addon that has a local path
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
@@ -1331,7 +1330,6 @@ function LiteXL:install()
         log_action("Downloading file " .. file.url .. "...")
         common.get(file.url, { target = path, checksum = file.checksum, callback = write_progress_bar })
         log_action("Downloaded file " .. file.url .. " to " .. path)
-        if file.checksum ~= "SKIP" and system.hash(path, "file") ~= file.checksum then fatal_warning("checksum doesn't match for " .. path) end
         if archive then
           log_action("Extracting file " .. basename .. " in " .. self.local_path)
           system.extract(path, self.local_path)
