@@ -581,7 +581,10 @@ function common.get(source, options)
   if not system.stat(cache_path) then
     res, headers = system.get(protocol, hostname, port, rest, cache_path .. ".part", callback)
     if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
-    if checksum ~= "SKIP" and system.hash(cache_path .. ".part", "file") ~= checksum then fatal_warning("checksum doesn't match for " .. source) end
+    if checksum ~= "SKIP" and system.hash(cache_path .. ".part", "file") ~= checksum then
+      common.rmrf(cache_path .. ".part")
+      fatal_warning("checksum doesn't match for " .. source)
+    end
     common.rename(cache_path .. ".part", cache_path)
   end
   if target then common.copy(cache_path, target) else res = io.open(cache_path, "rb"):read("*all") end
