@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo apt-get install mingw-w64 && ./build.sh clean && BIN=lpm.x86_64-windows.exe CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_INCLUDE_PATH=/usr/share/mingw-w64/include" LZMA_CONFIGURE="--host=x86_64-w64-mingw32" GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-windows'"'
       - name: Create Release(s)
-        env: { GITHUB_TOKEN: "${{ github.token }}", ARTIFACTS: "lpm.x86_64-linux lpm.riscv64-linux lpm.x86_64-windows.exe lpm.arm-android lpm.aarch64-android lpm.x86-android lpm.x86_64-android" }
+        env: { GITHUB_TOKEN: "${{ github.token }}", ARTIFACTS: "lpm.x86_64-linux lpm.aarch64-linux lpm.riscv64-linux lpm.x86_64-windows.exe lpm.arm-android lpm.aarch64-android lpm.x86-android lpm.x86_64-android" }
         run: |
           perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md | tail -n +2 > NOTES.md
           gh release delete -y continuous || true; gh release create -t 'Continuous Release' -F NOTES.md continuous $ARTIFACTS
