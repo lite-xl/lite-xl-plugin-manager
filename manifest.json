@@ -58,7 +58,7 @@
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-android",
           "arch": "x86_64-android",
-          "checksum": "bcc79ca26399de77bbb789ad61874aa71e855ac17c593fe3dd28294bdc14159f",
+          "checksum": "SKIP",
           "optional": true
         }
       ],
