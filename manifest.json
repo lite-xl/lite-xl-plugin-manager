@@ -14,6 +14,12 @@
           "optional": true
         },
         {
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.aarch64-linux",
+          "arch": "aarch64-linux",
+          "checksum": "SKIP",
+          "optional": true
+        },
+        {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe",
           "arch": "x86_64-windows",
           "checksum": "SKIP",
