@@ -102,6 +102,7 @@ for `mbedtls` and `libgit2`, `cmake` is also required.
 
 * Windows x86_64
 * Linux x86_64
+* Linux aarch64
 * MacOS x86_64
 * MacOS aarch64
 * Android 8.0+ x86_64
