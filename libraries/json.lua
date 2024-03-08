@@ -385,5 +385,12 @@ function json.decode(str)
   return res
 end
 
+local status, cjson = pcall(require, "libraries.cjson")
+if status then
+  json.ldecode = json.decode
+  json.lencode = json.encode
+  json.decode = cjson.decode
+  json.encode = cjson.encode
+end
 
 return json
