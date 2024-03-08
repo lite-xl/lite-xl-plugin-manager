@@ -1,3 +1,10 @@
+# 1.2.4
+
+* Added `aarch64-linux` to the release CI list.
+* Fixed an error in `plugin_manager` with `MOD_VERSION_MAJOR`.
+* Fixed an error where packages would be flagged as only being for certain architectures if they had optional files.
+
+
 # 1.2.3
 
 * STDIN flushing was added for prompts.
