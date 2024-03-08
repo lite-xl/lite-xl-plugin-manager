@@ -576,7 +576,8 @@ function common.get(source, options)
   end
   local cache_dir = options.cache or CACHEDIR
   if not system.stat(cache_dir .. PATHSEP .. "files") then common.mkdirp(cache_dir .. PATHSEP .. "files") end
-  local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. (checksum ~= "SKIP" and checksum or system.hash(source))
+  local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. system.hash(source)
+  if checksum ~= "SKIP" and system.stat(cache_path) and system.hash(cache_path, "file") ~= checksum then common.rmrf(cache_path) end
   local res
   if not system.stat(cache_path) then
     res, headers = system.get(protocol, hostname, port, rest, cache_path .. ".part", callback)
