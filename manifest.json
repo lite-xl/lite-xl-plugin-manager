@@ -81,7 +81,33 @@
       "version": "1.0",
       "description": "JSON support plugin, provides encoding/decoding.",
       "type": "library",
-      "path": "libraries/json.lua"
+      "path": "libraries/json.lua",
+      "files": [
+        {
+          "arch": "x86_64-linux",
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/cjson.x86_64-linux.so",
+          "checksum": "SKIP",
+          "optional": true
+        },
+        {
+          "arch": "x86_64-windows",
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/cjson.x86_64-windows.dll",
+          "checksum": "SKIP",
+          "optional": true
+        },
+        {
+          "arch": "x86_64-darwin",
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/cjson.x86_64-x86_64-darwin.so",
+          "checksum": "SKIP",
+          "optional": true
+        },
+        {
+          "arch": "aarch64-darwin",
+          "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/cjson.aarch64-darwin.so",
+          "checksum": "SKIP",
+          "optional": true
+        }
+      ]
     }
   ],
   "lite-xls": [

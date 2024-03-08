@@ -391,6 +391,8 @@ if status then
   json.lencode = json.encode
   json.decode = cjson.decode
   json.encode = cjson.encode
+else
+  print(cjson)
 end
 
 return json
