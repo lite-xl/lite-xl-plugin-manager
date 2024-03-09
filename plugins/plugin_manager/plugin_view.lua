@@ -174,11 +174,10 @@ function PluginView:draw()
   end
 
   renderer.draw_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, 1, style.dim)
-  
-  local x = self.position.x + self.size.x - style.padding.x - style.font:get_width("Search")
-  common.draw_text(style.font, style.dim, "Search: Ctrl+F", "right", x, self.position.y, style.font:get_width("Ctrl+F"), lh)
-  core.push_clip_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, self.size.y)
 
+  command.perform "plugin-manager:find"
+  
+  core.push_clip_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, self.size.y)
   for i, plugin in ipairs(self:get_plugins()) do
     local x, y = ox, oy
     if y + lh >= self.position.y and y <= self.position.y + self.size.y then
@@ -286,7 +285,7 @@ command.add(PluginView, {
           end
         end
       end,
-      suggest = function(value)
+      if #value > 0 then -- only suggest if the user typed something
         return common.fuzzy_match(plugin_names, value)
       end
     })
