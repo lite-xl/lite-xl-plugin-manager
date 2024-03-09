@@ -85,26 +85,26 @@
       "files": [
         {
           "arch": "x86_64-linux",
-          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.2/cjson.x86_64-linux.so",
-          "checksum": "e8aa584aa9478e2d6ddaf3659c5c7916b7eda8ad3d61e615dc6369ec359ad89e",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.3/cjson.x86_64-linux.so",
+          "checksum": "e0d8253b38e4011c3f53396a9c3b842378a81e4c64c38a6212ae9305ed867163",
           "optional": true
         },
         {
           "arch": "x86_64-windows",
-          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.2/cjson.x86_64-windows.dll",
-          "checksum": "5c7558e3c00a3a5c6ebc2f03bba2ceb5641e7c5efe186a643062c72f5918cd80",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.3/cjson.x86_64-windows.dll",
+          "checksum": "f964142173d1dda16044fcfdf18a286fc97a4a39394770efd1ad7d01e94d01ba",
           "optional": true
         },
         {
           "arch": "x86_64-darwin",
-          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.2/cjson.x86_64-darwin.so",
-          "checksum": "4eb4b2e347660c4872ce294853516de16463b85f32560bf4a3b1532a0cc6cafc",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.3/cjson.x86_64-darwin.so",
+          "checksum": "9e5ab4801138a7afcc69a71891a29223f1947cfbb9efcb331049185c67f1de74",
           "optional": true
         },
         {
           "arch": "aarch64-darwin",
-          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.2/cjson.aarch64-darwin.so",
-          "checksum": "7291983bc5b8bf26b7f5b63b9e0a9bf6cf56ce1e5d2813210083ddbc11793e40",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.3/cjson.aarch64-darwin.so",
+          "checksum": "31a5e1f7d60fcdc6b904733ceb39e9cf5bc476451e0439c9adaa264bea747a8d",
           "optional": true
         }
       ]
