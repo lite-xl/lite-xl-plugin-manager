@@ -475,6 +475,8 @@ end
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
 local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, RAW, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, MASK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
+local SHOULD_COLOR = os.getenv("TERM") and os.getenv("TERM") ~= "dumb" and not os.getenv("NO_COLOR")
+local Addon, Repository, LiteXL, Bottle, lpm, log = {}, {}, {}, {}, {}, {}
 
 local function engage_locks(func, err, warn)
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
@@ -483,8 +485,6 @@ local function engage_locks(func, err, warn)
   return system.flock(lockfile, func, err, warn)
 end
 
-local Addon, Repository, LiteXL, Bottle = {}, {}, {}, {}
-
 local colors = {
   red = 31,
   green = 32,
@@ -492,35 +492,34 @@ local colors = {
   blue = 34,
   cyan = 36
 }
-local SHOULD_COLOR = os.getenv("TERM") and os.getenv("TERM") ~= "dumb" and not os.getenv("NO_COLOR")
 local function colorize(text, color)
   if not SHOULD_COLOR or not TTY or NO_COLOR or not color then return text end
   return "\x1B[" .. colors[color] .. "m" .. text .. "\x1B[0m"
 end
 
 local actions, warnings = {}, {}
-local function log_action(message, color)
+function log.action(message, color)
   if JSON then table.insert(actions, message) end
   if not QUIET then
     io.stderr:write(colorize(message .. "\n", color))
     io.stderr:flush()
   end
 end
-local function log_warning(message)
+function log.warning(message)
   if JSON then table.insert(warnings, message) end
   if not QUIET then
     io.stderr:write(colorize("warning: " .. message .. "\n", "yellow"))
     io.stderr:flush()
   end
 end
-local function fatal_warning(message)
-  if not FORCE then error(message .. "; use --force to override") else log_warning(message) end
+function log.fatal_warning(message)
+  if not FORCE then error(message .. "; use --force to override") else log.warning(message) end
 end
-local function log_progress_action(message)
+function log.progress_action(message)
   if write_progress_bar then
     progress_bar_label = message
   else
-    log_action(message)
+    log.action(message)
   end
 end
 local function prompt(message)
@@ -535,28 +534,6 @@ local function prompt(message)
   return not response:find("%S") or response:find("^%s*[yY]%s*$")
 end
 
-local status = 0
-local function error_handler(err)
-  local s, e
-  if err then s, e = err:find("%:%d+") end
-  local message = e and err:sub(e + 3) or err
-  if JSON then
-    if VERBOSE then
-      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback(nil, 2) }) .. "\n")
-    else
-      io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
-    end
-  else
-    if err then io.stderr:write(colorize((not VERBOSE and message or err) .. "\n", "red")) end
-    if VERBOSE then io.stderr:write(debug.traceback(nil, 2) .. "\n") end
-  end
-  io.stderr:flush()
-  status = -1
-end
-local function lock_warning()
-  log_warning("waiting for lpm global lock to be released (only one instance of lpm can be run at once)")
-end
-
 
 function common.get(source, options)
   options = options or {}
@@ -564,7 +541,7 @@ function common.get(source, options)
   if not source then error("requires url") end
   if (depth or 0) > 10 then error("too many redirects") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
-  log_progress_action("Downloading " .. source:sub(1, 100) .. "...")
+  log.progress_action("Downloading " .. source:sub(1, 100) .. "...")
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
   if not rest or rest == "" then rest = "/" end
@@ -584,7 +561,7 @@ function common.get(source, options)
     if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
     if checksum ~= "SKIP" and system.hash(cache_path .. ".part", "file") ~= checksum then
       common.rmrf(cache_path .. ".part")
-      fatal_warning("checksum doesn't match for " .. source)
+      log.fatal_warning("checksum doesn't match for " .. source)
     end
     common.rename(cache_path .. ".part", cache_path)
   end
@@ -702,8 +679,8 @@ function Addon:unstub()
     local addon = Addon.new(repo, remote_entry)
 
     -- merge in attribtues that are probably more accurate than the stub
-    if addon.version ~= self.version then log_warning(self.id .. " stub on " .. self.repository:url() .. " has differing version from remote (" .. self.version .. " vs " .. addon.version .. "); may lead to install being inconsistent") end
-    -- if addon.mod_version ~= self.mod_version then log_warning(self.id .. " stub on " .. self.repository:url() .. " has differing mod_version from remote (" .. self.mod_version .. " vs " .. addon.mod_version .. ")") end
+    if addon.version ~= self.version then log.warning(self.id .. " stub on " .. self.repository:url() .. " has differing version from remote (" .. self.version .. " vs " .. addon.version .. "); may lead to install being inconsistent") end
+    -- if addon.mod_version ~= self.mod_version then log.warning(self.id .. " stub on " .. self.repository:url() .. " has differing mod_version from remote (" .. self.mod_version .. " vs " .. addon.mod_version .. ")") end
     for k,v in pairs(addon) do self[k] = v end
   end)
   if not status then self.inaccessible = err end
@@ -790,7 +767,7 @@ end
 
 
 function Addon:install(bottle, installing)
-  if MASK[self.id] then if not installing[self.id] then log_warning("won't install masked addon " .. self.id) end installing[self.id] = true return end
+  if MASK[self.id] then if not installing[self.id] then log.warning("won't install masked addon " .. self.id) end installing[self.id] = true return end
   if self:is_installed(bottle) and not REINSTALL then error("addon " .. self.id .. " is already installed") return end
   if self:is_stub() then self:unstub() end
   if self.inaccessible then error("addon " .. self.id .. " is inaccessible: " .. self.inaccessible) end
@@ -811,7 +788,7 @@ function Addon:install(bottle, installing)
         if not v.optional then
           error("can't find dependency " .. addon .. (v.version and (":" .. v.version) or ""))
         else
-          log_warning("can't find optional dependency " .. addon .. (v.version and (":" .. v.version) or ""))
+          log.warning("can't find optional dependency " .. addon .. (v.version and (":" .. v.version) or ""))
         end
       end
     end
@@ -828,32 +805,32 @@ function Addon:install(bottle, installing)
     end
 
     if self.type == "meta" then
-      log_action("Installed metapackage " .. self.id .. ".", "green")
+      log.action("Installed metapackage " .. self.id .. ".", "green")
       return
     end
 
     common.mkdirp(common.dirname(temporary_install_path))
     if self:is_upgradable(bottle) then
-      log_action("Upgrading " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
+      log.action("Upgrading " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
       common.rmrf(install_path)
     else
-      log_action("Installing " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
+      log.action("Installing " .. self.organization .. " " .. self.type .. " " .. self.id .. ".", "green")
     end
     if self.organization == "complex" and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(install_path) end
     if self.url then -- remote simple addon
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, { target = path, checksum = self.checksum, callback = write_progress_bar })
-      if VERBOSE then log_action("Downloaded file " .. self.url .. " to " .. path) end
+      if VERBOSE then log.action("Downloaded file " .. self.url .. " to " .. path) end
     else -- local addon that has a local path
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
       if self.path then
         local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
         if SYMLINK then
-          if VERBOSE then log_action("Symlinking " .. self.local_path .. " to " .. path .. ".") end
+          if VERBOSE then log.action("Symlinking " .. self.local_path .. " to " .. path .. ".") end
           system.symlink(self.local_path, temporary_path)
         else
-          if VERBOSE then log_action("Copying " .. self.local_path .. " to " .. path .. ".") end
+          if VERBOSE then log.action("Copying " .. self.local_path .. " to " .. path .. ".") end
           common.copy(self.local_path, temporary_path)
         end
       end
@@ -878,10 +855,10 @@ function Addon:install(bottle, installing)
             if not system.stat(temporary_path) then
               common.mkdirp(common.dirname(temporary_path))
               if SYMLINK and self.repository:is_local() and system.stat(local_path) then
-                log_action("Symlinking " .. local_path .. " to " .. target_path .. ".")
+                log.action("Symlinking " .. local_path .. " to " .. target_path .. ".")
                 system.symlink(local_path, temporary_path)
               elseif SYMLINK and self.repository:is_local() and system.stat(stripped_local_path) then
-                log_action("Symlinking " .. stripped_local_path .. " to " .. target_path .. ".")
+                log.action("Symlinking " .. stripped_local_path .. " to " .. target_path .. ".")
                 system.symlink(stripped_local_path, temporary_path)
               else
                 common.get(file.url, { target = temporary_path, checksum = file.checksum, callback = write_progress_bar })
@@ -889,7 +866,7 @@ function Addon:install(bottle, installing)
                 local is_archive = basename:find("%.zip$") or basename:find("%.tar%.gz$") or basename:find("%.tgz$")
                 local target = temporary_path
                 if is_archive or basename:find("%.gz$") then
-                  if VERBOSE then log_action("Extracting file " .. basename .. " in " .. install_path .. "...") end
+                  if VERBOSE then log.action("Extracting file " .. basename .. " in " .. install_path .. "...") end
                   target = temporary_install_path .. (not is_archive and (PATHSEP .. basename:gsub(".gz$", "")) or "")
                   system.extract(temporary_path, target)
                   os.remove(temporary_path)
@@ -902,7 +879,7 @@ function Addon:install(bottle, installing)
                   if path:find(PATHSEP .. "%.%.") then error("invalid chmod_executable value " .. executable) end
                   local stat = system.stat(path)
                   if not stat then error("can't find executable to chmod_executable " .. path) end
-                  if VERBOSE then log_action("Chmodding file " .. executable .. " to be executable.") end
+                  if VERBOSE then log.action("Chmodding file " .. executable .. " to be executable.") end
                   system.chmod(path, stat.mode | 73)
                 end
               end
@@ -972,7 +949,7 @@ end
 
 
 function Addon:uninstall(bottle, uninstalling)
-  if MASK[self.id] then if not uninstalling[self.id] then log_warning("won't uninstall masked addon " .. self.id) end uninstalling[self.id] = true return end
+  if MASK[self.id] then if not uninstalling[self.id] then log.warning("won't uninstall masked addon " .. self.id) end uninstalling[self.id] = true return end
   local install_path = self:get_install_path(bottle)
   if self:is_core(bottle) then error("can't uninstall " .. self.id .. "; is a core addon") end
   local orphans = common.sort(common.grep(self:get_orphaned_dependencies(bottle), function(e) return not uninstalling or not uninstalling[e.id] end), function(a, b) return a.id < b.id end)
@@ -982,9 +959,9 @@ function Addon:uninstall(bottle, uninstalling)
   end
   common.each(orphans, function(e) e:uninstall(bottle, common.merge(uninstalling or {}, { [self.id] = true })) end)
   if self.type == "meta" then
-    log_action("Uninstalling meta " .. self.id .. ".", "green")
+    log.action("Uninstalling meta " .. self.id .. ".", "green")
   else
-    log_action("Uninstalling " .. self.type .. " located at " .. install_path, "green")
+    log.action("Uninstalling " .. self.type .. " located at " .. install_path, "green")
   end
   local incompatible_addons = common.grep(bottle:installed_addons(), function(p) return p:depends_on(self) and (not uninstalling or not uninstalling[p.id]) end)
   local should_uninstall = #incompatible_addons == 0 or uninstalling
@@ -1069,7 +1046,7 @@ function Repository:parse_manifest(repo_id)
   if system.stat(self.local_path)  then
     self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then
-      log_warning("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
+      log.warning("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
       self:generate_manifest(repo_id)
     end
     local status, err = pcall(function()
@@ -1191,7 +1168,7 @@ function Repository:fetch()
       path = self.repo_path .. PATHSEP .. "master"
       common.rmrf(temporary_path)
       common.mkdirp(temporary_path)
-      log_progress_action("Fetching " .. self.remote .. "...")
+      log.progress_action("Fetching " .. self.remote .. "...")
       system.init(temporary_path, self.remote)
       self.branch = system.fetch(temporary_path, write_progress_bar)
       if not self.branch then error("Can't find remote branch for " .. self.remote) end
@@ -1206,7 +1183,7 @@ function Repository:fetch()
         system.init(temporary_path, self.remote)
       end
       if not exists or self.branch then
-        log_progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
+        log.progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
         if self.commit then
           system.fetch(temporary_path or path, write_progress_bar, self.commit)
         elseif self.branch then
@@ -1250,7 +1227,7 @@ end
 function Repository:update(pull_remotes)
   local manifest, remotes = self:parse_manifest()
   if self.branch then
-    log_progress_action("Updating " .. self:url() .. "...")
+    log.progress_action("Updating " .. self:url() .. "...")
     local status, err = pcall(system.fetch, self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
     if not status then -- see https://github.com/lite-xl/lite-xl-plugin-manager/issues/85
       if not err:find("object not found %- no match for id") then error(err, 0) end
@@ -1306,7 +1283,7 @@ function LiteXL:is_compatible(addon) return not addon.mod_version or compatible_
 function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
-  if self:is_installed() then log_warning("lite-xl " .. self.version .. " already installed") return end
+  if self:is_installed() then log.warning("lite-xl " .. self.version .. " already installed") return end
   common.mkdirp(self.local_path)
   if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
     local executable, datadir = common.path("lite-xl" .. EXECUTABLE_EXTENSION)
@@ -1331,11 +1308,11 @@ function LiteXL:install()
         local basename = common.basename(file.url)
         local archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
         local path = self.local_path .. PATHSEP .. (archive and basename or "lite-xl")
-        log_action("Downloading file " .. file.url .. "...")
+        log.action("Downloading file " .. file.url .. "...")
         common.get(file.url, { target = path, checksum = file.checksum, callback = write_progress_bar })
-        log_action("Downloaded file " .. file.url .. " to " .. path)
+        log.action("Downloaded file " .. file.url .. " to " .. path)
         if archive then
-          log_action("Extracting file " .. basename .. " in " .. self.local_path)
+          log.action("Extracting file " .. basename .. " in " .. self.local_path)
           system.extract(path, self.local_path)
         end
       end
@@ -1424,7 +1401,7 @@ function Bottle:run(args)
   local line = path .. (#args > 0 and " " or "") .. table.concat(common.map(args, function(arg)
     return "'" .. arg:gsub("'", "'\"'\"'"):gsub("\\", "\\\\") .. "'"
   end), " ")
-  if VERBOSE then log_action("Running " .. line) end
+  if VERBOSE then log.action("Running " .. line) end
   return os.execute(line)
 end
 
@@ -1567,35 +1544,33 @@ local function get_repository(url)
   return nil
 end
 
-
-local function lpm_settings_save()
+function lpm.settings_save()
   common.write(CACHEDIR .. PATHSEP .. "settings.json", json.encode(settings))
 end
 
 
-local function lpm_repo_save()
+function lpm.repo_save()
   settings.repositories = common.map(repositories, function(r) return r:url() end)
-  lpm_settings_save()
+  lpm.settings_save()
 end
 
 
-
 local DEFAULT_REPOS
-local function lpm_repo_init(repos)
+function lpm.repo_init(repos)
   DEFAULT_REPOS = { Repository.url(DEFAULT_REPO_URL) }
   common.mkdirp(CACHEDIR)
   if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
     for i, repository in ipairs(repos or DEFAULT_REPOS) do
       table.insert(repositories, repository:add(true))
     end
-    lpm_repo_save()
+    lpm.repo_save()
   end
 end
 
 
 
 
-local function lpm_repo_add(...)
+function lpm.repo_add(...)
   for i, url in ipairs({ ... }) do
     local idx, repo = get_repository(url)
     if repo then -- if we're alreayd a repo, put this at the head of the resolution list
@@ -1606,22 +1581,22 @@ local function lpm_repo_add(...)
     table.insert(repositories, 1, repo)
     repo:update()
   end
-  lpm_repo_save()
+  lpm.repo_save()
 end
 
 
-local function lpm_repo_rm(...)
+function lpm.repo_rm(...)
   for i, url in ipairs({ ... }) do
     local idx, repo = get_repository(url)
     if not repo then error("cannot find repository " .. url) end
     table.remove(repositories, idx)
     repo:remove()
   end
-  lpm_repo_save()
+  lpm.repo_save()
 end
 
 
-local function lpm_repo_update(...)
+function lpm.repo_update(...)
   local t = { ... }
   if #t == 0 then table.insert(t, false) end
   for i, url in ipairs(t) do
@@ -1638,12 +1613,12 @@ local function get_lite_xl(version)
   return common.first(common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end)), function(lite_xl) return lite_xl.version == version end)
 end
 
-local function lpm_lite_xl_save()
+function lpm.lite_xl_save()
   settings.lite_xls = common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path } end)
-  lpm_settings_save()
+  lpm.settings_save()
 end
 
-local function lpm_lite_xl_add(version, path)
+function lpm.lite_xl_add(version, path)
   if not version then error("requires a version") end
   if not version:find("^%d") then error("versions must begin numerically (i.e. 2.1.1-debug)") end
   if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " lite-xl already exists") end
@@ -1655,28 +1630,28 @@ local function lpm_lite_xl_add(version, path)
   local path_stat = system.stat(path:gsub(PATHSEP .. "$", ""))
   if not path_stat then error("can't find lite-xl path " .. path) end
   table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
-  lpm_lite_xl_save()
+  lpm.lite_xl_save()
 end
 
-local function lpm_lite_xl_rm(version)
+function lpm.lite_xl_rm(version)
   if not version then error("requires a version") end
   local lite_xl = get_lite_xl(version) or error("can't find lite_xl version " .. version)
   lite_xls = common.grep(lite_xls, function(l) return l ~= lite_xl end)
-  lpm_lite_xl_save()
+  lpm.lite_xl_save()
 end
 
-local function lpm_lite_xl_install(version)
+function lpm.lite_xl_install(version)
   if not version then error("requires a version") end
   (get_lite_xl(version) or error("can't find lite-xl version " .. version)):install()
 end
 
 
-local function lpm_lite_xl_switch(version, target)
+function lpm.lite_xl_switch(version, target)
   if not version then error("requires a version") end
   target = target or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
   if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly as a second argument") end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
-  if not lite_xl:is_installed() then log_action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
+  if not lite_xl:is_installed() then log.action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
   local stat = system.stat(target)
   if stat and stat.symlink then os.remove(target) end
   system.symlink(lite_xl:get_binary_path(), target)
@@ -1687,12 +1662,12 @@ local function lpm_lite_xl_switch(version, target)
 end
 
 
-local function lpm_lite_xl_uninstall(version)
+function lpm.lite_xl_uninstall(version)
   (get_lite_xl(version) or error("can't find lite-xl version " .. version)):uninstall()
 end
 
 
-local function lpm_lite_xl_list()
+function lpm.lite_xl_list()
   local result = { ["lite-xls"] = { } }
   local max_version = 0
   for i,lite_xl in ipairs(lite_xls) do
@@ -1751,7 +1726,7 @@ local function is_argument_repo(arg)
   return arg:find("^http") or arg:find("[\\/]") or arg == "."
 end
 
-local function lpm_lite_xl_run(version, ...)
+function lpm.lite_xl_run(version, ...)
   if not version then error("requires a version or arguments") end
   local arguments = { ... }
   if not version:find("^%d+") and version ~= "system" then
@@ -1795,7 +1770,7 @@ local function lpm_lite_xl_run(version, ...)
 end
 
 
-local function lpm_install(type, ...)
+function lpm.install(type, ...)
   local repo_only = nil
   local to_install = {}
   local to_explicitly_install = {}
@@ -1804,7 +1779,7 @@ local function lpm_install(type, ...)
     local id, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
     if not id then error('unrecognized identifier ' .. identifier) end
     if id == "lite-xl" then
-      lpm_lite_xl_install(version)
+      lpm.lite_xl_install(version)
     else
       if is_argument_repo(identifier) then
         table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
@@ -1816,7 +1791,7 @@ local function lpm_install(type, ...)
         local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
         if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
         if #addons == 0 then
-          log_warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
+          log.warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
           if not common.first(settings.installed, id) then table.insert(to_explicitly_install, id) end
         else
           for j,v in ipairs(addons) do
@@ -1835,7 +1810,7 @@ local function lpm_install(type, ...)
     end
   end)
   settings.installed = common.concat(settings.installed, to_explicitly_install)
-  lpm_settings_save()
+  lpm.settings_save()
 end
 
 local function get_table(headers, rows)
@@ -1932,7 +1907,7 @@ local function print_addon_info(type, addons, filters)
 end
 
 
-local function lpm_unstub(type, ...)
+function lpm.unstub(type, ...)
   local addons = {}
   for i, identifier in ipairs({ ... }) do
     if not identifier then error('unrecognized identifier ' .. identifier) end
@@ -1944,7 +1919,7 @@ local function lpm_unstub(type, ...)
       addons = common.grep(potential_addons, function(e) return e:is_stub() end)
       if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. identifier .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
       if #addons == 0 then
-        log_warning((potential_addons[1].type or "addon") .. " " .. identifier .. " already unstubbed")
+        log.warning((potential_addons[1].type or "addon") .. " " .. identifier .. " already unstubbed")
       end
     end
   end
@@ -1953,7 +1928,7 @@ local function lpm_unstub(type, ...)
 end
 
 
-local function lpm_addon_uninstall(type, ...)
+function lpm.addon_uninstall(type, ...)
   for i, id in ipairs({ ... }) do
     local addons = { system_bottle:get_addon(id, nil, { type = type }) }
     if #addons == 0 then error("can't find addon " .. id) end
@@ -1964,12 +1939,12 @@ local function lpm_addon_uninstall(type, ...)
       settings.installed = common.grep(settings.installed, function(e) return e ~= addon.id end)
     end
   end
-  lpm_settings_save()
+  lpm.settings_save()
 end
 
-local function lpm_addon_reinstall(type, ...) for i, id in ipairs({ ... }) do pcall(lpm_addon_uninstall, type, id) end lpm_install(type, ...) end
+function lpm.addon_reinstall(type, ...) for i, id in ipairs({ ... }) do pcall(lpm.addon_uninstall, type, id) end lpm.install(type, ...) end
 
-local function lpm_repo_list()
+function lpm.repo_list()
   if JSON then
     io.stdout:write(json.encode({ repositories = common.map(repositories, function(repo) return { remote = repo.remote, commit = repo.commit, branch = repo.branch, path = repo.local_path, remotes = common.map(repo.remotes or {}, function(r) return r:url() end)  } end) }) .. "\n")
   else
@@ -1983,23 +1958,23 @@ local function lpm_repo_list()
   end
 end
 
-local function lpm_addon_list(type, id, filters)
+function lpm.addon_list(type, id, filters)
   print_addon_info(type, common.grep(system_bottle:all_addons(), function(p) return (not type or p.type == type) and (not id or p.id:find(id)) end), filters)
 end
 
-local function lpm_describe()
+function lpm.describe()
   local repo_urls = common.grep(common.map(repositories, function(e) return e:url() end), function(url) return #common.grep(DEFAULT_REPOS, function(r) return r:url() == url end) == 0  end)
   print("lpm run " .. common.join(" ", { system_bottle.lite_xl.version, table.unpack(repo_urls) }) .. " " .. common.join(" ", common.map(system_bottle:installed_addons(), function(p) return p.id .. ":" .. p.version end)))
 end
 
-local function lpm_addon_upgrade()
+function lpm.addon_upgrade()
   for i,addon in ipairs(system_bottle:installed_addons()) do
     local upgrade = common.sort({ system_bottle:get_addon(addon.id, ">" .. addon.version) }, function(a, b) return compare_version(b.version, a.version) end)[1]
     if upgrade then upgrade:install(system_bottle) end
   end
 end
 
-local function lpm_self_upgrade(release)
+function lpm.self_upgrade(release)
   if not DEFAULT_RELEASE_URL or #DEFAULT_RELEASE_URL == 0 then error("self-upgrade has been disabled on lpm version " .. VERSION .. "; please upgrade it however you installed it") end
   local path = ARGV[1]:find(PATHSEP) and system.stat(ARGV[1]) and ARGV[1] or common.path(ARGV[1])
   if not path then error("can't find path to lpm") end
@@ -2021,19 +1996,19 @@ local function lpm_self_upgrade(release)
     if PLATFORM ~= "windows" then -- because we can't delete the running executbale on windows
       common.rmrf(old_temporary_file)
     end
-    log_action("Upgraded lpm to " .. release .. ".")
+    log.action("Upgraded lpm to " .. release .. ".")
   else
-    log_warning("aborting upgrade; remote executable is identical to current")
+    log.warning("aborting upgrade; remote executable is identical to current")
     common.rmrf(new_temporary_file)
   end
 end
 
-local function lpm_bottle_purge()
+function lpm.bottle_purge()
   common.rmrf(CACHEDIR .. PATHSEP .. "bottles")
 end
 
-local function lpm_purge()
-  log_action("Purged " .. CACHEDIR .. ".", "green")
+function lpm.purge()
+  log.action("Purged " .. CACHEDIR .. ".", "green")
   common.rmrf(CACHEDIR)
 end
 
@@ -2073,40 +2048,63 @@ end
 local function run_command(ARGS)
   if not ARGS[2]:find("%S") then return
   elseif ARGS[2] == "init" then return
-  elseif ARGS[2] == "repo" and ARGV[3] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "add" then lpm_repo_add(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "rm" then lpm_repo_rm(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm_repo_update(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_repo_list()
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "install" then lpm_install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "uninstall" then lpm_addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "reinstall" then lpm_addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
-  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and (#ARGS == 2 or ARGS[3] == "list") then return lpm_addon_list(ARGS[2], ARGS[4], ARGS)
-  elseif ARGS[2] == "upgrade" then return lpm_addon_upgrade(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "install" then lpm_install(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "unstub" then return lpm_unstub(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "uninstall" then lpm_addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "reinstall" then lpm_addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "describe" then lpm_describe(nil, table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "list" then return lpm_addon_list(nil, ARGS[3], ARGS)
-  elseif ARGS[2] == "lite-xl" and (#ARGS == 2 or ARGS[3] == "list") then return lpm_lite_xl_list(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm_lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm_lite_xl_install(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm_lite_xl_add(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" and ARGS[3] == "rm" then return lpm_lite_xl_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGV[3] == "add" then lpm.repo_add(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm.repo_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "add" then lpm.repo_add(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "rm" then lpm.repo_rm(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "update" then lpm.repo_update(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm.repo_update(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm.repo_list()
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "install" then lpm.install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "uninstall" then lpm.addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "reinstall" then lpm.addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
+  elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and (#ARGS == 2 or ARGS[3] == "list") then return lpm.addon_list(ARGS[2], ARGS[4], ARGS)
+  elseif ARGS[2] == "upgrade" then return lpm.addon_upgrade(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "install" then lpm.install(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "unstub" then return lpm.unstub(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "uninstall" then lpm.addon_uninstall(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "reinstall" then lpm.addon_reinstall(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "describe" then lpm.describe(nil, table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "list" then return lpm.addon_list(nil, ARGS[3], ARGS)
+  elseif ARGS[2] == "lite-xl" and (#ARGS == 2 or ARGS[3] == "list") then return lpm.lite_xl_list(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "uninstall" then return lpm.lite_xl_uninstall(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "install" then return lpm.lite_xl_install(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "switch" then return lpm.lite_xl_switch(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "run" then return lpm.lite_xl_run(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm.lite_xl_add(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "rm" then return lpm.lite_xl_rm(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" then error("unknown lite-xl command: " .. ARGS[3])
-  elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm_bottle_purge(common.slice(ARGS, 4))
-  elseif ARGS[2] == "run" then return lpm_lite_xl_run(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "switch" then return lpm_lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "purge" then lpm_purge()
+  elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm.bottle_purge(common.slice(ARGS, 4))
+  elseif ARGS[2] == "run" then return lpm.lite_xl_run(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "switch" then return lpm.lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "purge" then lpm.purge()
   else error("unknown command: " .. ARGS[2]) end
   if JSON then
     io.stdout:write(json.encode({ actions = actions, warnings = warnings }))
   end
+end
+
+
+local status = 0
+local function error_handler(err)
+  local s, e
+  if err then s, e = err:find("%:%d+") end
+  local message = e and err:sub(e + 3) or err
+  if JSON then
+    if VERBOSE then
+      io.stderr:write(json.encode({ error = err, actions = actions, warnings = warnings, traceback = debug.traceback(nil, 2) }) .. "\n")
+    else
+      io.stderr:write(json.encode({ error = message or err, actions = actions, warnings = warnings }) .. "\n")
+    end
+  else
+    if err then io.stderr:write(colorize((not VERBOSE and message or err) .. "\n", "red")) end
+    if VERBOSE then io.stderr:write(debug.traceback(nil, 2) .. "\n") end
+  end
+  io.stderr:flush()
+  status = -1
+end
+local function lock_warning()
+  log.warning("waiting for lpm global lock to be released (only one instance of lpm can be run at once)")
 end
 
 
@@ -2117,7 +2115,7 @@ xpcall(function()
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
-    repository = "string", ephemeral = "flag", mask = "array", raw = "string",
+    repository = "string", ephemeral = "flag", mask = "array", raw = "string", plugin = "array",
     -- filtration flags
     author = "array", tag = "array", stub = "array", dependency = "array", status = "array",
     type = "array", name = "array"
@@ -2133,7 +2131,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
   [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
-  [--no-color] [--table=...]
+  [--no-color] [--table=...] [--plugin=file]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -2263,6 +2261,8 @@ Flags have the following effects:
                            are those specified in this option.
   --ephemeral              Designates a bottle as 'ephemeral', meaning that it
                            is fully cleaned up when lpm exits.
+  --plugin                 Loads the specified plugin as part of lpm. Used
+                           for customizing lpm for various tasks.
 
 The following flags are useful when listing plugins, or generating the plugin
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2423,7 +2423,7 @@ not commonly used publically.
   end
 
   repositories = {}
-  if ARGS[2] == "purge" then return lpm_purge() end
+  if ARGS[2] == "purge" then return lpm.purge() end
   local ssl_certs = ARGS["ssl-certs"] or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
   if ssl_certs then
     if ssl_certs == "noverify" then
@@ -2465,6 +2465,16 @@ not commonly used publically.
     end
   end
 
+  for i,v in ipairs(ARGS["plugin"] or {}) do
+    local env = {
+      EXECUTABLE_EXTENSION = EXECUTABLE_EXTENSION, SHOULD_COLOR = SHOULD_COLOR, HOME = HOME, USERDIR = USERDIR, CACHEDIR = CACHEDIR, JSON = JSON, TABLE = TABLE, HEADER = HEADER, RAW = RAW, VERBOSE = VERBOSE, FILTRATION = FILTRATION, MOD_VERSION = MOD_VERSION, QUIET = QUIET, FORCE = FORCE, REINSTALL = REINSTALL, CONFIG = CONFIG,  NO_COLOR = NO_COLOR, AUTO_PULL_REMOTES = AUTO_PULL_REMOTES, ARCH = ARCH, ASSUME_YES = ASSUME_YES, NO_INSTALL_OPTIONAL = NO_INSTALL_OPTIONAL, TMPDIR = TMPDIR, DATADIR = DATADIR, BINARY = BINARY, POST = POST, PROGRESS = PROGRESS, SYMLINK = SYMLINK, REPOSITORY = REPOSITORY, EPHEMERAL = EPHEMERAL, MASK = MASK,
+      Addon = Addon, Repository = Repository, LiteXL = LiteXL, Bottle = Bottle, lpm = lpm, common = common, json = json, log = log,
+      settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar,
+    }
+    setmetatable(env, { __index = _G })
+    load(io.open(v):read("*all"), v, "bt", env)()
+  end
+
   -- Small utility functions that don't play into the larger app; are used for testing
   -- or for handy scripts.
   if ARGS[2] == "test" or ARGS[2] == "exec" then
@@ -2502,7 +2512,7 @@ not commonly used publically.
     for _, section in ipairs(common.concat(m.addons or {}, m["lite-xls"] or {})) do
       for _, file in ipairs(common.concat({ section }, section.files or {})) do
         if (not filter or (section.id and filter[section.id])) and file.url and file.checksum ~= "SKIP" and type(file.checksum) == "string" then
-          log_action("Computing checksum for " .. (section.id or section.version) .. " (" .. file.url .. ")...")
+          log.action("Computing checksum for " .. (section.id or section.version) .. " (" .. file.url .. ")...")
           local checksum = system.hash(common.get(file.url))
           if computed[file.checksum] and computed[file.checksum] ~= checksum then
             error("can't update manifest; existing checksum " .. file.checksum .. " exists in two separate places that now have disparate checksum values")
@@ -2522,7 +2532,7 @@ not commonly used publically.
     os.exit(0)
   end
   if ARGS[2] == "self-upgrade" then
-    lpm_self_upgrade(table.unpack(common.slice(ARGS, 3)))
+    lpm.self_upgrade(table.unpack(common.slice(ARGS, 3)))
     os.exit(0)
   end
 
@@ -2530,7 +2540,7 @@ not commonly used publically.
   -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   if engage_locks(function()
     settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
-    lpm_repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
+    lpm.repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
     repositories, lite_xls = {}, {}
     if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
     repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
@@ -2556,7 +2566,7 @@ not commonly used publically.
         if not system_lite_xl then
           system_lite_xl = detected_lite_xl
           table.insert(lite_xls, system_lite_xl)
-          lpm_lite_xl_save()
+          lpm.lite_xl_save()
         else
           lite_xls = common.grep(lite_xls, function(e) return e ~= system_lite_xl end)
           system_lite_xl = detected_lite_xl
