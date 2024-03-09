@@ -285,8 +285,10 @@ command.add(PluginView, {
           end
         end
       end,
-      if #value > 0 then -- only suggest if the user typed something
-        return common.fuzzy_match(plugin_names, value)
+      suggest = function(value)
+        if #value > 0 then -- only suggest if the user typed something
+          return common.fuzzy_match(plugin_names, value)
+        end
       end
     })
   end,
