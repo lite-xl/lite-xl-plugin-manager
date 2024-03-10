@@ -29,7 +29,7 @@ local function encode_nil(val)
 end
 
 
-local function encode_table(val, stack)
+local function encode_table(val, stack, options, depth)
   local res = {}
   stack = stack or {}
 
@@ -38,7 +38,7 @@ local function encode_table(val, stack)
 
   stack[val] = true
 
-  if rawget(val, 1) ~= nil or next(val) == nil then
+  if rawget(val, 1) ~= nil and next(val) ~= nil then
     -- Treat as array -- check keys are valid and it is not sparse
     local n = 0
     for k in pairs(val) do
@@ -52,20 +52,40 @@ local function encode_table(val, stack)
     end
     -- Encode
     for i, v in ipairs(val) do
-      table.insert(res, encode(v, stack))
+      if options.pretty then
+        table.insert(res, string.rep(options.indent, depth + 1) .. encode(v, stack, options, depth + 1))
+      else
+        table.insert(res, encode(v, stack, options, depth + 1))
+      end
     end
     stack[val] = nil
+    if options.pretty then
+      if #res == 0 then return "[]" end
+      return "[\n" ..
+          table.concat(res, ",\n") .. "\n" ..
+      string.rep(options.indent, depth) .. "]"
+    end
     return "[" .. table.concat(res, ",") .. "]"
-
   else
     -- Treat as an object
     for k, v in pairs(val) do
       if type(k) ~= "string" then
         error("invalid table: mixed or invalid key types")
       end
-      table.insert(res, encode(k, stack) .. ":" .. encode(v, stack))
+      if options.pretty then
+        table.insert(res, string.rep(options.indent, depth + 1) .. encode(k, stack, options, depth + 1) .. ": " .. encode(v, stack, options, depth + 1))
+      else
+        table.insert(res, encode(k, stack, options, depth + 1) .. ":" .. encode(v, stack, options, depth + 1))
+      end
     end
     stack[val] = nil
+    if options.pretty then
+      if #res == 0 then return "{}" end
+      table.sort(res)
+      return "{\n" ..
+        table.concat(res, ",\n") .. "\n" ..
+      string.rep(options.indent, depth) .. "}"
+    end
     return "{" .. table.concat(res, ",") .. "}"
   end
 end
@@ -94,18 +114,20 @@ local type_func_map = {
 }
 
 
-encode = function(val, stack)
+encode = function(val, stack, options, depth)
   local t = type(val)
   local f = type_func_map[t]
   if f then
-    return f(val, stack)
+    return f(val, stack, options, depth)
   end
   error("unexpected type '" .. t .. "'")
 end
 
 
-function json.encode(val)
-  return ( encode(val) )
+function json.encode(val, options)
+  if not options then options = {} end
+  if options.pretty and not options.indent then options.indent = "  " end
+  return encode(val, nil, options or {}, 0)
 end
 
 local parse
@@ -1181,7 +1203,7 @@ function Repository:generate_manifest(repo_id)
   end
   if #addons == 1 and not addons[1].path then addons[1].path = "." end
   table.sort(addons, function(a,b) return a.id:lower() < b.id:lower() end)
-  common.write(path .. PATHSEP .. "manifest.json", json.encode({ addons = addons }))
+  common.write(path .. PATHSEP .. "manifest.json", json.encode({ addons = addons }, { pretty = true }))
 end
 
 function Repository:fetch_if_not_present()
@@ -2479,7 +2501,12 @@ not commonly used publically.
         settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar,
       }
       setmetatable(env, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
-      assert(load(contents, v, "bt", env))()
+      local func, err = load(contents, v, "bt", env)
+      if func then
+        func()
+      else
+        log.warning("unable to load lpm plugin " .. v .. ": " .. err)
+      end
     end
   end
 
