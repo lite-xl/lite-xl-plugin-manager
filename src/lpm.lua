@@ -364,7 +364,7 @@ function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return 
 function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v, i)) end return t end
 function common.each(l, p) for i, v in ipairs(l) do p(v) end end
 function common.flat_map(l, p) local t = {} for i, v in ipairs(l) do local r = p(v) for k, w in ipairs(r) do table.insert(t, w) end end return t end
-function common.concat(t1, t2) local t = {} for i, v in ipairs(t1) do table.insert(t, v) end for i, v in ipairs(t2) do table.insert(t, v) end return t end
+function common.concat(...) local t = {} for i, tt in ipairs({ ... }) do for j, v in ipairs(tt) do table.insert(t, v) end end return t end
 function common.grep(l, p) local t = {} for i, v in ipairs(l) do if p(v) then table.insert(t, v) end end return t end
 function common.first(l, p) for i, v in ipairs(l) do if (type(p) == 'function' and p(v)) or p == v then return v end end end
 function common.slice(t, i, l) local n = {} for j = i, l ~= nil and (i - l) or #t do table.insert(n, t[j]) end return n end
@@ -470,6 +470,37 @@ function common.stat(path)
   local stat = system.stat(path)
   if not stat then error("can't find file or directory at " .. path) end
   return stat
+end
+
+function common.args(arguments, options)
+  local args = {}
+  local i = 1
+  while i <= #arguments do
+    local s,e, option, value = arguments[i]:find("%-%-([^=]+)=?(.*)")
+    if s and options[option] then
+      local flag_type = options[option]
+      if flag_type == "flag" then
+        args[option] = true
+      elseif flag_type == "string" or flag_type == "number" or flag_type == "array" then
+        if not value or value == "" then
+          if i == #arguments then error("option " .. option .. " requires a " .. flag_type) end
+          value = arguments[i+1]
+          i = i + 1
+        end
+        if flag_type == "number" and tonumber(flag_type) == nil then error("option " .. option .. " should be a number") end
+        if flag_type == "array" then
+          args[option] = args[option] or {}
+          table.insert(args[option], value)
+        else
+          args[option] = value
+        end
+      end
+    else
+      table.insert(args, arguments[i])
+    end
+    i = i + 1
+  end
+  return args
 end
 
 local LATEST_MOD_VERSION = "3.0.0"
@@ -1976,7 +2007,7 @@ end
 
 function lpm.self_upgrade(release)
   if not DEFAULT_RELEASE_URL or #DEFAULT_RELEASE_URL == 0 then error("self-upgrade has been disabled on lpm version " .. VERSION .. "; please upgrade it however you installed it") end
-  local path = ARGV[1]:find(PATHSEP) and system.stat(ARGV[1]) and ARGV[1] or common.path(ARGV[1])
+  local path = ARGS[1]:find(PATHSEP) and system.stat(ARGS[1]) and ARGS[1] or common.path(ARGS[1])
   if not path then error("can't find path to lpm") end
   release = release or "latest"
   local release_url = release and release:find("^https://") and release or (DEFAULT_RELEASE_URL:gsub("%%r", release))
@@ -2012,37 +2043,6 @@ function lpm.purge()
   common.rmrf(CACHEDIR)
 end
 
-local function parse_arguments(arguments, options)
-  local args = {}
-  local i = 1
-  while i <= #arguments do
-    local s,e, option, value = arguments[i]:find("%-%-([^=]+)=?(.*)")
-    if s then
-      local flag_type = options[option]
-      if not flag_type then error("unknown flag --" .. option) end
-      if flag_type == "flag" then
-        args[option] = true
-      elseif flag_type == "string" or flag_type == "number" or flag_type == "array" then
-        if not value or value == "" then
-          if i == #arguments then error("option " .. option .. " requires a " .. flag_type) end
-          value = arguments[i+1]
-          i = i + 1
-        end
-        if flag_type == "number" and tonumber(flag_type) == nil then error("option " .. option .. " should be a number") end
-        if flag_type == "array" then
-          args[option] = args[option] or {}
-          table.insert(args[option], value)
-        else
-          args[option] = value
-        end
-      end
-    else
-      table.insert(args, arguments[i])
-    end
-    i = i + 1
-  end
-  return args
-end
 
 
 local function run_command(ARGS)
@@ -2109,7 +2109,8 @@ end
 
 
 xpcall(function()
-  local ARGS = parse_arguments(ARGV, {
+  rawset(_G, "ARGS", ARGV)
+  ARGS = common.args(ARGS, {
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
     remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
@@ -2465,15 +2466,23 @@ not commonly used publically.
     end
   end
 
-  for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(":", os.getenv("LPM_PLUGINS") or "") })) do
+  local lpm_plugins_path = HOME .. PATHSEP .. ".config" .. PATHSEP .. "lpm" .. PATHSEP .. "plugins"
+  local lpm_plugins = system.stat(lpm_plugins_path) and common.map(common.grep(system.ls(lpm_plugins_path), function(path) return path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path end) or {}
+  for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(":", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
     if v ~= "" then
       local env = {
         EXECUTABLE_EXTENSION = EXECUTABLE_EXTENSION, SHOULD_COLOR = SHOULD_COLOR, HOME = HOME, USERDIR = USERDIR, CACHEDIR = CACHEDIR, JSON = JSON, TABLE = TABLE, HEADER = HEADER, RAW = RAW, VERBOSE = VERBOSE, FILTRATION = FILTRATION, MOD_VERSION = MOD_VERSION, QUIET = QUIET, FORCE = FORCE, REINSTALL = REINSTALL, CONFIG = CONFIG,  NO_COLOR = NO_COLOR, AUTO_PULL_REMOTES = AUTO_PULL_REMOTES, ARCH = ARCH, ASSUME_YES = ASSUME_YES, NO_INSTALL_OPTIONAL = NO_INSTALL_OPTIONAL, TMPDIR = TMPDIR, DATADIR = DATADIR, BINARY = BINARY, POST = POST, PROGRESS = PROGRESS, SYMLINK = SYMLINK, REPOSITORY = REPOSITORY, EPHEMERAL = EPHEMERAL, MASK = MASK,
         Addon = Addon, Repository = Repository, LiteXL = LiteXL, Bottle = Bottle, lpm = lpm, common = common, json = json, log = log,
         settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar,
       }
-      setmetatable(env, { __index = _G })
+      setmetatable(env, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
       assert(load(assert(io.open(v, "rb")):read("*all"), v, "bt", env))()
+    end
+  end
+
+  for i,v in ipairs(ARGS) do
+    if v:find("^%-%-") then
+      error("unknown flag " .. v)
     end
   end
 
