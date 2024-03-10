@@ -2132,7 +2132,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
   [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
-  [--no-color] [--table=...] [--plugin=file]
+  [--no-color] [--table=...] [--plugin=file/url]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -2263,9 +2263,11 @@ Flags have the following effects:
   --ephemeral              Designates a bottle as 'ephemeral', meaning that it
                            is fully cleaned up when lpm exits.
   --plugin                 Loads the specified plugin as part of lpm. Used
-                           for customizing lpm for various tasks.
+                           for customizing lpm for various tasks. Can be
+                           specified as a remote URL. By default, will always
+                           load all the plugins specified in $HOME/.config/lpm/plugins.
 
-The following flags are useful when listing plugins, or generating the plugin
+The following flags are useful when listing addons, or generating the addon
 table. Putting a ! infront of the string will invert the filter. Multiple
 filters of the same type can be specified to create an OR relationship.
 
@@ -2470,13 +2472,14 @@ not commonly used publically.
   local lpm_plugins = system.stat(lpm_plugins_path) and common.map(common.grep(system.ls(lpm_plugins_path), function(path) return path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path end) or {}
   for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(":", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
     if v ~= "" then
+      local contents = v:find("^https?://") and common.get(v) or common.read(v)
       local env = {
         EXECUTABLE_EXTENSION = EXECUTABLE_EXTENSION, SHOULD_COLOR = SHOULD_COLOR, HOME = HOME, USERDIR = USERDIR, CACHEDIR = CACHEDIR, JSON = JSON, TABLE = TABLE, HEADER = HEADER, RAW = RAW, VERBOSE = VERBOSE, FILTRATION = FILTRATION, MOD_VERSION = MOD_VERSION, QUIET = QUIET, FORCE = FORCE, REINSTALL = REINSTALL, CONFIG = CONFIG,  NO_COLOR = NO_COLOR, AUTO_PULL_REMOTES = AUTO_PULL_REMOTES, ARCH = ARCH, ASSUME_YES = ASSUME_YES, NO_INSTALL_OPTIONAL = NO_INSTALL_OPTIONAL, TMPDIR = TMPDIR, DATADIR = DATADIR, BINARY = BINARY, POST = POST, PROGRESS = PROGRESS, SYMLINK = SYMLINK, REPOSITORY = REPOSITORY, EPHEMERAL = EPHEMERAL, MASK = MASK,
         Addon = Addon, Repository = Repository, LiteXL = LiteXL, Bottle = Bottle, lpm = lpm, common = common, json = json, log = log,
         settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar,
       }
       setmetatable(env, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
-      assert(load(assert(io.open(v, "rb")):read("*all"), v, "bt", env))()
+      assert(load(contents, v, "bt", env))()
     end
   end
 
