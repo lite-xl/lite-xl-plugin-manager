@@ -2512,6 +2512,7 @@ not commonly used publically.
 
   for i,v in ipairs(ARGS) do
     if v:find("^%-%-") then
+      if #v == 2 then break end
       error("unknown flag " .. v)
     end
   end
