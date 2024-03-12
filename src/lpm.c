@@ -1014,7 +1014,7 @@ static int strncicmp(const char* a, const char* b, int n) {
   return 0;
 }
 
-static const char* strnstr(const char* haystack, const char* needle, int n) {
+static const char* strnstr_local(const char* haystack, const char* needle, int n) {
   int len = strlen(needle);
   for (int i = 0; i <= n - len; ++i) {
     if (strncmp(&haystack[i], needle, len) == 0)
@@ -1174,7 +1174,7 @@ static int lpm_get(lua_State* L) {
   while (1) {
     // If we have an unknown amount of chunk bytes to be fetched, determine the size of the next chunk.
     while (chunk_length == -1) {
-      char* newline = (char*)strnstr(buffer, "\r\n", buffer_length);
+      char* newline = (char*)strnstr_local(buffer, "\r\n", buffer_length);
       if (newline) {
         *newline = '\0';
         if (sscanf(buffer, "%x", &chunk_length) != 1) {
@@ -1226,7 +1226,7 @@ static int lpm_get(lua_State* L) {
           goto finish;
         }
         if (buffer_length >= 2) {
-          if (!strnstr(buffer, "\r\n", 2)) {
+          if (!strnstr_local(buffer, "\r\n", 2)) {
             snprintf(err, sizeof(err), "invalid end to chunk for %s%s", hostname, rest);
             goto cleanup;
           }
