@@ -599,14 +599,14 @@ function common.get(source, options)
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
   if not rest or rest == "" then rest = "/" end
   local res, headers
-  if not checksum then
+  if checksum == "SKIP" and not target then
     res, headers = system.get(protocol, hostname, port, rest, target, callback)
     if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
     return res
   end
-  local cache_dir = options.cache or CACHEDIR
+  local cache_dir = checksum ~= "SKIP" and TMPDIR or (options.cache or CACHEDIR)
   if not system.stat(cache_dir .. PATHSEP .. "files") then common.mkdirp(cache_dir .. PATHSEP .. "files") end
-  local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. system.hash(source)
+  local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. system.hash(checksum .. source)
   if checksum ~= "SKIP" and system.stat(cache_path) and system.hash(cache_path, "file") ~= checksum then common.rmrf(cache_path) end
   local res
   if not system.stat(cache_path) then
@@ -619,6 +619,7 @@ function common.get(source, options)
     common.rename(cache_path .. ".part", cache_path)
   end
   if target then common.copy(cache_path, target) else res = io.open(cache_path, "rb"):read("*all") end
+  if checksum == "SKIP" then common.rmrf(cache_path) end
   return res
 end
 
@@ -2434,7 +2435,9 @@ not commonly used publically.
           return
         end
         if not start_time or not last_read or total_read < last_read then start_time = system.time() end
-        local status_line = string.format("%s [%s/s][%03d%%]: ", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100))
+        local status_line = total_objects_or_content_length and
+          string.format("%s [%s/s][%03d%%]: ", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)), math.floor((received_objects and (received_objects/total_objects_or_content_length) or (total_read/total_objects_or_content_length) or 0)*100)) or
+          string.format("%s [%s/s]: ", format_bytes(total_read), format_bytes(total_read / (system.time() - start_time)))
         local terminal_width = system.tcwidth(1)
         if not terminal_width then terminal_width = #status_line + #progress_bar_label end
         local characters_remaining = terminal_width - #status_line
@@ -2527,7 +2530,8 @@ not commonly used publically.
     os.exit(0)
   end
   if ARGS[2] == "download" then
-    local file = common.get(ARGS[3], { target = ARGS[4] });
+    if ARGS[4] then log.progress_action("Downloading " .. ARGS[3]) end
+    local file = common.get(ARGS[3], { target = ARGS[4], callback = write_progress_bar });
     if file then print(file) end
     os.exit(0)
   end

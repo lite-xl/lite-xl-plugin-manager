@@ -1174,8 +1174,9 @@ static int lpm_get(lua_State* L) {
   while (1) {
     // If we have an unknown amount of chunk bytes to be fetched, determine the size of the next chunk.
     while (chunk_length == -1) {
-      const char* newline = strnstr(buffer, "\r\n", buffer_length);
+      char* newline = (char*)strnstr(buffer, "\r\n", buffer_length);
       if (newline) {
+        *newline = '\0';
         if (sscanf(buffer, "%x", &chunk_length) != 1) {
           snprintf(err, sizeof(err), "error retrieving chunk length %s%s", hostname, rest);
           goto cleanup;
@@ -1206,7 +1207,10 @@ static int lpm_get(lua_State* L) {
         if (callback_function) {
           lua_pushvalue(L, callback_function);
           lua_pushinteger(L, total_downloaded);
-          lua_pushinteger(L, content_length);
+          if (content_length == -1)
+            lua_pushnil(L);
+          else
+            lua_pushinteger(L, content_length);
           lua_call(L, 2, 0);
         }
         if (file)
