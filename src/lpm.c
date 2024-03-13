@@ -1222,9 +1222,8 @@ static int lpm_get(lua_State* L) {
           memmove(buffer, &buffer[to_write], buffer_length);
       }
       if (chunk_written == chunk_length) {
-        if (!chunked) {
+        if (!chunked)
           goto finish;
-        }
         if (buffer_length >= 2) {
           if (!strnstr_local(buffer, "\r\n", 2)) {
             snprintf(err, sizeof(err), "invalid end to chunk for %s%s", hostname, rest);
@@ -1237,13 +1236,14 @@ static int lpm_get(lua_State* L) {
       }
     }
     if (chunk_length > 0) {
-      buffer_length = lpm_socket_read(s, buffer, imin(sizeof(buffer), chunk_length - chunk_written + (chunked ? 2 : 0)), ssl_ctx);
-      if ((!ssl_ctx && buffer_length == 0) || (ssl_ctx && content_length == -1 && buffer_length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY))
+      int length = lpm_socket_read(s, &buffer[buffer_length], imin(sizeof(buffer) - buffer_length, chunk_length - chunk_written + (chunked ? 2 : 0)), ssl_ctx);
+      if ((!ssl_ctx && length == 0) || (ssl_ctx && content_length == -1 && length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY))
         goto finish;
-      if (buffer_length <= 0) {
-        mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? buffer_length : errno, "error retrieving full chunk for %s%s", hostname, rest);
+      if (length <= 0) {
+        mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full chunk for %s%s", hostname, rest);
         goto cleanup;
       }
+      buffer_length += length;
     }
   }
   finish:

@@ -604,7 +604,7 @@ function common.get(source, options)
     if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
     return res
   end
-  local cache_dir = checksum ~= "SKIP" and TMPDIR or (options.cache or CACHEDIR)
+  local cache_dir = checksum == "SKIP" and TMPDIR or (options.cache or CACHEDIR)
   if not system.stat(cache_dir .. PATHSEP .. "files") then common.mkdirp(cache_dir .. PATHSEP .. "files") end
   local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. system.hash(checksum .. source)
   if checksum ~= "SKIP" and system.stat(cache_path) and system.hash(cache_path, "file") ~= checksum then common.rmrf(cache_path) end
