@@ -1097,7 +1097,7 @@ end
 
 function Repository:parse_manifest(repo_id)
   if self.manifest then return self.manifest, self.remotes end
-  if system.stat(self.local_path)  then
+  if system.stat(self.local_path) then
     self.manifest_path = self.local_path .. PATHSEP .. "manifest.json"
     if not system.stat(self.manifest_path) then
       log.warning("Can't find manifest.json for " .. self:url() .. "; automatically generating manifest.")
@@ -1219,14 +1219,15 @@ function Repository:fetch()
   local status, err = pcall(function()
     if not self.branch and not self.commit then
       temporary_path = TMPDIR .. PATHSEP .. "transient-repo"
-      path = self.repo_path .. PATHSEP .. "master"
       common.rmrf(temporary_path)
       common.mkdirp(temporary_path)
       log.progress_action("Fetching " .. self.remote .. "...")
       system.init(temporary_path, self.remote)
-      self.branch = system.fetch(temporary_path, write_progress_bar)
+      self.branch = system.fetch(temporary_path, write_progress_bar):gsub("^refs/heads/", "")
       if not self.branch then error("Can't find remote branch for " .. self.remote) end
+      path = self.repo_path .. PATHSEP .. self.branch
       self.local_path = path
+      common.reset(temporary_path, self.branch, "hard")
     else
       path = self.local_path
       local exists = system.stat(path)

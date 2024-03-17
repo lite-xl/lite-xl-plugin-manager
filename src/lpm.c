@@ -35,7 +35,11 @@
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
-#include <mbedtls/net.h>
+#if MBEDTLS_VERSION_MAJOR < 3
+  #include <mbedtls/net.h>
+#else
+  #include <mbedtls/net_sockets.h>
+#endif
 #ifdef MBEDTLS_DEBUG_C
   #include <mbedtls/debug.h>
 #endif
@@ -133,7 +137,7 @@ static int lpm_hash(lua_State* L) {
   unsigned char buffer[digest_length];
   mbedtls_sha256_context hash_ctx;
   mbedtls_sha256_init(&hash_ctx);
-  mbedtls_sha256_starts_ret(&hash_ctx, 0);
+  mbedtls_sha256_starts(&hash_ctx, 0);
   if (strcmp(type, "file") == 0) {
     FILE* file = lua_fopen(L, data, "rb");
     if (!file) {
@@ -143,15 +147,15 @@ static int lpm_hash(lua_State* L) {
     while (1) {
       unsigned char chunk[4096];
       size_t bytes = fread(chunk, 1, sizeof(chunk), file);
-      mbedtls_sha256_update_ret(&hash_ctx, chunk, bytes);
+      mbedtls_sha256_update(&hash_ctx, chunk, bytes);
       if (bytes < sizeof(chunk))
         break;
     }
     fclose(file);
   } else {
-    mbedtls_sha256_update_ret(&hash_ctx, data, len);
+    mbedtls_sha256_update(&hash_ctx, data, len);
   }
-  mbedtls_sha256_finish_ret(&hash_ctx, buffer);
+  mbedtls_sha256_finish(&hash_ctx, buffer);
   mbedtls_sha256_free(&hash_ctx);
   lua_pushhexstring(L, buffer, digest_length);
   return 1;
