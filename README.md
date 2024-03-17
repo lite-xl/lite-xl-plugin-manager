@@ -81,6 +81,8 @@ You can also use `scoop` to grab `lpm`, courtesy of @cvladan:
 scoop install https://gist.githubusercontent.com/cvladan/416c1945c9e446a6fc64ba766d6ee4ef/raw/lite-xl-plugin-manager.json
 ```
 
+Please note, that _meson_ is _not_ necessarily the best way to compile `lpm`. If you have troubles with it, please do consider using the build.sh script.
+
 ## Supporting Libraries / Dependencies
 
 As seen in the `lib` folder, the following external libraries are used to
