@@ -411,7 +411,11 @@ end
 
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
-function common.path(exec) return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) local s = system.stat(e) return s and s.type ~= "dir" and s.mode and s.mode & 73 and (not s.symlink or system.stat(s.symlink)) end) end
+function common.path(exec)
+  -- On windows, in theory to resolve things, we also check the working directory even without a PATHSEP.
+  if exec:find(PATHSEP) or PLATFORM == "windows" and system.stat(exec) then return exec end
+  return common.first(common.map({ common.split(":", os.getenv("PATH")) }, function(e) return e .. PATHSEP .. exec end), function(e) local s = system.stat(e) return s and s.type ~= "dir" and s.mode and s.mode & 73 and (not s.symlink or system.stat(s.symlink)) end)
+end
 function common.normalize_path(path) if PLATFORM == "windows" and path then path = path:gsub("/", PATHSEP) end if not path or not path:find("^~") then return path end return os.getenv("HOME") .. path:sub(2) end
 function common.rmrf(root)
   local info = root and root ~= "" and system.stat(root)
@@ -2031,23 +2035,21 @@ end
 
 function lpm.self_upgrade(release)
   if not DEFAULT_RELEASE_URL or #DEFAULT_RELEASE_URL == 0 then error("self-upgrade has been disabled on lpm version " .. VERSION .. "; please upgrade it however you installed it") end
-  local path = ARGS[1]:find(PATHSEP) and system.stat(ARGS[1]) and ARGS[1] or common.path(ARGS[1])
-  if not path then error("can't find path to lpm") end
   release = release or "latest"
   local release_url = release and release:find("^https://") and release or (DEFAULT_RELEASE_URL:gsub("%%r", release))
-  local stat = system.stat(path)
-  if not stat then error("can't find lpm at " .. path) end
+  local stat = EXEFILE and system.stat(EXEFILE)
+  if not stat then error("can't find lpm at " .. EXEFILE) end
   local new_temporary_file = SYSTMPDIR ..  PATHSEP .. "lpm.upgrade"
   local old_temporary_file = SYSTMPDIR ..  PATHSEP .. "lpm.backup"
   common.rmrf(new_temporary_file)
   common.rmrf(old_temporary_file)
   local status, err = pcall(common.get, release_url, { cache = SYSTMPDIR, target = new_temporary_file, callback = write_progress_bar })
   if not status then error("can't find release for lpm at " .. release_url .. (VERBOSE and (": " .. err) or  "")) end
-  if common.is_path_different(new_temporary_file, path) then
-    status, err = pcall(common.rename, path, old_temporary_file)
+  if common.is_path_different(new_temporary_file, EXEFILE) then
+    status, err = pcall(common.rename, EXEFILE, old_temporary_file)
     if not status then error("can't move lpm executable; do you need to " .. (PLATFORM == "windows" and "run as administrator" or "be root") .. "?" .. (VERBOSE and ": " .. err or "")) end
-    common.rename(new_temporary_file, path)
-    system.chmod(path, stat.mode)
+    common.rename(new_temporary_file, EXEFILE)
+    system.chmod(EXEFILE, stat.mode)
     if PLATFORM ~= "windows" then -- because we can't delete the running executbale on windows
       common.rmrf(old_temporary_file)
     end

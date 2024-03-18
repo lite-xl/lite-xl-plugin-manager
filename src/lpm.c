@@ -1503,6 +1503,22 @@ int main(int argc, char* argv[]) {
   #endif
   lua_setglobal(L, "SYSTMPDIR");
 
+  #if _WIN32
+    wchar_t selfpath[MAX_PATH] = {0};
+    if (GetModuleFileNameW(0, selfpath, MAX_PATH - 1))
+      lua_toutf8(L, selfpath);
+    else
+      lua_pushnil(L);
+  #else
+    char selfpath[MAX_PATH] = {0};
+    int length = readlink("/proc/self/exe", selfpath, MAX_PATH);
+    if (length > 0)
+      lua_pushlstring(L, selfpath, length);
+    else
+      lua_pushnil(L);
+  #endif
+  lua_setglobal(L, "EXEFILE");
+
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
   lua_pushliteral(L, LPM_DEFAULT_REPOSITORY);
