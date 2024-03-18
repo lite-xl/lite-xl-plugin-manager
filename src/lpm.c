@@ -1471,7 +1471,21 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "VERSION");
   lua_pushliteral(L, ARCH_PLATFORM);
   lua_setglobal(L, "PLATFORM");
-  lua_pushboolean(L, isatty(fileno(stdout)));
+  #if _WIN32
+    DWORD handles[] = { STD_OUTPUT_HANDLE, STD_ERROR_HANDLE };
+    int setVirtualProcessing = 0;
+    for (int i = 0; i < 2; ++i) {
+      DWORD mode = 0;
+      if (GetConsoleMode(GetStdHandle(handles[i]), &mode)) {
+        if (SetConsoleMode(GetStdHandle(handles[i]), mode | ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
+          setVirtualProcessing = 1;
+      }
+    }
+    // This will fail with mintty, see here: https://github.com/mintty/mintty/issues/482
+    lua_pushboolean(L, setVirtualProcessing || isatty(fileno(stdout)));
+  #else
+    lua_pushboolean(L, isatty(fileno(stdout)));
+  #endif
   lua_setglobal(L, "TTY");
   #if _WIN32
     lua_pushliteral(L, "\\");

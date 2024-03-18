@@ -528,7 +528,7 @@ end
 local LATEST_MOD_VERSION = "3.0.0"
 local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
 local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, RAW, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, MASK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
-local SHOULD_COLOR = os.getenv("TERM") and os.getenv("TERM") ~= "dumb" and not os.getenv("NO_COLOR")
+local SHOULD_COLOR = (PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")
 local Addon, Repository, LiteXL, Bottle, lpm, log = {}, {}, {}, {}, {}, {}
 
 local function engage_locks(func, err, warn)
