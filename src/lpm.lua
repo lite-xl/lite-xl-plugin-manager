@@ -469,6 +469,7 @@ function common.copy(src, dst, hidden)
       dst_io:write(chunk)
     end
     dst_io:close()
+    src_io:close()
     system.chmod(dst, src_stat.mode)
   end
 end
