@@ -1,3 +1,13 @@
+# 1.2.5
+
+* Added in support for `mbedtls3`.
+* Added in support for `Transfer-Encoding: chunked`.
+* Added in better support for determining the path of the running exectable in `EXEFILE`.
+* Added in detection of being a TTY on windows for some terminals.
+* Fixed a bug with self-upgrading in `common.copy` that would cause a race between the garbage collector and the main program on windows.
+* Allowed for pretty-printing of json.
+* Allowed for local plugins to exist for `lpm`, allowing it to modify behaviour if specified with `--plugin` or if located in `~/.config/lpm/plugins`; plugins currently located at https://github.com/adamharrison/lite-xl-maintenance.
+
 # 1.2.4
 
 * Added `aarch64-linux` to the release CI list.
