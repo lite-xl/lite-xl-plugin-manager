@@ -2329,7 +2329,7 @@ There exist also other debug commands that are potentially useful, but are
 not commonly used publically.
 
   lpm test <test file>               Runs the specified test suite.
-  lpm exec <file>                    Runs the specified lua file with the internal
+  lpm exec <file|string>             Runs the specified lua file/string with the internal
                                      interpreter.
   lpm download <url> [target]        Downloads the specified URL to stdout,
                                      or to the specified target file.
@@ -2530,7 +2530,17 @@ not commonly used publically.
     local arg = common.slice(ARGS, 4)
     arg[0] = ARGS[1]
     rawset(_G, "arg", arg)
-    loadfile(ARGS[3])(table.unpack(arg))
+    local chunk, err
+    if system.stat(ARGS[3]) then
+      chunk, err = loadfile(ARGS[3])
+    else
+      chunk, err = load(ARGS[3])
+    end
+    if chunk then
+      chunk(table.unpack(arg))
+    else
+      error(err)
+    end
     os.exit(0)
   end
   if ARGS[2] == "download" then
