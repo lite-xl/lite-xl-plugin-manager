@@ -2502,7 +2502,7 @@ not commonly used publically.
   local env = {
     EXECUTABLE_EXTENSION = EXECUTABLE_EXTENSION, SHOULD_COLOR = SHOULD_COLOR, HOME = HOME, USERDIR = USERDIR, CACHEDIR = CACHEDIR, JSON = JSON, TABLE = TABLE, HEADER = HEADER, RAW = RAW, VERBOSE = VERBOSE, FILTRATION = FILTRATION, MOD_VERSION = MOD_VERSION, QUIET = QUIET, FORCE = FORCE, REINSTALL = REINSTALL, CONFIG = CONFIG,  NO_COLOR = NO_COLOR, AUTO_PULL_REMOTES = AUTO_PULL_REMOTES, ARCH = ARCH, ASSUME_YES = ASSUME_YES, NO_INSTALL_OPTIONAL = NO_INSTALL_OPTIONAL, TMPDIR = TMPDIR, DATADIR = DATADIR, BINARY = BINARY, POST = POST, PROGRESS = PROGRESS, SYMLINK = SYMLINK, REPOSITORY = REPOSITORY, EPHEMERAL = EPHEMERAL, MASK = MASK,
     Addon = Addon, Repository = Repository, LiteXL = LiteXL, Bottle = Bottle, lpm = lpm, common = common, json = json, log = log,
-    settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar,
+    settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar = write_progress_bar,
   }
   for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(":", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
     if v ~= "" then
