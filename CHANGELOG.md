@@ -1,3 +1,8 @@
+# 1.2.6
+
+* Added in support for arbitrary execution of strings, rather than just of files with `exec`.
+* Added in support for accessing `lpm` internals with `exec`, just as you would with plugins.
+
 # 1.2.5
 
 * Added in support for `mbedtls3`.
