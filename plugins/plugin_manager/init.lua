@@ -5,8 +5,6 @@ local common = require "core.common"
 local config = require "core.config"
 local command = require "core.command"
 local json = require "libraries.json"
-local keymap = require "core.keymap"
-
 
 local PluginManager = {
   last_refresh = nil,
@@ -14,7 +12,9 @@ local PluginManager = {
 }
 local binary_extension = (PLATFORM == "Windows" and ".exe" or (PLATFORM == "Android" and ".so" or ""))
 config.plugins.plugin_manager = common.merge({
+  -- Name of the plugin manager binary.
   lpm_binary_name = "lpm." .. ARCH .. binary_extension,
+  -- Path to the plugin manager binary.
   lpm_binary_path = nil,
   -- Restarts the plugin manager on changes.
   restart_on_change = true,
@@ -27,7 +27,17 @@ config.plugins.plugin_manager = common.merge({
   -- Whether or not to force install things.
   force = false,
   -- Dumps commands that run to stdout, as well as responses from lpm.
-  debug = false
+  debug = false,
+  config_spec = {
+		name = "Plugin Manager",
+    {
+			label = "Restart On Change",
+			description = "Automatically restart the plugin manager on changes.",
+			path = "restart_on_change",
+			type = "toggle",
+			default = true,
+		}
+  }
 }, config.plugins.plugin_manager)
 
 package.path = package.path .. ";" .. USERDIR .. "/libraries/?.lua" .. ";" .. USERDIR .. "/libraries/?/init.lua" .. ";" .. DATADIR .. "/libraries/?.lua" .. ";" .. DATADIR .. "/libraries/?/init.lua"
