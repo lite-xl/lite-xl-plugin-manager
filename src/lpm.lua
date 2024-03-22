@@ -1826,8 +1826,24 @@ function lpm.lite_xl_run(version, ...)
   local bottle = Bottle.new(lite_xl, addons, CONFIG)
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
-    bottle:run(common.slice(arguments, i + 1))
-    if EPHEMERAL then bottle:destruct() end
+    if EPHEMERAL then
+      local lockfile = bottle.local_path .. PATHSEP .. "lock"
+      if not system.stat(lockfile) then common.write(lockfile, "0") end
+      system.flock(lockfile, function()
+        common.write(lockfile, common.read(lockfile) + 1)
+      end)
+      bottle:run(common.slice(arguments, i + 1))
+      system.flock(lockfile, function()
+        local locks = tonumber(common.read(lockfile))
+        if locks == 1 then
+          bottle:destruct()
+        else
+          common.write(lockfile, locks - 1)
+        end
+      end)
+    else
+      bottle:run(common.slice(arguments, i + 1))
+    end
   end
 end
 
