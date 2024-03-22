@@ -595,31 +595,33 @@ end
 
 function common.get(source, options)
   options = options or {}
+  if not options.depth then options.depth = {} end
+  table.insert(options.depth, source)
   local target, checksum, callback, depth = options.target, options.checksum or "SKIP", options.callback, options.depth
   if not source then error("requires url") end
-  if (depth or 0) > 10 then error("too many redirects") end
+  if #depth > 10 then error("too many redirects") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
-  log.progress_action("Downloading " .. source:sub(1, 100) .. "...")
+  if #depth == 1 then log.progress_action("Downloading " .. options.depth[1]:sub(1, 100) .. "...") end
   if not protocol then error("malfomed url " .. source) end
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
   if not rest or rest == "" then rest = "/" end
   local res, headers
   if checksum == "SKIP" and not target then
     res, headers = system.get(protocol, hostname, port, rest, target, callback)
-    if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
+    if headers.location then return common.get(headers.location, common.merge(options, { })) end
     return res
   end
   local cache_dir = checksum == "SKIP" and TMPDIR or (options.cache or CACHEDIR)
   if not system.stat(cache_dir .. PATHSEP .. "files") then common.mkdirp(cache_dir .. PATHSEP .. "files") end
-  local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. system.hash(checksum .. source)
+  local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. system.hash(checksum .. options.depth[1])
   if checksum ~= "SKIP" and system.stat(cache_path) and system.hash(cache_path, "file") ~= checksum then common.rmrf(cache_path) end
   local res
   if not system.stat(cache_path) then
     res, headers = system.get(protocol, hostname, port, rest, cache_path .. ".part", callback)
-    if headers.location then return common.get(headers.location, common.merge(options, { depth = (depth or 0) + 1 })) end
+    if headers.location then return common.get(headers.location, common.merge(options, {  })) end
     if checksum ~= "SKIP" and system.hash(cache_path .. ".part", "file") ~= checksum then
       common.rmrf(cache_path .. ".part")
-      log.fatal_warning("checksum doesn't match for " .. source)
+      log.fatal_warning("checksum doesn't match for " .. options.depth[1])
     end
     common.rename(cache_path .. ".part", cache_path)
   end
