@@ -1400,7 +1400,14 @@ function Bottle.new(lite_xl, addons, config, is_system)
   if not is_system then
     table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
     self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version end)) .. (config or "") .. (EPHEMERAL and "E" or ""))
-    self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
+    if EPHEMERAL then
+      for i = 1, 1000 do
+        self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash .. "-" .. i
+        if not system.stat(self.local_path) then break elseif i == 1000 then error("can't create epehemeral bottle") end
+      end
+    else
+      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
+    end
   end
   return self
 end
@@ -1826,24 +1833,8 @@ function lpm.lite_xl_run(version, ...)
   local bottle = Bottle.new(lite_xl, addons, CONFIG)
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
-    if EPHEMERAL then
-      local lockfile = bottle.local_path .. PATHSEP .. "lock"
-      if not system.stat(lockfile) then common.write(lockfile, "0") end
-      system.flock(lockfile, function()
-        common.write(lockfile, common.read(lockfile) + 1)
-      end)
-      bottle:run(common.slice(arguments, i + 1))
-      system.flock(lockfile, function()
-        local locks = tonumber(common.read(lockfile))
-        if locks == 1 then
-          bottle:destruct()
-        else
-          common.write(lockfile, locks - 1)
-        end
-      end)
-    else
-      bottle:run(common.slice(arguments, i + 1))
-    end
+    bottle:run(common.slice(arguments, i + 1))
+    if EPHEMERAL then bottle:destruct() end
   end
 end
 
@@ -2306,7 +2297,9 @@ Flags have the following effects:
                            repositories, simply act as if the only repositories
                            are those specified in this option.
   --ephemeral              Designates a bottle as 'ephemeral', meaning that it
-                           is fully cleaned up when lpm exits.
+                           is fully cleaned up when lpm exits. Multiple ephemeral
+                           bottles will also execute independently of one another
+                           even if they share plugins.
   --plugin                 Loads the specified plugin as part of lpm. Used
                            for customizing lpm for various tasks. Can be
                            specified as a remote URL. By default, will always
