@@ -2046,7 +2046,7 @@ function lpm.describe()
 end
 
 function lpm.addon_upgrade()
-  for i,addon in ipairs(system_bottle:installed_addons()) do
+  for _,addon in ipairs(system_bottle:installed_addons()) do
     local upgrade = common.sort({ system_bottle:get_addon(addon.id, ">" .. addon.version) }, function(a, b) return compare_version(b.version, a.version) end)[1]
     if upgrade then upgrade:install(system_bottle) end
   end

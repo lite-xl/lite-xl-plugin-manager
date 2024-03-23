@@ -1115,22 +1115,22 @@ static int lpm_get(lua_State* L) {
   if (buffer_length < 0) {
     mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? buffer_length : errno, "can't write to socket %s", hostname); goto cleanup;
   }
-  int bytes_read = 0;
   const char* header_end = NULL;
 
 
-  while (!header_end && bytes_read < sizeof(buffer) - 1) {
-    buffer_length = lpm_socket_read(s, &buffer[bytes_read], sizeof(buffer) - bytes_read - 1, ssl_ctx);
-    if (buffer_length < 0) {
+  buffer_length = 0;
+  while (!header_end && buffer_length < sizeof(buffer) - 1) {
+    int length = lpm_socket_read(s, &buffer[buffer_length], sizeof(buffer) - buffer_length - 1, ssl_ctx);
+    if (length < 0) {
       mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? buffer_length : errno, "can't read from socket %s", hostname); goto cleanup;
-    } else if (buffer_length > 0) {
-      bytes_read += buffer_length;
-      buffer[bytes_read] = 0;
+    } else if (length > 0) {
+      buffer_length += length;
+      buffer[buffer_length] = 0;
       header_end = strstr(buffer, "\r\n\r\n");
     }
   }
   if (!header_end) {
-    snprintf(err, sizeof(err), "can't parse response headers for %s%s: %s", hostname, rest, bytes_read >= sizeof(buffer) - 1 ? "response header buffer length exceeded" : "malformed response");
+    snprintf(err, sizeof(err), "can't parse response headers for %s://%s%s: %s", protocol, hostname, rest, buffer_length >= sizeof(buffer) - 1 ? "response header buffer length exceeded" : "malformed response");
     goto cleanup;
   }
   header_end += 4;
@@ -1146,10 +1146,10 @@ static int lpm_get(lua_State* L) {
         lua_pushlstring(L, location, len);
         lua_setfield(L, -2, "location");
       } else
-        snprintf(err, sizeof(err), "received invalid %d-response from %s%s: %d", code, hostname, rest, code);
+        snprintf(err, sizeof(err), "received invalid %d-response from %s://%s%s: %d", code, protocol, hostname, rest, code);
       goto cleanup;
     } else {
-      snprintf(err, sizeof(err), "received non 200-response from %s%s: %d", hostname, rest, code); goto cleanup;
+      snprintf(err, sizeof(err), "received non 200-response from %s://%s%s: %d", protocol, hostname, rest, code); goto cleanup;
     }
   }
   const char* transfer_encoding = get_header(buffer, "transfer-encoding", NULL);
@@ -1182,7 +1182,7 @@ static int lpm_get(lua_State* L) {
       if (newline) {
         *newline = '\0';
         if (sscanf(buffer, "%x", &chunk_length) != 1) {
-          snprintf(err, sizeof(err), "error retrieving chunk length %s%s", hostname, rest);
+          snprintf(err, sizeof(err), "error retrieving chunk length for %s://%s%s", protocol, hostname, rest);
           goto cleanup;
         }
         if (chunk_length == 0)
@@ -1192,12 +1192,12 @@ static int lpm_get(lua_State* L) {
           memmove(buffer, newline + 2, buffer_length);
         chunk_written = 0;
       } else if (buffer_length >= sizeof(buffer)) {
-        snprintf(err, sizeof(err), "can't find chunk length for %s%s", hostname, rest);
+        snprintf(err, sizeof(err), "can't find chunk length for %s://%s%s", protocol, hostname, rest);
         goto cleanup;
       } else {
         int length = lpm_socket_read(s, &buffer[buffer_length], sizeof(buffer) - buffer_length, ssl_ctx);
         if (length <= 0 || (ssl_ctx && length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY)) {
-          mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full response for %s%s", hostname, rest);
+          mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full response for %s://%s%s", protocol, hostname, rest);
           goto cleanup;
         }
         buffer_length += length;
@@ -1230,7 +1230,7 @@ static int lpm_get(lua_State* L) {
           goto finish;
         if (buffer_length >= 2) {
           if (!strnstr_local(buffer, "\r\n", 2)) {
-            snprintf(err, sizeof(err), "invalid end to chunk for %s%s", hostname, rest);
+            snprintf(err, sizeof(err), "invalid end to chunk for %s://%s%s", protocol, hostname, rest);
             goto cleanup;
           }
           memmove(buffer, &buffer[2], buffer_length - 2);
@@ -1244,7 +1244,7 @@ static int lpm_get(lua_State* L) {
       if ((!ssl_ctx && length == 0) || (ssl_ctx && content_length == -1 && length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY))
         goto finish;
       if (length <= 0) {
-        mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full chunk for %s%s", hostname, rest);
+        mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full chunk for %s://%s%s", protocol, hostname, rest);
         goto cleanup;
       }
       buffer_length += length;
@@ -1259,7 +1259,7 @@ static int lpm_get(lua_State* L) {
       luaL_pushresult(&B);
     }
     if (content_length != -1 && total_downloaded != content_length) {
-      snprintf(err, sizeof(err), "error retrieving full response for %s%s", hostname, rest);
+      snprintf(err, sizeof(err), "error retrieving full response for %s://%s%s", protocol, hostname, rest);
       goto cleanup;
     }
     if (callback_function) {
