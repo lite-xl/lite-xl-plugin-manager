@@ -1,3 +1,13 @@
+# 1.2.7
+
+* Fixed a bug where a `gc` race would cause us to erroneously hold onto a file handle longer than we need to.
+* Improved error reporting and logging around sending `GET` requests.
+* Fixed an issue where `Transfer-Encoding: chunked` didn't work quite correctly, if headers aren't sent in a single read.
+* Changed how `--ephemeral` bottles work; now one running instance if completely independent from another, unlike normal bottles, where multiple executions share the environment.
+* Changed how stubs are reported when listing plugins.
+* Fixed a bug relating to plugin loading and ARGS clobbering.
+* Abstracted out the `common.handleize` method.
+
 # 1.2.6
 
 * Added in support for arbitrary execution of strings, rather than just of files with `exec`.
