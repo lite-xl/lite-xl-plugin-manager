@@ -375,10 +375,6 @@ function json.decode(str)
 end
 
 -- End JSON library.
-local function is_commit_hash(hash)
-  return #hash == 40 and not hash:find("[^a-z0-9]")
-end
-
 
 
 local common = {}
@@ -409,6 +405,7 @@ function common.split(splitter, str)
   return table.unpack(res)
 end
 
+function common.is_commit_hash(hash) return #hash == 40 and not hash:find("[^a-z0-9]") end
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
 function common.path(exec)
@@ -480,7 +477,7 @@ function common.rename(src, dst)
   end
 end
 function common.reset(path, ref, type)
-  if is_commit_hash(ref) then
+  if common.is_commit_hash(ref) then
     system.reset(path, ref, type)
   else
     if not pcall(system.reset, path, "refs/tags/" .. ref, type) then system.reset(path, "refs/remotes/origin/" .. ref, type) end
@@ -502,6 +499,7 @@ end
 function common.args(arguments, options)
   local args = {}
   local i = 1
+  for k,v in pairs(arguments) do if math.type(k) ~= "integer" then args[k] = v end end
   while i <= #arguments do
     local s,e, option, value = arguments[i]:find("%-%-([^=]+)=?(.*)")
     if s and options[option] then
@@ -1096,7 +1094,7 @@ function Repository.url(url)
   local s = e and (#url - e + 1)
   local remote, branch_or_commit = url:sub(1, s and (s-1) or #url), s and url:sub(s+1)
   if remote == "https" or remote == "file" then remote, branch_or_commit = url, nil end
-  if branch_or_commit and is_commit_hash(branch_or_commit) then
+  if branch_or_commit and common.is_commit_hash(branch_or_commit) then
     return Repository.new({ remote = remote, commit = branch_or_commit })
   end
   return Repository.new({ remote = remote, branch = branch_or_commit })
@@ -1914,7 +1912,7 @@ local function print_addon_info(type, addons, filters)
     local hash = {
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
-      stub = addon:is_stub(),
+      stub = (addon:is_stub() and "git" or false),
       name = addon.name or addon.id,
       version = "" .. addon.version,
       dependencies = addon.dependencies,
@@ -2354,6 +2352,7 @@ not commonly used publically.
     return 0
   end
 
+
   VERBOSE = ARGS["verbose"] or false
   JSON = ARGS["json"] or os.getenv("LPM_JSON")
   QUIET = ARGS["quiet"] or os.getenv("LPM_QUIET")
@@ -2465,6 +2464,8 @@ not commonly used publically.
     end
   end
 
+
+
   repositories = {}
   if ARGS[2] == "purge" then return lpm.purge() end
   local ssl_certs = ARGS["ssl-certs"] or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
@@ -2515,6 +2516,7 @@ not commonly used publically.
     Addon = Addon, Repository = Repository, LiteXL = LiteXL, Bottle = Bottle, lpm = lpm, common = common, json = json, log = log,
     settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar = write_progress_bar
   }, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
+
   for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(":", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
     if v ~= "" then
       local contents = v:find("^https?://") and common.get(v) or common.read(v)
@@ -2653,6 +2655,7 @@ not commonly used publically.
     if not system_bottle then system_bottle = Bottle.new(nil, nil, nil, true) end
     if REPOSITORY then repositories = common.map(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end) end
   end, error_handler, lock_warning) then return end
+
   if ARGS[2] ~= '-' then
     local res
     engage_locks(function()
