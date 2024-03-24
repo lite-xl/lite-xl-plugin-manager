@@ -405,7 +405,8 @@ function common.split(splitter, str)
   return table.unpack(res)
 end
 
-function common.is_commit_hash(hash) return #hash == 40 and not hash:find("[^a-z0-9]") end
+function common.handleize(str) return str:lower():gsub("%s+", "-"):gsub("%-+", "-"):gsub("[^a-z0-9%-_]", ""):gsub("^%-+", ""):gsub("%-+$", "") end
+function common.is_commit_hash(hash) return #hash == 40 and not hash:find("[^a-f0-9]") end
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
 function common.path(exec)
@@ -1143,7 +1144,7 @@ function Repository:generate_manifest(repo_id)
       for line in io.lines(path .. PATHSEP .. "README.md") do
         local _, _, name, path, description = line:find("^%s*%|%s*%[`([%w_]+)%??.-`%]%((.-)%).-%|%s*(.-)%s*%|%s*$")
         if name then
-          local id = name:lower():gsub("[^a-z0-9%-_]", "")
+          local id = common.handleize(name)
           addon_map[id] = { id = id, description = description, name = name }
           if path:find("^http") then
             if path:find("%.lua") then
@@ -1174,7 +1175,7 @@ function Repository:generate_manifest(repo_id)
           if name == "init" then name = repo_id or common.basename(self.remote or self.local_path) end
           if name ~= "init" then
             local type = folder == "libraries" and "library" or folder:sub(1, #folder - 1)
-            local addon = { description = nil, id = name:lower():gsub("[^a-z0-9%-_]", ""), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. PATHSEP .. file) or nil), type = type }
+            local addon = { description = nil, id = common.handleize(name), name = name, mod_version = LATEST_MOD_VERSION, version = "0.1", path = (filename ~= "init" and (addon_dir .. PATHSEP .. file) or nil), type = type }
             for line in io.lines(path .. PATHSEP .. addon_dir .. PATHSEP .. file) do
               local _, _, mod_version = line:find("%-%-.*mod%-version:%s*(%w+)")
               if mod_version then addon.mod_version = mod_version end
@@ -1188,7 +1189,7 @@ function Repository:generate_manifest(repo_id)
               local _, _, name_override = line:find("config%.plugins%.([%w_-]+)%s*=%s*common%.merge")
               if not repo_id and name_override then
                 addon.name = name_override
-                addon.id = name_override:lower():gsub("[^a-z0-9%-_]", "")
+                addon.id = common.handleize(name_override)
                 addon.dependencies = common.delete(addon.dependencies, addon.id)
               end
             end
@@ -1482,7 +1483,7 @@ local function get_repository_addons()
       if not hash[p.id] then hash[p.id] = {} end
       table.insert(hash[p.id], p)
       if p:is_asset() and p.organization == "singleton" then
-        local filename = (p.path or (p.url and common.basename(p.url) or p.id)):lower():gsub("[^a-z0-9%-_]", "")
+        local filename = common.handleize((p.path or (p.url and common.basename(p.url) or p.id)))
         if not hash[filename] then hash[filename] = {} end
         table.insert(hash[filename], p)
       end
@@ -1519,7 +1520,7 @@ function Bottle:all_addons()
     }
     for i, addon_path in ipairs(common.grep(addon_paths, function(e) return system.stat(e) end)) do
       for j, v in ipairs(system.ls(addon_path)) do
-        local id = v:gsub("%.lua$", ""):lower():gsub("[^a-z0-9%-_]", "")
+        local id = common.handleize(v:gsub("%.lua$", ""))
         local path = addon_path .. PATHSEP .. v
         -- in the case where we have an existing plugin that targets a stub, then fetch that repository
         local fetchable = hash[id] and common.grep(hash[id], function(e) return e:is_stub() end)[1]
