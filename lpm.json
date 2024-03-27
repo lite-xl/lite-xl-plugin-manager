@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://github.com/lite-xl/lite-xl-plugin-manager/raw/master/lpm.json",
+  "title": "Lite XL Plugin Manager Manifest",
+  "description": "Description of Lite XL addons",
+  "$comment": "TODO: Add our own uri format for <url>:<ref>.",
+  "definitions": {
+    "addon-id": {
+      "type": "string",
+      "pattern": "^[a-z0-9\\-_]+$"
+    },
+    "addon-version": {
+      "type": "string",
+      "$comment": "TODO: should we avoid limiting this to only 3 components? See lite-xl-lsp-servers -> lsp_json.",
+      "pattern": "^[0-9]+(\\.[0-9]+){0,2}$"
+    },
+    "addon-version-specifier": {
+      "type": "string",
+      "pattern": "^[><]?=?[0-9]+(\\.[0-9]+){0,2}$"
+    },
+    "mod-version": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9\\.]+$"
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ]
+    },
+    "arch": {
+      "description": "Lite XL/Clang architecture tuple that the file is relevant for",
+      "type": "string",
+      "examples": [
+        "x86_64-linux",
+        "x86_64-windows",
+        "x86_64-darwin",
+        "aarch64-darwin"
+      ]
+    },
+    "checksum": {
+      "type": "string",
+      "oneOf": [
+        {
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        {
+          "const": "SKIP"
+        }
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "checksum": {
+            "$ref": "#/definitions/checksum"
+          },
+          "arch": {
+            "description": "List of architectures this file is relevant for",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/arch"
+                }
+              },
+              {
+                "$ref": "#/definitions/arch"
+              }
+            ]
+          },
+          "path": {
+            "description": "The location to install this file inside the addon's directory",
+            "type": "string"
+          },
+          "optional": {
+            "description": "Whether the file is an optional addition. If omitted, the file is assumed to be required.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url",
+          "checksum"
+        ]
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "remotes": {
+      "description": "A simple array of string repository identifiers",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "addons": {
+      "description": "A simple array of string repository identifiers",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The semantic id of the addon",
+            "$ref": "#/definitions/addon-id"
+          },
+          "version": {
+            "description": "The semantic version of the addon",
+            "$ref": "#/definitions/addon-version"
+          },
+          "mod_version": {
+            "description": "The mod_version this addon is compatible with",
+            "$ref": "#/definitions/mod-version"
+          },
+          "type": {
+            "description": "Addon type",
+            "type": "string",
+            "default": "plugin",
+            "enum": [
+              "plugin",
+              "library",
+              "color",
+              "font",
+              "meta"
+            ]
+          },
+          "name": {
+            "description": "The name of the addon",
+            "type": "string"
+          },
+          "description": {
+            "description": "The description of the addon",
+            "type": "string"
+          },
+          "provides": {
+            "description": "Array of strings that are a shorthand of functionality this addon provides. Can be used as a dependency.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/addon-id"
+            }
+          },
+          "replaces": {
+            "description": "Array of ids that this plugin explicitly replaces. Will always prefer this plugin in place of those plugins, so long as version requirements are met.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/addon-id"
+            }
+          },
+          "remote": {
+            "description": "Public https git link where this addon is located",
+            "type": "string"
+          },
+          "dependencies": {
+            "description": "Table of dependencies",
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/definitions/addon-id"
+            },
+            "patternProperties": {
+              "": {
+                "version": {
+                  "description": "Dependency version specifier",
+                  "$ref": "#/definitions/addon-version-specifier"
+                },
+                "optional": {
+                  "description": "Determines whether the dependency is optional",
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "conflicts": {
+            "description": "Table of addons that conflict with the current one",
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/definitions/addon-id"
+            },
+            "$comment": "TODO: The spec says in the same format as `dependencies`, but I don't think this supports `optional`.",
+            "patternProperties": {
+              "": {
+                "version": {
+                  "description": "Dependency version specifier",
+                  "$ref": "#/definitions/addon-version-specifier"
+                }
+              }
+            }
+          },
+          "tags": {
+            "description": "Freeform tags that may describe attributes of the addon",
+            "type": "array",
+            "$comment": "TODO: Should we limit the tag format? For example to #/definitions/addon-id",
+            "items": {
+              "type": "string"
+            }
+          },
+          "path": {
+            "description": "The path to the addon in the repository. If omitted, will only pull the files in files. To pull the whole repository, use \".\".",
+            "type": "string"
+          },
+          "arch": {
+            "description": "List of architectures this plugin supports. If not present, and no `files` entry specifies arches, the plugin is valid for all architectures. Otherwise uses the arches specified in `files` entries.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/arch"
+            }
+          },
+          "post": {
+            "description": "Commands to run after the addon is installed",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/definitions/arch"
+                },
+                "patternProperties": {
+                  "": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "url": {
+            "description": "URL which specifies a direct download link to a single lua file. Precludes the use of `remote`, `path`.",
+            "type": "string",
+            "format": "uri"
+          },
+          "checksum": {
+            "description": "SHA256 digest of the file specified in `url`",
+            "$ref": "#/definitions/checksum"
+          },
+          "extra": {
+            "description": "Dictionary which holds any desired extra information",
+            "type": "object",
+            "examples": [
+              {
+                "author": "Ford Prefect",
+                "license": "MIT"
+              }
+            ]
+          },
+          "files": {
+            "description": "Files that are downloaded and placed inside the addon directory. If the file is an archive, it will be automatically extracted.",
+            "$ref": "#/definitions/files"
+          }
+        },
+        "required": [
+          "id", "version"
+        ]
+      }
+    },
+    "lite-xls": {
+      "description": "Represents the different versions of Lite XL that are registered in this repository",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "version": {},
+          "mod_version": {
+            "description": "The modversion the binary corresponds to",
+            "$ref": "#/definitions/mod-version"
+          },
+          "files": {
+            "description": "Files that are downloaded. If the file is an archive, it will be automatically extracted. Conventionally, there should be a single file per architecture that is a `.tar.gz` or `.zip` containing all necessary files for Lite XL to run.",
+            "$ref": "#/definitions/files"
+          }
+        }
+      }
+    }
+  }
+}
