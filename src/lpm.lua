@@ -2518,7 +2518,7 @@ not commonly used publically.
     settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar = write_progress_bar
   }, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
 
-  for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(":", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
+  for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(",", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
     if v ~= "" then
       local contents = v:find("^https?://") and common.get(v) or common.read(v)
       local func, err = load(contents, v, "bt", env)
