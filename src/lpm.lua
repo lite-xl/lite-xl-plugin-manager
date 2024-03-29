@@ -405,7 +405,7 @@ function common.split(splitter, str)
   return table.unpack(res)
 end
 
-function common.handleize(str) return str:lower():gsub("%s+", "-"):gsub("%-+", "-"):gsub("[^a-z0-9%-_]", ""):gsub("^%-+", ""):gsub("%-+$", "") end
+function common.handleize(str) return str:lower():gsub("[^a-z0-9%-_]+", "-"):gsub("%-+", "-"):gsub("^%-+", ""):gsub("%-+$", "") end
 function common.is_commit_hash(hash) return #hash == 40 and not hash:find("[^a-f0-9]") end
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
