@@ -70,6 +70,7 @@ Fields that are required are bolded.
   with a dictionary, takes `ARCH` keys, and runs a different command per `ARCH`.
 * `url`: Optionally a URL which specifies a direct download link to a single lua file.
   precludes the use of `remote`, `path`. Usually a `singleton`.
+* `checksum`: Provides a checksum to check against a `url`.
 * `extra`: Optionally a dictionary which holds any desired extra information.
 
 Any keys not present in this official listing render the manifest non-conforming.
@@ -121,7 +122,7 @@ be extracted inside the addon's directory.
 Lite-XLs represent different version of lite-xl that are registered in this
 repository. Lite-XLs has the following metadata, as well as a `files` array.
 
-* `version`: A version specifier. Must take the form of x.x(.x)(-suffix).
+* `version`: A version specifier. Must take the form of x(.x)\*(-suffix).
   Suffixes can be used to denote different flavours of lite-xl.
 * `mod_version`: The modversion the binary corresponds to.
 
