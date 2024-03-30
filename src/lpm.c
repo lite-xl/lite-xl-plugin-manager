@@ -6,8 +6,10 @@
 #else
   #include <netdb.h>
   #include <sys/socket.h>
+  #include <sys/ioctl.h>
   #include <arpa/inet.h>
   #include <libgen.h>
+  #include <termios.h>
 
   #define MAX_PATH PATH_MAX
 #endif
@@ -33,7 +35,11 @@
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
-#include <mbedtls/net.h>
+#if MBEDTLS_VERSION_MAJOR < 3
+  #include <mbedtls/net.h>
+#else
+  #include <mbedtls/net_sockets.h>
+#endif
 #ifdef MBEDTLS_DEBUG_C
   #include <mbedtls/debug.h>
 #endif
@@ -131,7 +137,7 @@ static int lpm_hash(lua_State* L) {
   unsigned char buffer[digest_length];
   mbedtls_sha256_context hash_ctx;
   mbedtls_sha256_init(&hash_ctx);
-  mbedtls_sha256_starts_ret(&hash_ctx, 0);
+  mbedtls_sha256_starts(&hash_ctx, 0);
   if (strcmp(type, "file") == 0) {
     FILE* file = lua_fopen(L, data, "rb");
     if (!file) {
@@ -141,20 +147,48 @@ static int lpm_hash(lua_State* L) {
     while (1) {
       unsigned char chunk[4096];
       size_t bytes = fread(chunk, 1, sizeof(chunk), file);
-      mbedtls_sha256_update_ret(&hash_ctx, chunk, bytes);
+      mbedtls_sha256_update(&hash_ctx, chunk, bytes);
       if (bytes < sizeof(chunk))
         break;
     }
     fclose(file);
   } else {
-    mbedtls_sha256_update_ret(&hash_ctx, data, len);
+    mbedtls_sha256_update(&hash_ctx, data, len);
   }
-  mbedtls_sha256_finish_ret(&hash_ctx, buffer);
+  mbedtls_sha256_finish(&hash_ctx, buffer);
   mbedtls_sha256_free(&hash_ctx);
   lua_pushhexstring(L, buffer, digest_length);
   return 1;
 }
 
+static int lpm_tcflush(lua_State* L) {
+  int stream = luaL_checkinteger(L, 1);
+  #ifndef _WIN32
+    if (isatty(stream))
+      tcflush(stream, TCIOFLUSH);
+  #endif
+  return 0;
+}
+
+static int lpm_tcwidth(lua_State* L) {
+  int stream = luaL_checkinteger(L, 1);
+  #ifndef _WIN32
+    if (isatty(stream)) {
+      struct winsize ws={0};
+      ioctl(stream, TIOCGWINSZ, &ws);
+      lua_pushinteger(L, ws.ws_col);
+      return 1;
+    }
+  #else
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    int columns, rows;
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi)) {
+      lua_pushinteger(L, csbi.srWindow.Right - csbi.srWindow.Left + 1);
+      return 1;
+    }
+  #endif
+  return 0;
+}
 
 static int lpm_symlink(lua_State* L) {
   #ifndef _WIN32
@@ -862,10 +896,11 @@ static int lpm_extract(lua_State* L) {
           while (remaining > 0) {
             int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
 
-            if (mtar_read_data(&tar, buffer, read_size) != MTAR_ESUCCESS) {
+            int err = mtar_read_data(&tar, buffer, read_size);
+            if (err != MTAR_ESUCCESS) {
               fclose(file);
               mtar_close(&tar);
-              return luaL_error(L, "can't write file %s: %s", target, strerror(errno));
+              return luaL_error(L, "can't read file %s: %s", target, mtar_strerror(err));
             }
 
             fwrite(buffer, sizeof(char), read_size, file);
@@ -983,6 +1018,15 @@ static int strncicmp(const char* a, const char* b, int n) {
   return 0;
 }
 
+static const char* strnstr_local(const char* haystack, const char* needle, int n) {
+  int len = strlen(needle);
+  for (int i = 0; i <= n - len; ++i) {
+    if (strncmp(&haystack[i], needle, len) == 0)
+      return &haystack[i];
+  }
+  return NULL;
+}
+
 static const char* get_header(const char* buffer, const char* header, int* len) {
   const char* line_end = strstr(buffer, "\r\n");
   const char* header_end = strstr(buffer, "\r\n\r\n");
@@ -1001,6 +1045,9 @@ static const char* get_header(const char* buffer, const char* header, int* len) 
   return NULL;
 }
 
+static int imin(int a, int b) { return a < b ? a : b; }
+static int imax(int a, int b) { return a > b ? a : b; }
+
 static int lpm_get(lua_State* L) {
   long response_code;
   char err[1024] = {0};
@@ -1012,6 +1059,7 @@ static int lpm_get(lua_State* L) {
   mbedtls_ssl_context ssl_context;
   mbedtls_ssl_context* ssl_ctx = NULL;
   mbedtls_net_context* net_ctx = NULL;
+  FILE* file = NULL;
   if (strcmp(protocol, "https") == 0) {
     int status;
     const char* port = lua_tostring(L, 3);
@@ -1067,20 +1115,22 @@ static int lpm_get(lua_State* L) {
   if (buffer_length < 0) {
     mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? buffer_length : errno, "can't write to socket %s", hostname); goto cleanup;
   }
-  int bytes_read = 0;
   const char* header_end = NULL;
-  while (!header_end && bytes_read < sizeof(buffer) - 1) {
-    buffer_length = lpm_socket_read(s, &buffer[bytes_read], sizeof(buffer) - bytes_read - 1, ssl_ctx);
-    if (buffer_length < 0) {
+
+
+  buffer_length = 0;
+  while (!header_end && buffer_length < sizeof(buffer) - 1) {
+    int length = lpm_socket_read(s, &buffer[buffer_length], sizeof(buffer) - buffer_length - 1, ssl_ctx);
+    if (length < 0) {
       mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? buffer_length : errno, "can't read from socket %s", hostname); goto cleanup;
-    } else if (buffer_length > 0) {
-      bytes_read += buffer_length;
-      buffer[bytes_read] = 0;
+    } else if (length > 0) {
+      buffer_length += length;
+      buffer[buffer_length] = 0;
       header_end = strstr(buffer, "\r\n\r\n");
     }
   }
   if (!header_end) {
-    snprintf(err, sizeof(err), "can't parse response headers for %s%s: %s", hostname, rest, bytes_read >= sizeof(buffer) - 1 ? "response header buffer length exceeded" : "malformed response");
+    snprintf(err, sizeof(err), "can't parse response headers for %s://%s%s: %s", protocol, hostname, rest, buffer_length >= sizeof(buffer) - 1 ? "response header buffer length exceeded" : "malformed response");
     goto cleanup;
   }
   header_end += 4;
@@ -1096,81 +1146,135 @@ static int lpm_get(lua_State* L) {
         lua_pushlstring(L, location, len);
         lua_setfield(L, -2, "location");
       } else
-        snprintf(err, sizeof(err), "received invalid %d-response from %s%s: %d", code, hostname, rest, code);
+        snprintf(err, sizeof(err), "received invalid %d-response from %s://%s%s: %d", code, protocol, hostname, rest, code);
       goto cleanup;
     } else {
-      snprintf(err, sizeof(err), "received non 200-response from %s%s: %d", hostname, rest, code); goto cleanup;
+      snprintf(err, sizeof(err), "received non 200-response from %s://%s%s: %d", protocol, hostname, rest, code); goto cleanup;
     }
   }
+  const char* transfer_encoding = get_header(buffer, "transfer-encoding", NULL);
+  int chunked = transfer_encoding && strncmp(transfer_encoding, "chunked", 7) == 0 ? 1 : 0;
   const char* content_length_value = get_header(buffer, "content-length", NULL);
-  int content_length = -1;
-  if (content_length_value)
-    content_length = atoi(content_length_value);
+  int content_length = content_length_value ? atoi(content_length_value) : -1;
   const char* path = luaL_optstring(L, 5, NULL);
   int callback_function = lua_type(L, 6) == LUA_TFUNCTION ? 6 : 0;
 
-  int body_length = buffer_length - (header_end - buffer);
-  int total_downloaded = body_length;
-  int remaining = content_length - body_length;
+  buffer_length -= (header_end - buffer);
+  if (buffer_length > 0)
+    memmove(buffer, header_end, buffer_length);
+
+  int total_downloaded = 0;
+  int chunk_length = !chunked && content_length == -1 ? INT_MAX : content_length;
+  int chunk_written = 0;
+  luaL_Buffer B;
   if (path) {
-    FILE* file = lua_fopen(L, path, "wb");
+    file = lua_fopen(L, path, "wb");
     if (!file) {
-      snprintf(err, sizeof(err), "can't open file %s: %s", path, strerror(errno)); goto cleanup;
+      snprintf(err, sizeof(err), "can't open file %s: %s", path, strerror(errno));
+      goto cleanup;
     }
-    fwrite(header_end, sizeof(char), body_length, file);
-    while (content_length == -1 || remaining > 0) {
-      int length = lpm_socket_read(s, buffer, sizeof(buffer), ssl_ctx);
-      if (length == 0 || (ssl_ctx && content_length == -1 && length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY)) break;
-      if (length < 0) {
-        mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full response for %s%s", hostname, rest); goto cleanup;
-      }
-      total_downloaded += length;
-      if (callback_function) {
-        lua_pushvalue(L, callback_function);
-        lua_pushinteger(L, total_downloaded);
-        lua_pushinteger(L, content_length);
-        lua_call(L, 2, 0);
-      }
-      fwrite(buffer, sizeof(char), length, file);
-      remaining -= length;
-    }
-    fclose(file);
-    lua_pushnil(L);
-  } else {
-    luaL_Buffer B;
+  } else
     luaL_buffinit(L, &B);
-    luaL_addlstring(&B, header_end, body_length);
-    while (content_length == -1 || remaining > 0) {
-      int length = lpm_socket_read(s, buffer, sizeof(buffer), ssl_ctx);
-      if (length == 0 || (ssl_ctx && content_length == -1 && length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY)) break;
-      if (length < 0) {
-        mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full response for %s%s", hostname, rest); goto cleanup;
+  while (1) {
+    // If we have an unknown amount of chunk bytes to be fetched, determine the size of the next chunk.
+    while (chunk_length == -1) {
+      char* newline = (char*)strnstr_local(buffer, "\r\n", buffer_length);
+      if (newline) {
+        *newline = '\0';
+        if (sscanf(buffer, "%x", &chunk_length) != 1) {
+          snprintf(err, sizeof(err), "error retrieving chunk length for %s://%s%s", protocol, hostname, rest);
+          goto cleanup;
+        }
+        if (chunk_length == 0)
+          goto finish;
+        buffer_length -= (newline + 2 - buffer);
+        if (buffer_length > 0)
+          memmove(buffer, newline + 2, buffer_length);
+        chunk_written = 0;
+      } else if (buffer_length >= sizeof(buffer)) {
+        snprintf(err, sizeof(err), "can't find chunk length for %s://%s%s", protocol, hostname, rest);
+        goto cleanup;
+      } else {
+        int length = lpm_socket_read(s, &buffer[buffer_length], sizeof(buffer) - buffer_length, ssl_ctx);
+        if (length <= 0 || (ssl_ctx && length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY)) {
+          mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full response for %s://%s%s", protocol, hostname, rest);
+          goto cleanup;
+        }
+        buffer_length += length;
       }
-      total_downloaded += length;
-      if (callback_function) {
-        lua_pushvalue(L, callback_function);
-        lua_pushinteger(L, total_downloaded);
-        lua_call(L, 1, 0);
-      }
-      luaL_addlstring(&B, buffer, length);
-      remaining -= length;
     }
-    luaL_pushresult(&B);
+    if (buffer_length > 0) {
+      int to_write = imin(chunk_length - chunk_written, buffer_length);
+      if (to_write > 0) {
+        total_downloaded += to_write;
+        chunk_written += to_write;
+        if (callback_function) {
+          lua_pushvalue(L, callback_function);
+          lua_pushinteger(L, total_downloaded);
+          if (content_length == -1)
+            lua_pushnil(L);
+          else
+            lua_pushinteger(L, content_length);
+          lua_call(L, 2, 0);
+        }
+        if (file)
+          fwrite(buffer, sizeof(char), to_write, file);
+        else
+          luaL_addlstring(&B, buffer, to_write);
+        buffer_length -= to_write;
+        if (buffer_length > 0)
+          memmove(buffer, &buffer[to_write], buffer_length);
+      }
+      if (chunk_written == chunk_length) {
+        if (!chunked)
+          goto finish;
+        if (buffer_length >= 2) {
+          if (!strnstr_local(buffer, "\r\n", 2)) {
+            snprintf(err, sizeof(err), "invalid end to chunk for %s://%s%s", protocol, hostname, rest);
+            goto cleanup;
+          }
+          memmove(buffer, &buffer[2], buffer_length - 2);
+          buffer_length -= 2;
+          chunk_length = -1;
+        }
+      }
+    }
+    if (chunk_length > 0) {
+      int length = lpm_socket_read(s, &buffer[buffer_length], imin(sizeof(buffer) - buffer_length, chunk_length - chunk_written + (chunked ? 2 : 0)), ssl_ctx);
+      if ((!ssl_ctx && length == 0) || (ssl_ctx && content_length == -1 && length == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY))
+        goto finish;
+      if (length <= 0) {
+        mbedtls_snprintf(ssl_ctx ? 1 : 0, err, sizeof(err), ssl_ctx ? length : errno, "error retrieving full chunk for %s://%s%s", protocol, hostname, rest);
+        goto cleanup;
+      }
+      buffer_length += length;
+    }
   }
-  if (content_length != -1 && remaining != 0) {
-    snprintf(err, sizeof(err), "error retrieving full response for %s%s", hostname, rest); goto cleanup;
-  }
-  if (callback_function) {
-    lua_pushvalue(L, callback_function);
-    lua_pushboolean(L, 1);
-    lua_call(L, 1, 0);
-  }
-  lua_newtable(L);
+  finish:
+    if (file) {
+      fclose(file);
+      file = NULL;
+      lua_pushnil(L);
+    } else {
+      luaL_pushresult(&B);
+    }
+    if (content_length != -1 && total_downloaded != content_length) {
+      snprintf(err, sizeof(err), "error retrieving full response for %s://%s%s", protocol, hostname, rest);
+      goto cleanup;
+    }
+    if (callback_function) {
+      lua_pushvalue(L, callback_function);
+      lua_pushboolean(L, 1);
+      lua_call(L, 1, 0);
+    }
+    lua_newtable(L);
   cleanup:
     if (ssl_ctx)
       mbedtls_ssl_free(ssl_ctx);
     if (net_ctx)
       mbedtls_net_free(net_ctx);
+    if (file)
+      fclose(file);
     if (s != -2)
       close(s);
     if (err[0])
@@ -1279,6 +1383,8 @@ static const luaL_Reg system_lib[] = {
   { "mkdir",     lpm_mkdir },    // Makes a directory.
   { "rmdir",     lpm_rmdir },    // Removes a directory.
   { "hash",      lpm_hash  },    // Returns a hex sha256 hash.
+  { "tcflush",   lpm_tcflush },  // Flushes an terminal stream.
+  { "tcwidth",   lpm_tcwidth },  // Gets the terminal width in columns.
   { "symlink",   lpm_symlink },  // Creates a symlink.
   { "chmod",     lpm_chmod },    // Chmod's a file.
   { "init",      lpm_init },     // Initializes a git repository with the specified remote.
@@ -1365,7 +1471,21 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "VERSION");
   lua_pushliteral(L, ARCH_PLATFORM);
   lua_setglobal(L, "PLATFORM");
-  lua_pushboolean(L, isatty(fileno(stdout)));
+  #if _WIN32
+    DWORD handles[] = { STD_OUTPUT_HANDLE, STD_ERROR_HANDLE };
+    int setVirtualProcessing = 0;
+    for (int i = 0; i < 2; ++i) {
+      DWORD mode = 0;
+      if (GetConsoleMode(GetStdHandle(handles[i]), &mode)) {
+        if (SetConsoleMode(GetStdHandle(handles[i]), mode | ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
+          setVirtualProcessing = 1;
+      }
+    }
+    // This will fail with mintty, see here: https://github.com/mintty/mintty/issues/482
+    lua_pushboolean(L, setVirtualProcessing || isatty(fileno(stdout)));
+  #else
+    lua_pushboolean(L, isatty(fileno(stdout)));
+  #endif
   lua_setglobal(L, "TTY");
   #if _WIN32
     lua_pushliteral(L, "\\");
@@ -1382,6 +1502,22 @@ int main(int argc, char* argv[]) {
     lua_pushstring(L, getenv("TMPDIR") ? getenv("TMPDIR") : P_tmpdir);
   #endif
   lua_setglobal(L, "SYSTMPDIR");
+
+  #if _WIN32
+    wchar_t selfpath[MAX_PATH] = {0};
+    if (GetModuleFileNameW(0, selfpath, MAX_PATH - 1))
+      lua_toutf8(L, selfpath);
+    else
+      lua_pushnil(L);
+  #else
+    char selfpath[MAX_PATH] = {0};
+    int length = readlink("/proc/self/exe", selfpath, MAX_PATH);
+    if (length > 0)
+      lua_pushlstring(L, selfpath, length);
+    else
+      lua_pushnil(L);
+  #endif
+  lua_setglobal(L, "EXEFILE");
 
   lua_pushliteral(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");

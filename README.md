@@ -81,6 +81,8 @@ You can also use `scoop` to grab `lpm`, courtesy of @cvladan:
 scoop install https://gist.githubusercontent.com/cvladan/416c1945c9e446a6fc64ba766d6ee4ef/raw/lite-xl-plugin-manager.json
 ```
 
+Please note, that _meson_ is _not_ necessarily the best way to compile `lpm`. If you have troubles with it, please do consider using the build.sh script.
+
 ## Supporting Libraries / Dependencies
 
 As seen in the `lib` folder, the following external libraries are used to
@@ -102,6 +104,7 @@ for `mbedtls` and `libgit2`, `cmake` is also required.
 
 * Windows x86_64
 * Linux x86_64
+* Linux aarch64
 * MacOS x86_64
 * MacOS aarch64
 * Android 8.0+ x86_64

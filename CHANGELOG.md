@@ -1,3 +1,44 @@
+# 1.2.7
+
+* Fixed a bug where a `gc` race would cause us to erroneously hold onto a file handle longer than we need to.
+* Improved error reporting and logging around sending `GET` requests.
+* Fixed an issue where `Transfer-Encoding: chunked` didn't work quite correctly, if headers aren't sent in a single read.
+* Changed how `--ephemeral` bottles work; now one running instance if completely independent from another, unlike normal bottles, where multiple executions share the environment.
+* Changed how stubs are reported when listing plugins.
+* Fixed a bug relating to plugin loading and ARGS clobbering.
+* Abstracted out the `common.handleize` method.
+
+# 1.2.6
+
+* Added in support for arbitrary execution of strings, rather than just of files with `exec`.
+* Added in support for accessing `lpm` internals with `exec`, just as you would with plugins.
+
+# 1.2.5
+
+* Added in support for `mbedtls3`.
+* Added in support for `Transfer-Encoding: chunked`.
+* Added in better support for determining the path of the running exectable in `EXEFILE`.
+* Added in detection of being a TTY on windows for some terminals.
+* Fixed a bug with self-upgrading in `common.copy` that would cause a race between the garbage collector and the main program on windows.
+* Allowed for pretty-printing of json.
+* Allowed for local plugins to exist for `lpm`, allowing it to modify behaviour if specified with `--plugin` or if located in `~/.config/lpm/plugins`; plugins currently located at https://github.com/adamharrison/lite-xl-maintenance.
+
+# 1.2.4
+
+* Added `aarch64-linux` to the release CI list.
+* Fixed an error in `plugin_manager` with `MOD_VERSION_MAJOR`.
+* Fixed an error where packages would be flagged as only being for certain architectures if they had optional files.
+
+
+# 1.2.3
+
+* STDIN flushing was added for prompts.
+* Partially downloading files, then cancelling no longer causes lpm to break on subsequent operations.
+* Fixed a bug relating to local paths not being computed directly under some cirstumances leading to errors on install.
+* Small terminals will no longer spew huge amounts of output into the console when downloading things; we'll now truncate download status prompts when attached to a small TTY.
+* Improved error handlings of tar extracting.
+* Added discord release notifications to CI.
+
 # 1.2.2
 
 * Added in ability to disallow `self-upgrade` at compile time with `-DLPM_DEFAULT_RELEASE=''`.
