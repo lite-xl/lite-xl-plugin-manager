@@ -1520,7 +1520,7 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "EXEFILE");
 
   lua_pushliteral(L, LITE_ARCH_TUPLE);
-  lua_setglobal(L, "ARCH");
+  lua_setglobal(L, "DEFAULT_ARCH");
   lua_pushliteral(L, LPM_DEFAULT_REPOSITORY);
   lua_setglobal(L, "DEFAULT_REPO_URL");
   lua_pushliteral(L, LPM_DEFAULT_RELEASE);
