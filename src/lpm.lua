@@ -3,7 +3,7 @@ function global(g) if #g > 0 then for i,v in ipairs(g) do rawset(_S, g[i], true)
 setmetatable(_G, { __index = function(t, k) if not rawget(_S, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k, v) if rawget(_S, k) then rawset(t, k, v) else error("cannot set global variable: " .. k, 2) end end })
 
 -- Begin rxi JSON library.
-local json = { _version = "0.1.2" }
+global({ json = { _version = "0.1.2" } })
 local encode
 local escape_char_map = {
   [ "\\" ] = "\\",
@@ -2135,7 +2135,7 @@ function lpm.setup()
   if REPOSITORY then repositories = common.map(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end) end
 end
 
-function lpm.run_command(ARGS)
+function lpm.command(ARGS)
   if not ARGS[2]:find("%S") then return
   elseif ARGS[2] == "init" then return
   elseif ARGS[2] == "repo" and ARGS[3] == "add" then lpm.repo_add(table.unpack(common.slice(ARGS, 4)))
@@ -2168,8 +2168,15 @@ function lpm.run_command(ARGS)
   elseif ARGS[2] == "run" then return lpm.lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm.lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "purge" then lpm.purge()
-  else error("unknown command: " .. ARGS[2]) end
-  if JSON then
+  else return false end
+  return true
+end
+
+function lpm.run(ARGS)
+  local result = lpm.command(ARGS)
+  if result == false then
+    error("unknown command: " .. ARGS[2])
+  elseif result == true and JSON then
     io.stdout:write(json.encode({ actions = actions, warnings = warnings }))
   end
 end
@@ -2566,7 +2573,14 @@ not commonly used publically.
   end
 
   local lpm_plugins_path = HOME .. PATHSEP .. ".config" .. PATHSEP .. "lpm" .. PATHSEP .. "plugins"
-  local lpm_plugins = system.stat(lpm_plugins_path) and common.map(common.grep(system.ls(lpm_plugins_path), function(path) return path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path end) or {}
+  local lpm_plugins = {}
+  if system.stat(lpm_plugins_path) then
+    local files = system.ls(lpm_plugins_path)
+    lpm_plugins = common.concat(
+      common.map(common.grep(files, function(path) return path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path end),
+      common.grep(common.map(common.grep(files, function(path) return not path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path .. PATHSEP .. "init.lua" end), function(path) return system.stat(path) end)
+    )
+  end
   local env = setmetatable({}, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
 
   for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(",", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
@@ -2578,6 +2592,7 @@ not commonly used publically.
       else
         log.warning("unable to load lpm plugin " .. v .. ": " .. err)
       end
+      if VERBOSE then log.action("Loaded plugin " .. v) end
     end
   end
 
@@ -2668,7 +2683,7 @@ not commonly used publically.
   if ARGS[2] ~= '-' then
     local res
     engage_locks(function()
-      res = lpm.run_command(ARGS)
+      res = lpm.run(ARGS)
     end, error_handler, lock_warning)
     if res then
       res()
@@ -2688,7 +2703,7 @@ not commonly used publically.
       xpcall(function()
         local res
         engage_locks(function()
-          res = lpm.run_command(args)
+          res = lpm.run(args)
         end, error_handler, lock_warning)
         if res then
           res()
