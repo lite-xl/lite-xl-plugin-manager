@@ -1,4 +1,6 @@
-setmetatable(_G, { __index = function(t, k) if not rawget(t, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k) error("cannot set global variable: " .. k, 2) end  })
+_S = {}
+function global(g) if #g > 0 then for i,v in ipairs(g) do rawset(_S, g[i], true) end else for k,v in pairs(g) do rawset(_G, k, v) rawset(_S, k, true) end end  end
+setmetatable(_G, { __index = function(t, k) if not rawget(_S, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k, v) if rawget(_S, k) then rawset(t, k, v) else error("cannot set global variable: " .. k, 2) end end })
 
 -- Begin rxi JSON library.
 local json = { _version = "0.1.2" }
@@ -377,7 +379,7 @@ end
 -- End JSON library.
 
 
-local common = {}
+global({ common = {} })
 function common.merge(dst, src) for k, v in pairs(src) do dst[k] = v end return dst end
 function common.map(l, p) local t = {} for i, v in ipairs(l) do table.insert(t, p(v, i)) end return t end
 function common.each(l, p) for i, v in ipairs(l) do p(v) end end
@@ -529,11 +531,13 @@ function common.args(arguments, options)
   return args
 end
 
-local LATEST_MOD_VERSION = "3.0.0"
-local EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or ""
-local HOME, USERDIR, CACHEDIR, JSON, TABLE, HEADER, RAW, VERBOSE, FILTRATION, MOD_VERSION, QUIET, FORCE, REINSTALL, CONFIG,  NO_COLOR, AUTO_PULL_REMOTES, ARCH, ASSUME_YES, NO_INSTALL_OPTIONAL, TMPDIR, DATADIR, BINARY, POST, PROGRESS, SYMLINK, REPOSITORY, EPHEMERAL, MASK, settings, repositories, lite_xls, system_bottle, progress_bar_label, write_progress_bar
-local SHOULD_COLOR = (PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")
-local Addon, Repository, LiteXL, Bottle, lpm, log = {}, {}, {}, {}, {}, {}
+global({
+  LATEST_MOD_VERSION = "3.0.0",
+  EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or "",
+  SHOULD_COLOR = (PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")
+})
+global({ "HOME", "USERDIR", "CACHEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL", "MASK", "settings", "repositories", "lite_xls", "system_bottle", "progress_bar_label", "write_progress_bar" })
+global({ Addon = {}, Repository = {}, LiteXL = {}, Bottle = {}, lpm = {}, log = {} })
 
 local function engage_locks(func, err, warn)
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
@@ -1334,8 +1338,8 @@ function LiteXL.new(repository, metadata)
 end
 
 function LiteXL:get_binary_path(arch)
-  if self.binary_path and self.binary_path[arch or _G.ARCH] then return self.binary_path[arch or _G.ARCH] end
-  return self.local_path .. PATHSEP .. "lite-xl." .. (arch or _G.ARCH)
+  if self.binary_path and self.binary_path[arch or DEFAULT_ARCH] then return self.binary_path[arch or DEFAULT_ARCH] end
+  return self.local_path .. PATHSEP .. "lite-xl." .. (arch or DEFAULT_ARCH)
 end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
@@ -2084,9 +2088,54 @@ function lpm.purge()
   common.rmrf(CACHEDIR)
 end
 
+-- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
+function lpm.setup()
+  settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
+  lpm.repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
+  repositories, lite_xls = {}, {}
+  if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
+  repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
+  lite_xls = common.map(settings.lite_xls or {}, function(lite_xl) return LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }) end)
 
+  if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
+  if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
+  local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
+  if lite_xl_binary then
+    local stat = system.stat(lite_xl_binary)
+    if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
+    lite_xl_binary = stat.symlink or lite_xl_binary
+    local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl:get_binary_path() == lite_xl_binary end)
+    if not system_lite_xl then
+      system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
 
-local function run_command(ARGS)
+      local directory = common.dirname(lite_xl_binary)
+      local lite_xl_datadirs = { DATADIR or "", directory .. PATHSEP .. "data", directory:find(PATHSEP .. "bin$") and common.dirname(directory) .. PATHSEP .. "share" .. PATHSEP .. "lite-xl" or "", directory .. PATHSEP .. "data" }
+      local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
+
+      if not BINARY and not DATADIR and system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+      local detected_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [DEFAULT_ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
+      if not system_lite_xl then
+        system_lite_xl = detected_lite_xl
+        table.insert(lite_xls, system_lite_xl)
+        lpm.lite_xl_save()
+      else
+        lite_xls = common.grep(lite_xls, function(e) return e ~= system_lite_xl end)
+        system_lite_xl = detected_lite_xl
+        table.insert(lite_xls, system_lite_xl)
+      end
+    else
+      if DATADIR then system_lite_xl.datadir_path = DATADIR end
+      table.insert(system_lite_xl.tags, "system")
+    end
+    system_bottle = Bottle.new(system_lite_xl, nil, nil, true)
+  else
+    system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, nil, true)
+  end
+  if not system_bottle then system_bottle = Bottle.new(nil, nil, nil, true) end
+  if REPOSITORY then repositories = common.map(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end) end
+end
+
+function lpm.run_command(ARGS)
   if not ARGS[2]:find("%S") then return
   elseif ARGS[2] == "init" then return
   elseif ARGS[2] == "repo" and ARGS[3] == "add" then lpm.repo_add(table.unpack(common.slice(ARGS, 4)))
@@ -2170,7 +2219,7 @@ xpcall(function()
     io.stdout:write([[
 Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--cachedir=directory] [--quiet] [--version] [--help] [--remotes]
-  [--ssl-certs=directory/file] [--force] [--arch=]] .. _G.ARCH .. [[]
+  [--ssl-certs=directory/file] [--force] [--arch=]] .. DEFAULT_ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
   [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
   [--no-color] [--table=...] [--plugin=file/url]
@@ -2274,7 +2323,7 @@ Flags have the following effects:
   --help                   Displays this help text.
   --ssl-certs              Sets the SSL certificate store. Can be a directory,
                            or path to a certificate bundle.
-  --arch=architecture      Sets the architecture (default: ]] .. _G.ARCH .. [[).
+  --arch=architecture      Sets the architecture (default: ]] .. DEFAULT_ARCH .. [[).
   --assume-yes             Ignores any prompts, and automatically answers yes
                            to all.
   --no-install-optional    On install, anything marked as optional
@@ -2403,7 +2452,7 @@ not commonly used publically.
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]
-  ARCH = ARGS["arch"] or { _G.ARCH }
+  ARCH = ARGS["arch"] or { DEFAULT_ARCH }
   ASSUME_YES = ARGS["assume-yes"] or FORCE
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION")
   if MOD_VERSION == "any" then MOD_VERSION = nil end
@@ -2518,11 +2567,7 @@ not commonly used publically.
 
   local lpm_plugins_path = HOME .. PATHSEP .. ".config" .. PATHSEP .. "lpm" .. PATHSEP .. "plugins"
   local lpm_plugins = system.stat(lpm_plugins_path) and common.map(common.grep(system.ls(lpm_plugins_path), function(path) return path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path end) or {}
-  local env = setmetatable({
-    EXECUTABLE_EXTENSION = EXECUTABLE_EXTENSION, SHOULD_COLOR = SHOULD_COLOR, HOME = HOME, USERDIR = USERDIR, CACHEDIR = CACHEDIR, JSON = JSON, TABLE = TABLE, HEADER = HEADER, RAW = RAW, VERBOSE = VERBOSE, FILTRATION = FILTRATION, MOD_VERSION = MOD_VERSION, QUIET = QUIET, FORCE = FORCE, REINSTALL = REINSTALL, CONFIG = CONFIG,  NO_COLOR = NO_COLOR, AUTO_PULL_REMOTES = AUTO_PULL_REMOTES, ARCH = ARCH, ASSUME_YES = ASSUME_YES, NO_INSTALL_OPTIONAL = NO_INSTALL_OPTIONAL, TMPDIR = TMPDIR, DATADIR = DATADIR, BINARY = BINARY, POST = POST, PROGRESS = PROGRESS, SYMLINK = SYMLINK, REPOSITORY = REPOSITORY, EPHEMERAL = EPHEMERAL, MASK = MASK,
-    Addon = Addon, Repository = Repository, LiteXL = LiteXL, Bottle = Bottle, lpm = lpm, common = common, json = json, log = log,
-    settings = settings, repositories = repositories, lite_xls = lite_xls, system_bottle = system_bottle, progress_bar_label = progress_bar_label, write_progress_bar = write_progress_bar
-  }, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
+  local env = setmetatable({}, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
 
   for i,v in ipairs(common.concat(ARGS["plugin"] or {}, { common.split(",", os.getenv("LPM_PLUGINS") or "") }, lpm_plugins)) do
     if v ~= "" then
@@ -2616,57 +2661,14 @@ not commonly used publically.
   end
 
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
-  -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
   if engage_locks(function()
-    settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
-    lpm.repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
-    repositories, lite_xls = {}, {}
-    if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
-    repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
-    lite_xls = common.map(settings.lite_xls or {}, function(lite_xl) return LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }) end)
-
-    if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
-    if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
-    local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
-    if lite_xl_binary then
-      local stat = system.stat(lite_xl_binary)
-      if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
-      lite_xl_binary = stat.symlink or lite_xl_binary
-      local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl:get_binary_path() == lite_xl_binary end)
-      if not system_lite_xl then
-        system_lite_xl = common.first(lite_xls, function(e) return e.version == "system" end)
-
-        local directory = common.dirname(lite_xl_binary)
-        local lite_xl_datadirs = { DATADIR or "", directory .. PATHSEP .. "data", directory:find(PATHSEP .. "bin$") and common.dirname(directory) .. PATHSEP .. "share" .. PATHSEP .. "lite-xl" or "", directory .. PATHSEP .. "data" }
-        local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
-
-        if not BINARY and not DATADIR and system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
-        local detected_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [_G.ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
-        if not system_lite_xl then
-          system_lite_xl = detected_lite_xl
-          table.insert(lite_xls, system_lite_xl)
-          lpm.lite_xl_save()
-        else
-          lite_xls = common.grep(lite_xls, function(e) return e ~= system_lite_xl end)
-          system_lite_xl = detected_lite_xl
-          table.insert(lite_xls, system_lite_xl)
-        end
-      else
-        if DATADIR then system_lite_xl.datadir_path = DATADIR end
-        table.insert(system_lite_xl.tags, "system")
-      end
-      system_bottle = Bottle.new(system_lite_xl, nil, nil, true)
-    else
-      system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, nil, true)
-    end
-    if not system_bottle then system_bottle = Bottle.new(nil, nil, nil, true) end
-    if REPOSITORY then repositories = common.map(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end) end
+    lpm.setup()
   end, error_handler, lock_warning) then return end
 
   if ARGS[2] ~= '-' then
     local res
     engage_locks(function()
-      res = run_command(ARGS)
+      res = lpm.run_command(ARGS)
     end, error_handler, lock_warning)
     if res then
       res()
@@ -2686,7 +2688,7 @@ not commonly used publically.
       xpcall(function()
         local res
         engage_locks(function()
-          res = run_command(args)
+          res = lpm.run_command(args)
         end, error_handler, lock_warning)
         if res then
           res()
