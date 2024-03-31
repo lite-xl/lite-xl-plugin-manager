@@ -2578,7 +2578,7 @@ not commonly used publically.
     local files = system.ls(lpm_plugins_path)
     lpm_plugins = common.concat(
       common.map(common.grep(files, function(path) return path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path end),
-      common.grep(common.map(common.grep(files, function(path) return not path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path .. PATHSEP .. "init.lua" end), function(path) system.stat(path) end)
+      common.grep(common.map(common.grep(files, function(path) return not path:find("%.lua$") end), function(path) return lpm_plugins_path .. PATHSEP .. path .. PATHSEP .. "init.lua" end), function(path) return system.stat(path) end)
     )
   end
   local env = setmetatable({}, { __index = _G, __newindex = function(t, k, v) _G[k] = v end })
@@ -2592,6 +2592,7 @@ not commonly used publically.
       else
         log.warning("unable to load lpm plugin " .. v .. ": " .. err)
       end
+      if VERBOSE then log.action("Loaded plugin " .. v) end
     end
   end
 
