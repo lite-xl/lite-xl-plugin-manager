@@ -12,7 +12,13 @@ libgit2_dep = dependency('libgit2')
 libzip_dep = dependency('libzip')
 lua_dep = dependency('lua')
 
-if not mbedtls_dep.found()
+if mbedtls_dep.found()
+    mbedtls_dep = [
+        mbedtls_dep,
+        dependency('mbedx509', version: '<3', required: true),
+        dependency('mbedcrypto', version: '<3', required: true),
+    ]
+else
     # Using has_headers to distinguish between mbedtls2 and mbedtls3
     _mbedtls_dep = cc.find_library('mbedtls', has_headers: 'mbedtls/net.h', required: false)
     if _mbedtls_dep.found()
