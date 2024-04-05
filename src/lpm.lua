@@ -2178,6 +2178,8 @@ function lpm.run(ARGS)
     error("unknown command: " .. ARGS[2])
   elseif result == true and JSON then
     io.stdout:write(json.encode({ actions = actions, warnings = warnings }))
+  elseif type(result) == "function" then
+    return result
   end
 end
 
