@@ -30,8 +30,6 @@ config.plugins.plugin_manager = common.merge({
   debug = false
 }, config.plugins.plugin_manager)
 
-package.path = package.path .. ";" .. USERDIR .. "/libraries/?.lua" .. ";" .. USERDIR .. "/libraries/?/init.lua" .. ";" .. DATADIR .. "/libraries/?.lua" .. ";" .. DATADIR .. "/libraries/?/init.lua"
-
 if not config.plugins.plugin_manager.lpm_binary_path then
   local paths = {
     DATADIR .. PATHSEP .. "plugins" .. PATHSEP .. "plugin_manager" .. PATHSEP .. config.plugins.plugin_manager.lpm_binary_name,
