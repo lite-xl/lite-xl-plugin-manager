@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 : ${CC=gcc}
+: ${HOSTCC=gcc}
 : ${AR=ar}
 : ${MAKE=make}
 : ${BIN=lpm}
@@ -39,7 +40,7 @@ fi
 
 # Build the pre-packaged lua file into the executbale.
 if [[ "$@" == *"-DLPM_STATIC"* ]]; then
-  [[ ! -e "lua.exe" ]] && { $CC -Ilib/lua -o lua.exe lib/lua/onelua.c -lm || exit -1; }
+  [[ ! -e "lua.exe" ]] && { $HOSTCC -Ilib/lua -o lua.exe lib/lua/onelua.c -lm || exit -1; }
   ./lua.exe -e 'io.open("src/lpm.lua.c", "wb"):write("unsigned char lpm_luac[] = \""..string.dump(loadfile("src/lpm.lua")):gsub(".",function(c) return string.format("\\x%02X",string.byte(c)) end).."\";unsigned int lpm_luac_len = sizeof(lpm_luac)-1;")'
 fi
 
