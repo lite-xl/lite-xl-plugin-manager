@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 : ${CC=gcc}
-: ${HOSTCC=gcc}
+: ${HOSTCC=$CC}
 : ${AR=ar}
 : ${MAKE=make}
 : ${BIN=lpm}
