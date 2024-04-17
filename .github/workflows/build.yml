@@ -20,8 +20,8 @@ jobs:
           sudo apt-get install musl-tools musl musl-dev
           wget -q https://musl.cc/riscv64-linux-musl-cross.tgz && tar -zxvf riscv64-linux-musl-cross.tgz
           wget -q https://musl.cc/aarch64-linux-musl-cross.tgz && tar -zxvf aarch64-linux-musl-cross.tgz
-          ./build.sh clean && BIN=lpm.riscv64-linux CC=`pwd`/riscv64-linux-musl-cross/bin/riscv64-linux-musl-cc AR=`pwd`/riscv64-linux-musl-cross/bin/riscv64-linux-musl-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-riscv64-linux'"' -static -O3
-          ./build.sh clean && BIN=lpm.aarch64-linux CC=`pwd`/aarch64-linux-musl-cross/bin/aarch64-linux-musl-cc AR=`pwd`/aarch64-linux-musl-cross/bin/aarch64-linux-musl-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-aarch64-linux'"' -static -O3
+          ./build.sh clean && BIN=lpm.riscv64-linux HOSTCC=gcc CC=`pwd`/riscv64-linux-musl-cross/bin/riscv64-linux-musl-cc AR=`pwd`/riscv64-linux-musl-cross/bin/riscv64-linux-musl-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-riscv64-linux'"' -static -O3
+          ./build.sh clean && BIN=lpm.aarch64-linux HOSTCC=gcc CC=`pwd`/aarch64-linux-musl-cross/bin/aarch64-linux-musl-cc AR=`pwd`/aarch64-linux-musl-cross/bin/aarch64-linux-musl-ar ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-aarch64-linux'"' -static -O3
           ./build.sh clean && BIN=lpm.x86_64-linux CC=musl-gcc ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-x86_64-linux'"' -static -O3
       - name: Run Tests
         run: |
@@ -31,10 +31,10 @@ jobs:
         run: |
           export CMAKE_DEFAULT_FLAGS="-DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME -DCMAKE_ANDROID_API=$ANDROID_ABI_VERSION -DCMAKE_SYSTEM_VERSION=$ANDROID_ABI_VERSION -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_SYSTEM_NAME=Android -DCMAKE_SYSTEM_INCLUDE_PATH=$ANDROID_SYSROOT_NDK/sysroot/usr/include"
           export AR="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-          ./build.sh clean && export ARCH="arm-android" &&     CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=armeabi-v7a" CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi$ANDROID_ABI_VERSION-clang   ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="aarch64-android" && CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a"   CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ABI_VERSION-clang      ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="x86-android" &&     CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86"         CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ABI_VERSION-clang         ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
-          ./build.sh clean && export ARCH="x86_64-android" &&  CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86_64"      CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ABI_VERSION-clang       ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="arm-android" &&     CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=armeabi-v7a" HOSTCC=gcc CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi$ANDROID_ABI_VERSION-clang   ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="aarch64-android" && CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a"   HOSTCC=gcc CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android$ANDROID_ABI_VERSION-clang      ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86-android" &&     CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86"         HOSTCC=gcc CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android$ANDROID_ABI_VERSION-clang         ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
+          ./build.sh clean && export ARCH="x86_64-android" &&  CFLAGS="-Dinline=" BIN=lpm.$ARCH CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_ANDROID_ARCH_ABI=x86_64"      HOSTCC=gcc CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android$ANDROID_ABI_VERSION-clang       ./build.sh -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -DLPM_STATIC
       # - name: Package Debian/Ubuntu
       #   env: { ARCH: "amd64", DESCRIPTION: "A plugin manager for the lite-xl text editor.", MAINTAINER: "Adam Harrison <adamdharrison@gmail.com>" }
       #   run: |
@@ -44,7 +44,7 @@ jobs:
       #     dpkg-deb --build --root-owner-group $NAME
       - name: Build Windows
         run: |
-          sudo apt-get install mingw-w64 && ./build.sh clean && BIN=lpm.x86_64-windows.exe CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_INCLUDE_PATH=/usr/share/mingw-w64/include" LZMA_CONFIGURE="--host=x86_64-w64-mingw32" GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-windows'"' -O3
+          sudo apt-get install mingw-w64 && ./build.sh clean && BIN=lpm.x86_64-windows.exe HOSTCC=gcc CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-gcc-ar WINDRES=x86_64-w64-mingw32-windres CMAKE_DEFAULT_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_INCLUDE_PATH=/usr/share/mingw-w64/include" LZMA_CONFIGURE="--host=x86_64-w64-mingw32" GIT2_CONFIGURE="-DDLLTOOL=x86_64-w64-mingw32-dlltool" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$VERSION-x86_64-windows'"' -O3
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}", ARTIFACTS: "lpm.x86_64-linux lpm.aarch64-linux lpm.riscv64-linux lpm.x86_64-windows.exe lpm.arm-android lpm.aarch64-android lpm.x86-android lpm.x86_64-android" }
         run: |
