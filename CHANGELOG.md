@@ -1,3 +1,18 @@
+# 1.2.8
+
+* Fixed a bug where when we `handleize` certain strings, they'd erroneously end in `-`.
+* Changed separator for `LPM_PLUGINS` to be a `,` instead of `:`, due to plugins.
+* Spec now properly contains `checksum` at an `addon` level for when `url` is specified.
+* Added in a warning for when you use an explcit repository as part of a `run` list, and it contains a version of an addon you're trying to run that is lower than the one in your primrary repos.
+* Fixed issues with meson and `mbedtls`.
+* Major internal restructuring to better accomodate `lpm` plugins.
+* Renamed `CFLAGS` and `LDFLAGS` to `COMPILE_FLAGS` and `LINK_FLAGS` internally in `build.sh`, so as to not disrupt more exotic build configurations that rely on these variables.
+* Removed hack to support jgmdev's older libraries.
+* Allowed specification of `HOSTCC` to build lua for static builds.
+* Ensured that `author` is pulled from inside `extra`.
+* Made it so that `--table` and `--raw` can access extra fields.
+* Changed how `url` is generated in `list`.
+
 # 1.2.7
 
 * Fixed a bug where a `gc` race would cause us to erroneously hold onto a file handle longer than we need to.
