@@ -1915,11 +1915,11 @@ local function print_addon_info(type, addons, filters)
   local result = { [plural] = { } }
   for j,addon in ipairs(addons) do
     max_id = math.max(max_id, #addon.id)
-    local url = addon.name or addon.id
-    if addon.remote then url = string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.remote:gsub(":%w+$", ""))
-    elseif addon.url then url = string.format("[`%s`](%s)\\*", addon.name or addon.id, addon.url)
-    elseif addon.path and addon.path:find(".lua$") then url = string.format("[`%s`](%s?raw=1)", addon.name or addon.id, addon.path)
-    elseif addon.path then url = string.format("[`%s`](%s)", addon.name or addon.id, addon.path) end
+    local url = addon.name and addon.name ~= addon.id and string.format("%s (`%s`)", addon.name, addon.id) or ("`" .. addon.id .. "`")
+    if addon.remote then url = string.format("[%s](%s)\\*", url, addon.remote:gsub(":%w+$", ""))
+    elseif addon.url then url = string.format("[%s](%s)\\*", url, addon.url)
+    elseif addon.path and addon.path:find(".lua$") then url = string.format("[%s](%s?raw=1)", url, addon.path)
+    elseif addon.path then url = string.format("[%s](%s)", url, addon.path) end
     local hash = {
       id = addon.id,
       status = addon.repository and (addon:is_installed(system_bottle) and "installed" or (system_bottle.lite_xl:is_compatible(addon) and "available" or "incompatible")) or (addon:is_bundled(system_bottle) and "bundled" or (addon:is_core(system_bottle) and "core" or (addon:is_upgradable(system_bottle) and "upgradable" or "orphan"))),
