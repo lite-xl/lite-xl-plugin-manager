@@ -1930,6 +1930,7 @@ local function print_addon_info(type, addons, filters)
       remote = addon.remote,
       description = addon.description,
       author = addon.extra and addon.extra.author or (addon:is_core(system_bottle) and "lite-xl") or nil,
+      extra = addon.extra,
       mod_version = addon.mod_version or LATEST_MOD_VERSION,
       tags = addon.tags,
       type = addon.type,
@@ -1953,9 +1954,20 @@ local function print_addon_info(type, addons, filters)
     if TABLE then
       local addons = common.grep(sorted, function(addon) return addon.status ~= "incompatible" end)
       print(get_table(HEADER or common.map(TABLE, function(header)
-        return ("" .. header:gsub("^%l", string.upper):gsub("_", " "))
+        return ("" .. header:gsub("^.*%.", ""):gsub("^%l", string.upper):gsub("_", " "))
       end), common.map(result[plural], function(addon)
-        return common.map(TABLE, function(header) return _G.type(header) == "function" and header(addon) or addon[header] or "" end)
+        return common.map(TABLE, function(header)
+          if _G.type(header) == "function" then
+            return header(addon)
+          else
+            local t = addon
+            for i,v in ipairs({ common.split("%.", header) }) do
+              t = t[v]
+              if _G.type(t) ~= "table" then break end
+            end
+            return t or ""
+          end
+        end)
       end)))
     elseif RAW then
       local addons = common.grep(sorted, function(addon) return addon.status ~= "incompatible" end)
