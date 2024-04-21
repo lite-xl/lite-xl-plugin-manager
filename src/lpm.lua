@@ -2447,8 +2447,9 @@ not commonly used publically.
       if arg:sub(offset, offset) == "{" then
         s,e = arg:find("%b{}", offset)
         if not e then error(string.format("no end to chunk %s", arg:sub(offset))) end
-        local chunk = arg:sub(s + 1, e - 1)
-        local func, err = load("local addon = ... return " .. chunk)
+        local amount = arg:sub(offset+1, offset+1) == "{" and 2 or 1
+        local chunk = arg:sub(s + amount, e - amount)
+        local func, err = load("local addon = ... " .. (amount == 2 and "return" or "") .. " " .. chunk)
         if err then error(string.format("can't parse chunk %s: %s", chunk, err)) end
         result[i] = func
         offset = e + 1
