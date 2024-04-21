@@ -1,6 +1,8 @@
 # 1.2.9
 
 * Fixed a major bug which caused lpm to stop working in CI pipelines without `$TERM` defined.
+* Fixed some minor bugs with templating in `--table` and `--raw`.
+* Changed how the `url` field is reported.
 
 # 1.2.8
 
