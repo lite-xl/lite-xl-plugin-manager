@@ -1532,9 +1532,15 @@ function Bottle:all_addons()
           return e.local_path and not Addon.is_addon_different(e.local_path, path)
         end)[1]
         if i == 2 or not hash[id] or not matching then
+          local translations = {
+            plugins = "plugin",
+            libraries = "library",
+            fonts = "font",
+            colors = "color"
+          }
           table.insert(t, Addon.new(nil, {
             id = id,
-            type = (addon_type == "plugins" and "plugin") or "library",
+            type = (translations[addon_type] or "plugin"),
             location = (i == 2 and (hash[id] and "bundled" or "core")) or "user",
             organization = (v:find("%.lua$") and "singleton" or "complex"),
             local_path = path,
@@ -2223,7 +2229,7 @@ xpcall(function()
   ARGS = common.args(ARGS, {
     json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
-    remotes = "flag", ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
+    ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
     repository = "string", ephemeral = "flag", mask = "array", raw = "string", plugin = "array",
