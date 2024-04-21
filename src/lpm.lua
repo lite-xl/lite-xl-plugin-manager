@@ -2452,13 +2452,15 @@ not commonly used publically.
         local func, err = load("local addon = ... " .. (amount == 2 and "return" or "") .. " " .. chunk)
         if err then error(string.format("can't parse chunk %s: %s", chunk, err)) end
         result[i] = func
+        offset = arg:find(",", e + 1)
+        if offset then offset = offset + 1 else offset = #arg end
+      else
+        s,e = arg:find("%s*,%s*", offset)
+        if not e then s,e = #arg+1, #arg end
+        if offset >= e then break end
+        result[i] = arg:sub(offset, s - 1)
         offset = e + 1
       end
-      s,e = arg:find("%s*,%s*", offset)
-      if not e then s,e = #arg+1, #arg end
-      if offset >= e then break end
-      result[i] = arg:sub(offset, s - 1)
-      offset = e + 1
       i = i + 1
     end
     if ARGS["table"] then
