@@ -1,3 +1,7 @@
+# 1.2.9
+
+* Fixed a major bug which caused lpm to stop working in CI pipelines without `$TERM` defined.
+
 # 1.2.8
 
 * Fixed a bug where when we `handleize` certain strings, they'd erroneously end in `-`.
