@@ -1853,7 +1853,7 @@ local function is_argument_repo(arg)
   return arg:find("^http") or arg:find("[\\/]") or arg == "."
 end
 
-local function retrieve_addons(lite_xl, arguments)
+local function retrieve_addons(lite_xl, arguments, filters)
   local addons = {}
   local i = 1
   while i <= #arguments do
@@ -1868,7 +1868,7 @@ local function retrieve_addons(lite_xl, arguments)
       if not remainder then repo = nil end
       local id, version = common.split(":", remainder or str)
 
-      local potentials = { system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version, repository = repo }) }
+      local potentials = { system_bottle:get_addon(id, version, common.merge({ mod_version = lite_xl.mod_version, repository = repo }, filters or {})) }
       local uniq = {}
       local found_one = false
       for i, addon in ipairs(potentials) do
@@ -1876,7 +1876,6 @@ local function retrieve_addons(lite_xl, arguments)
           uniq[addon.id] = addon
           found_one = true
         elseif not addon:is_orphan(system_bottle) and not uniq[addon.id] then
-          table.insert(addons, addon)
           uniq[addon.id] = addon
           found_one = true
         end
@@ -1886,6 +1885,7 @@ local function retrieve_addons(lite_xl, arguments)
         end
       end
       if not found_one then error("can't find addon " .. str) end
+      table.insert(addons, potentials)
     end
     i = i + 1
   end
@@ -1913,7 +1913,12 @@ function lpm.lite_xl_run(version, ...)
     version = "system"
   end
   local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
-  local addons, i = retrieve_addons(lite_xl, arguments)
+  local potential_addons, i = retrieve_addons(lite_xl, arguments)
+  local addons = common.map(potential_addons, function(potentials)
+    return common.grep(potentials, function(addon)
+      return not addon:is_core(system_bottle) and not addon:is_orphan(system_bottle)
+    end)[1]
+  end)
   local bottle = Bottle.new(lite_xl, addons, CONFIG)
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
@@ -1925,38 +1930,33 @@ end
 
 
 function lpm.install(type, ...)
-  local repo_only = nil
+  local arguments = { ... }
+  for i, identifier in ipairs(arguments) do
+    local id, version = common.split(":", identifier)
+    if id == "lite-xl" then lpm.lite_xl_install(version)
+      table.remove(arguments, i)
+      break
+    end
+  end
   local to_install = {}
   local to_explicitly_install = {}
-  for i, identifier in ipairs({ ... }) do
-    local s = identifier:find(":")
-    local id, version = (s and identifier:sub(1, s-1) or identifier), (s and identifier:sub(s+1) or nil)
-    if not id then error('unrecognized identifier ' .. identifier) end
-    if id == "lite-xl" then
-      lpm.lite_xl_install(version)
+
+  local potential_addon_list = retrieve_addons(system_bottle.lite_xl, arguments, { type = type })
+  for i, potential_addons in ipairs(potential_addon_list) do
+    local id = potential_addons[1].id
+    local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
+    if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
+    if #addons == 0 then
+      log.warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
+      if not common.first(settings.installed, id) then table.insert(to_explicitly_install, id) end
     else
-      if is_argument_repo(identifier) then
-        table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
-        system_bottle:invalidate_cache()
-        if repo_only == nil then repo_only = true end
-      else
-        repo_only = false
-        local potential_addons = { system_bottle:get_addon(id, version, { mod_version = system_bottle.lite_xl.mod_version, type = type }) }
-        local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
-        if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. id .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-        if #addons == 0 then
-          log.warning((potential_addons[1].type or "addon") .. " " .. id .. " already installed")
-          if not common.first(settings.installed, id) then table.insert(to_explicitly_install, id) end
-        else
-          for j,v in ipairs(addons) do
-            if not common.first(settings.installed, v.id) then table.insert(to_explicitly_install, v.id) end
-            table.insert(to_install, v)
-          end
-        end
+      for j,v in ipairs(addons) do
+        if not common.first(settings.installed, v.id) then table.insert(to_explicitly_install, v.id) end
+        table.insert(to_install, v)
       end
     end
   end
-  if #to_install == 0 and repo_only == true then error("no addons specified for install") end
+  if #to_install == 0 and #potential_addon_list == 0 then error("no addons specified for install") end
   local installing = {}
   common.each(to_install, function(e)
     if not installing[e.id] then
