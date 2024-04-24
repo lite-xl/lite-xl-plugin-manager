@@ -171,8 +171,14 @@ if config.plugins.plugin_manager.addons then
       table.insert(addons, v)
     end
   end
-  run({ "apply", table.unpack(addons) }):done(function(status)
-    if status["changed"] then command.perform("core:restart") end
+  core.log("Applying declarative addon list.")
+  run({ "apply", "plugin_manager", table.unpack(addons) }):done(function(status)
+    if status["changed"] then
+      command.perform("core:restart")
+      core.log("Addon list applied, changes required. Performing restart...")
+    else
+      core.log("Addon list applied, no changes required.")
+    end
   end)
 end
 
