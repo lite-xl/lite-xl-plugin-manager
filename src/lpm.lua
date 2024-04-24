@@ -1417,6 +1417,14 @@ end
 
 function Bottle:is_constructed() return self.is_system or system.stat(self.local_path) end
 
+local DEFAULT_CONFIG_HEADER = [[
+local core = require "core"
+local command = require "core.command"
+local keymap = require "core.keymap"
+local config = require "core.config"
+local style = require "core.style"
+]]
+
 function Bottle:construct()
   if self.is_system then error("system bottle cannot be constructed") end
   if self:is_constructed() and not REINSTALL then error("bottle " .. self.hash .. " already constructed") end
@@ -1428,14 +1436,7 @@ function Bottle:construct()
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   if self.config then
-    io.open(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", "wb"):write([[
-      local core = require "core"
-      local command = require "core.command"
-      local keymap = require "core.keymap"
-      local config = require "core.config"
-      local style = require "core.style"
-      ]] .. self.config
-    ):close()
+    common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. self.config)
   end
 
   -- Always copy the executbale, because of the way that lite determines the user folder (for now).
@@ -1457,6 +1458,29 @@ function Bottle:construct()
   common.mkdirp(common.dirname(local_path))
   common.rename(self.local_path, local_path)
   self.local_path = local_path
+end
+
+
+function Bottle:apply(addons, config)
+  local applying = {}
+  local applied = {}
+
+  for i, addon in ipairs(addons) do
+    if not addon:is_core() and not addon:is_installed(self) then
+      addon:install(self, applying)
+    end
+    applied[addon.id] = true
+  end
+  for i, addon in pairs(self:installed_addons()) do
+    if #common.grep(addons, function(p) return p:depends_on(addon) end) == 0 then
+      if not applied[addon.id] and not addon:is_core(self) and not addon:is_bundled(self) then
+        addon:uninstall(self)
+      end
+    end
+  end
+  if config then
+    common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'default' and DEFAULT_CONFIG_HEADER or config)
+  end
 end
 
 function Bottle:destruct()
@@ -1521,34 +1545,36 @@ function Bottle:all_addons()
       (self.local_path and (self.local_path .. PATHSEP .. "user") or USERDIR) .. PATHSEP .. addon_type,
       self.lite_xl.datadir_path .. PATHSEP .. addon_type
     }
-    for i, addon_path in ipairs(common.grep(addon_paths, function(e) return system.stat(e) end)) do
-      for j, v in ipairs(system.ls(addon_path)) do
-        local id = common.handleize(v:gsub("%.lua$", ""))
-        local path = addon_path .. PATHSEP .. v
-        -- in the case where we have an existing plugin that targets a stub, then fetch that repository
-        local fetchable = hash[id] and common.grep(hash[id], function(e) return e:is_stub() end)[1]
-        if fetchable then fetchable:unstub() end
-        local matching = hash[id] and common.grep(hash[id], function(e)
-          return e.local_path and not Addon.is_addon_different(e.local_path, path)
-        end)[1]
-        if i == 2 or not hash[id] or not matching then
-          local translations = {
-            plugins = "plugin",
-            libraries = "library",
-            fonts = "font",
-            colors = "color"
-          }
-          table.insert(t, Addon.new(nil, {
-            id = id,
-            type = (translations[addon_type] or "plugin"),
-            location = (i == 2 and (hash[id] and "bundled" or "core")) or "user",
-            organization = (v:find("%.lua$") and "singleton" or "complex"),
-            local_path = path,
-            mod_version = self.lite_xl.mod_version,
-            path = addon_type .. PATHSEP .. v,
-            description = (hash[id] and hash[id][1].description or nil),
-            repo_path = (hash[id] and hash[id][1].local_path or nil)
-          }))
+    for i, addon_path in ipairs(addon_paths) do
+      if system.stat(addon_path) then
+        for j, v in ipairs(system.ls(addon_path)) do
+          local id = common.handleize(v:gsub("%.lua$", ""))
+          local path = addon_path .. PATHSEP .. v
+          -- in the case where we have an existing plugin that targets a stub, then fetch that repository
+          local fetchable = hash[id] and common.grep(hash[id], function(e) return e:is_stub() end)[1]
+          if fetchable then fetchable:unstub() end
+          local matching = hash[id] and common.grep(hash[id], function(e)
+            return e.local_path and not Addon.is_addon_different(e.local_path, path)
+          end)[1]
+          if i == 2 or not hash[id] or not matching then
+            local translations = {
+              plugins = "plugin",
+              libraries = "library",
+              fonts = "font",
+              colors = "color"
+            }
+            table.insert(t, Addon.new(nil, {
+              id = id,
+              type = (translations[addon_type] or "plugin"),
+              location = (i == 2 and (hash[id] and "bundled" or "core")) or "user",
+              organization = (v:find("%.lua$") and "singleton" or "complex"),
+              local_path = path,
+              mod_version = self.lite_xl.mod_version,
+              path = addon_type .. PATHSEP .. v,
+              description = (hash[id] and hash[id][1].description or nil),
+              repo_path = (hash[id] and hash[id][1].local_path or nil)
+            }))
+          end
         end
       end
     end
@@ -1803,14 +1829,7 @@ local function is_argument_repo(arg)
   return arg:find("^http") or arg:find("[\\/]") or arg == "."
 end
 
-function lpm.lite_xl_run(version, ...)
-  if not version then error("requires a version or arguments") end
-  local arguments = { ... }
-  if not version:find("^%d+") and version ~= "system" then
-    table.insert(arguments, 1, version)
-    version = "system"
-  end
-  local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
+local function retrieve_addons(lite_xl, arguments)
   local addons = {}
   local i = 1
   while i <= #arguments do
@@ -1834,7 +1853,6 @@ function lpm.lite_xl_run(version, ...)
           uniq[addon.id] = addon
           found_one = true
         end
-
         if i > 1 and uniq[addon.id] and uniq[addon.id] ~= addon and addon.repository and addon.repository.explicit then
           log.warning("your explicitly specified repository " .. addon.repository:url() .. " has a version of " .. addon.id .. " lower than that in " .. uniq[addon.id].repository:url() .. " (" .. addon.version .. " vs. " .. uniq[addon.id].version ..
             "; in order to use the one in your specified repo, please specify " .. addon.id .. ":" .. addon.version)
@@ -1844,7 +1862,28 @@ function lpm.lite_xl_run(version, ...)
     end
     i = i + 1
   end
+  return addons, i
+end
+
+function lpm.apply(...)
+  local arguments = { ... }
+  local addons, i = retrieve_addons(system_bottle.lite_xl, arguments)
+  if #arguments >= i then error("invalid use of --") end
+  system_bottle:apply(addons, CONFIG)
+end
+
+
+function lpm.lite_xl_run(version, ...)
+  if not version then error("requires a version or arguments") end
+  local arguments = { ... }
+  if not version:find("^%d+") and version ~= "system" then
+    table.insert(arguments, 1, version)
+    version = "system"
+  end
+  local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  local addons, i = retrieve_addons(lite_xl, arguments)
   local bottle = Bottle.new(lite_xl, addons, CONFIG)
+  if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
     bottle:run(common.slice(arguments, i + 1))
@@ -2162,6 +2201,7 @@ function lpm.command(ARGS)
   elseif ARGS[2] == "update" then lpm.repo_update(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm.repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm.repo_list()
+  elseif ARGS[2] == "apply" then return lpm.apply(table.unpack(common.slice(ARGS, 3)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "install" then lpm.install(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "uninstall" then lpm.addon_uninstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
   elseif (ARGS[2] == "plugin" or ARGS[2] == "color" or ARGS[2] == "library" or ARGS[2] == "font") and ARGS[3] == "reinstall" then lpm.addon_reinstall(ARGS[2], table.unpack(common.slice(ARGS, 4)))
