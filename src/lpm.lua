@@ -1093,7 +1093,7 @@ function Repository.url(url)
   if type(url) == "table" then return (url.remote and (url.remote .. ":" .. (url.branch or url.commit)) or url.repo_path) end
   if not url:find("^%a+:") then
     local stat = system.stat(url:gsub("[/\\]$", "")) or error("can't find repository " .. url)
-    return Repository.new({ repo_path = stat.abs_path })
+    return common.grep(repositories, function(r) return r.repo_path == stat.abs_path end)[1] or Repository.new({ repo_path = stat.abs_path })
   end
   local e = url:reverse():find(":")
   local s = e and (#url - e + 1)
@@ -1103,6 +1103,14 @@ function Repository.url(url)
     return Repository.new({ remote = remote, commit = branch_or_commit })
   end
   return Repository.new({ remote = remote, branch = branch_or_commit })
+end
+
+function Repository.get_or_create(url)
+  local repo = Repository.url(url)
+  return common.grep(repositories, function(r)
+    if not repo.remote then return repo.local_path == r.local_path end
+    return r.remote == repo.remote and r.commit == repo.commit and r.branch == repo.branch
+  end)[0] or repo
 end
 
 function Repository:parse_manifest(repo_id)
@@ -1462,12 +1470,14 @@ end
 
 
 function Bottle:apply(addons, config)
+  local changes = false
   local applying = {}
   local applied = {}
 
   for i, addon in ipairs(addons) do
     if not addon:is_core() and not addon:is_installed(self) then
       addon:install(self, applying)
+      changes = true
     end
     applied[addon.id] = true
   end
@@ -1475,12 +1485,15 @@ function Bottle:apply(addons, config)
     if #common.grep(addons, function(p) return p:depends_on(addon) end) == 0 then
       if not applied[addon.id] and not addon:is_core(self) and not addon:is_bundled(self) then
         addon:uninstall(self)
+        changes = true
       end
     end
   end
   if config then
     common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'default' and DEFAULT_CONFIG_HEADER or config)
+    changes = true
   end
+  return changes
 end
 
 function Bottle:destruct()
@@ -1619,11 +1632,22 @@ local function addon_matches_filter(addon, filters)
     filter_match(addon.name or addon.id, filters["name"])
 end
 
+local transient_repos = {}
+
 function Bottle:get_addon(id, version, filter)
   local candidates = {}
   local wildcard = id:find("%*$")
   filter = filter or {}
-  for i,addon in ipairs(self:all_addons()) do
+  local addons
+  if filter.repository then
+    local repo = Repository.get_or_create(filter.repository)
+    repo:fetch_if_not_present():parse_manifest()
+    addons = repo.addons or {}
+  else
+    addons = self:all_addons()
+  end
+
+  for i,addon in ipairs(addons) do
     if (common.first(addon.replaces or {}, function(replaces) return replaces == id end) or
       common.first(addon.provides or {}, function(provides) return provides == id end) or
       (addon.id == id or (wildcard and addon.id:find("^" .. id:sub(1, #id - 1))))) and
@@ -1835,13 +1859,16 @@ local function retrieve_addons(lite_xl, arguments)
   while i <= #arguments do
     if arguments[i] == "--" then break end
     local str = arguments[i]
-    if is_argument_repo(str) then
+    if is_argument_repo(str) and not str:find("@") then
       table.insert(repositories, 1, Repository.url(str):add(AUTO_PULL_REMOTES))
       system_bottle:invalidate_cache()
       repositories[1].explicit = true
     else
-      local id, version = common.split(":", str)
-      local potentials = { system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version }) }
+      local repo, remainder = common.split("@", str)
+      if not remainder then repo = nil end
+      local id, version = common.split(":", remainder or str)
+
+      local potentials = { system_bottle:get_addon(id, version, { mod_version = lite_xl.mod_version, repository = repo }) }
       local uniq = {}
       local found_one = false
       for i, addon in ipairs(potentials) do
@@ -1869,7 +1896,12 @@ function lpm.apply(...)
   local arguments = { ... }
   local addons, i = retrieve_addons(system_bottle.lite_xl, arguments)
   if #arguments >= i then error("invalid use of --") end
-  system_bottle:apply(addons, CONFIG)
+  local changed = system_bottle:apply(addons, CONFIG)
+  if JSON then
+    io.stdout:write(json.encode({ changed = changed }) .. "\n")
+  else
+    log.action(changed and "Successfully applied addon list to system bottle." or "No changes made to system bottle.", "green")
+  end
 end
 
 
@@ -2768,7 +2800,11 @@ not commonly used publically.
           res = lpm.run(args)
         end, error_handler, lock_warning)
         if res then
-          res()
+          if type(res) == 'function' then
+            res()
+          elseif type(res) == 'number' then
+            status = res
+          end
         end
       end, error_handler)
       actions, warnings = {}, {}

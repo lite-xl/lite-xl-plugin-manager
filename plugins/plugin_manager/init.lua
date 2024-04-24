@@ -27,7 +27,9 @@ config.plugins.plugin_manager = common.merge({
   -- Whether or not to force install things.
   force = false,
   -- Dumps commands that run to stdout, as well as responses from lpm.
-  debug = false
+  debug = false,
+  -- A list of addons to apply to the system bottle.
+  addons = nil
 }, config.plugins.plugin_manager)
 
 if not config.plugins.plugin_manager.lpm_binary_path then
@@ -147,6 +149,31 @@ local function run(cmd, progress)
     end)
   end
   return promise
+end
+
+if config.plugins.plugin_manager.addons then
+  local addons = {}
+  for i,v in ipairs(config.plugins.plugin_manager.addons) do
+    if type(v) == 'table' then
+      local string = ""
+      if v.remote then
+        string = v.remote
+        if v.commit or v.branch then
+          string = string .. ":" .. (v.commit or v.branch)
+        end
+        string = string .. "@"
+      end
+      if not v.id then error("requires config.plugin_manager.addons entries to have an id") end
+      string = string .. v.id
+      if v.version then string = string .. ":" .. v.version end
+      table.insert(addons, string)
+    else
+      table.insert(addons, v)
+    end
+  end
+  run({ "apply", table.unpack(addons) }):done(function(status)
+    if status["changed"] then command.perform("core:restart") end
+  end)
 end
 
 
