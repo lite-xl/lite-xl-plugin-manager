@@ -70,7 +70,6 @@ local function join(joiner, t) local s = "" for i,v in ipairs(t) do if i > 1 the
 local running_processes = {}
 local default_arguments = {
   "--mod-version=" .. (rawget(_G, "MOD_VERSION") or MOD_VERSION_STRING), -- #workaround hack for new system.
-  "--userdir=" .. USERDIR,
   "--datadir=" .. DATADIR,
   "--binary=" .. EXEFILE,
   "--assume-yes"
@@ -88,11 +87,14 @@ local function extract_progress(chunk)
   return chunk:sub(1, newline - 1), chunk:sub(newline + 1)
 end
 
-local function run(cmd, progress)
+local function run(cmd, options)
+  options = options or {}
   table.insert(cmd, 1, config.plugins.plugin_manager.lpm_binary_path)
   table.insert(cmd, "--json")
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--progress")
+  if options.cachedir then table.insert(cmd, "--cachedir=" .. options.cachedir) end
+  table.insert(cmd, "--userdir=" .. (options.userdir or USERDIR))
   for i,v in ipairs(default_arguments) do table.insert(cmd, v) end
   local proc = process.start(cmd)
   if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") io.stdout:flush() end
@@ -115,9 +117,9 @@ local function run(cmd, progress)
             if chunk ~= nil and #chunk > 0 then
               v[3] = v[3] .. chunk
               progress_line, v[3] = extract_progress(v[3])
-              if progress and progress_line then
+              if options.progress and progress_line then
                 progress_line = json.decode(progress_line)
-                progress(progress_line.progress)
+                options.progress(progress_line.progress)
               end
               has_chunk = true
             else
@@ -151,41 +153,10 @@ local function run(cmd, progress)
   return promise
 end
 
-if config.plugins.plugin_manager.addons then
-  local addons = {}
-  for i,v in ipairs(config.plugins.plugin_manager.addons) do
-    if type(v) == 'table' then
-      local string = ""
-      if v.remote then
-        string = v.remote
-        if v.commit or v.branch then
-          string = string .. ":" .. (v.commit or v.branch)
-        end
-        string = string .. "@"
-      end
-      if not v.id then error("requires config.plugin_manager.addons entries to have an id") end
-      string = string .. v.id
-      if v.version then string = string .. ":" .. v.version end
-      table.insert(addons, string)
-    else
-      table.insert(addons, v)
-    end
-  end
-  core.log("Applying declarative addon list.")
-  run({ "apply", "plugin_manager", table.unpack(addons) }):done(function(status)
-    if status["changed"] then
-      command.perform("core:restart")
-      core.log("Addon list applied, changes required. Performing restart...")
-    else
-      core.log("Addon list applied, no changes required.")
-    end
-  end)
-end
-
 
 function PluginManager:refresh(options)
   local prom = Promise.new()
-  run({ "list" }, options.progress):done(function(addons)
+  run({ "list" }, options):done(function(addons)
     self.addons = json.decode(addons)["addons"]
     table.sort(self.addons, function(a,b) return a.id < b.id end)
     self.valid_addons = {}
@@ -200,7 +171,7 @@ function PluginManager:refresh(options)
     self.last_refresh = os.time()
     core.redraw = true
     prom:resolve(addons)
-    run({ "repo", "list" }, options.progress):done(function(repositories)
+    run({ "repo", "list" }, options):done(function(repositories)
       self.repositories = json.decode(repositories)["repositories"]
     end)
   end)
@@ -210,8 +181,8 @@ end
 
 function PluginManager:upgrade(options)
   local prom = Promise.new()
-  run({ "update" }, options.progress):done(function()
-    run({ "upgrade" }, options.progress):done(function()
+  run({ "update" }, options):done(function()
+    run({ "upgrade" }, options):done(function()
       prom:resolve()
     end)
   end)
@@ -221,7 +192,7 @@ end
 
 
 function PluginManager:purge(options)
-  return run({ "purge" }, options.progress)
+  return run({ "purge" }, options)
 end
 
 
@@ -239,7 +210,7 @@ end
 
 local function run_stateful_plugin_command(plugin_manager, cmd, args, options)
   local promise = Promise.new()
-  run({ cmd, table.unpack(args) }, options.progress):done(function(result)
+  run({ cmd, table.unpack(args) }, options):done(function(result)
     if (options.restart == nil and config.plugins.plugin_manager.restart_on_change) or options.restart then
       command.perform("core:restart")
     else
@@ -260,7 +231,7 @@ function PluginManager:unstub(addon, options)
   if addon.path and system.get_file_info(addon.path) then
     promise:resolve(addon)
   else
-    run({ "unstub", addon.id }, options.progress):done(function(result)
+    run({ "unstub", addon.id }, options):done(function(result)
       local unstubbed_addon = json.decode(result).addons[1]
       for k,v in pairs(unstubbed_addon) do addon[k] = v end
       promise:resolve(addon)
@@ -294,6 +265,201 @@ end
 
 PluginManager.promise = Promise
 PluginManager.view = require "plugins.plugin_manager.plugin_view"
+
+
+if config.plugins.plugin_manager.addons then
+  local target_plugin_directory = USERDIR .. PATHSEP .. "projects" .. PATHSEP .. common.basename(system.absolute_path("."))
+
+  local mod_version_regex =
+    regex.compile([[--.*mod-version:(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:$|\s)]])
+  local function get_plugin_details(filename)
+    local info = system.get_file_info(filename)
+    if info ~= nil and info.type == "dir" then
+      filename = filename .. PATHSEP .. "init.lua"
+      info = system.get_file_info(filename)
+    end
+    if not info or not filename:match("%.lua$") then return false end
+    local f = io.open(filename, "r")
+    if not f then return false end
+    local priority = false
+    local version_match = false
+    local major, minor, patch
+
+    for line in f:lines() do
+      if not version_match then
+        local _major, _minor, _patch = mod_version_regex:match(line)
+        if _major then
+          _major = tonumber(_major) or 0
+          _minor = tonumber(_minor) or 0
+          _patch = tonumber(_patch) or 0
+          major, minor, patch = _major, _minor, _patch
+
+          version_match = major == MOD_VERSION_MAJOR
+          if version_match then
+            version_match = minor <= MOD_VERSION_MINOR
+          end
+          if version_match then
+            version_match = patch <= MOD_VERSION_PATCH
+          end
+        end
+      end
+
+      if not priority then
+        priority = line:match('%-%-.*%f[%a]priority%s*:%s*(%d+)')
+        if priority then priority = tonumber(priority) end
+      end
+
+      if version_match then
+        break
+      end
+    end
+    f:close()
+    return true, {
+      version_match = version_match,
+      version = major and {major, minor, patch} or {},
+      priority = priority or 100
+    }
+  end
+
+  local function replace_string(str, text, replace)
+    local offset = 1
+    local result = ""
+    while true do
+      local s,e = str:find(text, offset, true)
+      if s then
+        result = result .. str:sub(offset, s - 1) .. replace
+        offset = e + 1
+      else
+        result = result .. str:sub(offset)
+        break
+      end
+    end
+    return result
+  end
+
+  local function lpm_load_plugins()
+    package.cpath = replace_string(package.cpath, USERDIR, target_plugin_directory)
+    package.path = replace_string(package.path, USERDIR, target_plugin_directory)
+
+    local no_errors = true
+    local refused_list = {
+      userdir = {dir = target_plugin_directory, plugins = {}}
+    }
+    local files, ordered = {}, {}
+    for _, root_dir in ipairs {target_plugin_directory} do
+      local plugin_dir = root_dir .. PATHSEP .. "plugins"
+      for _, filename in ipairs(system.list_dir(plugin_dir) or {}) do
+        if not files[filename] then
+          table.insert(
+            ordered, {file = filename}
+          )
+        end
+        -- user plugins will always replace system plugins
+        files[filename] = plugin_dir
+      end
+    end
+
+    for _, plugin in ipairs(ordered) do
+      local dir = files[plugin.file]
+      local name = plugin.file:match("(.-)%.lua$") or plugin.file
+      local is_lua_file, details = get_plugin_details(dir .. PATHSEP .. plugin.file)
+
+      plugin.valid = is_lua_file
+      plugin.name = name
+      plugin.dir = dir
+      plugin.priority = details and details.priority or 100
+      plugin.version_match = details and details.version_match or false
+      plugin.version = details and details.version or {}
+      plugin.version_string = #plugin.version > 0 and table.concat(plugin.version, ".") or "unknown"
+    end
+
+    -- sort by priority or name for plugins that have same priority
+    table.sort(ordered, function(a, b)
+      if a.priority ~= b.priority then
+        return a.priority < b.priority
+      end
+      return a.name < b.name
+    end)
+
+    local load_start = system.get_time()
+    for _, plugin in ipairs(ordered) do
+      if plugin.valid then
+        if not config.skip_plugins_version and not plugin.version_match then
+          core.log_quiet(
+            "Version mismatch for plugin %q[%s] from %s",
+            plugin.name,
+            plugin.version_string,
+            plugin.dir
+          )
+          local rlist = plugin.dir:find(USERDIR, 1, true) == 1
+            and 'userdir' or 'datadir'
+          local list = refused_list[rlist].plugins
+          table.insert(list, plugin)
+        elseif config.plugins[plugin.name] ~= false then
+          local start = system.get_time()
+          local ok, loaded_plugin = core.try(require, "plugins." .. plugin.name)
+          if ok then
+            local plugin_version = ""
+            if plugin.version_string ~= MOD_VERSION_STRING then
+              plugin_version = "["..plugin.version_string.."]"
+            end
+            core.log_quiet(
+              "Loaded plugin %q%s from %s in %.1fms",
+              plugin.name,
+              plugin_version,
+              plugin.dir,
+              (system.get_time() - start) * 1000
+            )
+          end
+          if not ok then
+            no_errors = false
+          elseif config.plugins[plugin.name].onload then
+            core.try(config.plugins[plugin.name].onload, loaded_plugin)
+          end
+        end
+      end
+    end
+    core.log_quiet(
+      "Loaded all managed plugins in %.1fms",
+      (system.get_time() - load_start) * 1000
+    )
+    return no_errors, refused_list
+  end
+
+  local addons = {}
+  for i,v in ipairs(config.plugins.plugin_manager.addons) do
+    if type(v) == 'table' then
+      local string = ""
+      if v.remote then
+        string = v.remote
+        if v.commit or v.branch then
+          string = string .. ":" .. (v.commit or v.branch)
+        end
+        string = string .. "@"
+      end
+      if not v.id then error("requires config.plugin_manager.addons entries to have an id") end
+      string = string .. v.id
+      if v.version then string = string .. ":" .. v.version end
+      table.insert(addons, string)
+    else
+      table.insert(addons, v)
+    end
+  end
+  local plugins = system.list_dir(USERDIR .. PATHSEP .. "plugins")
+  local old_configs = {}
+  for i,v in ipairs(plugins or {}) do
+    local id = v:gsub("%.lua", "")
+    if config.plugins[id] ~= false and id ~= "plugin_manager" then
+      old_configs[id] = config.plugins[id]
+      config.plugins[id] = false
+    end
+  end
+  run({ "apply", table.unpack(addons), }, { userdir = target_plugin_directory, cachedir =  USERDIR .. PATHSEP .. "lpm" }):done(function(status)
+    if json.decode(status)["changed"] then command.perform("core:restart") end
+  end)
+  lpm_load_plugins()
+end
+
 
 command.add(nil, {
   ["plugin-manager:install"] = function()
@@ -387,7 +553,7 @@ if pcall(require, "plugins.terminal") then
   local terminal = require "plugins.terminal"
   command.add(nil, {
     ["plugin-manager:open-session"] = function()
-      local arguments = { "-" }
+      local arguments = { "-", "--userdir=" .. USERDIR }
       for i,v in ipairs(default_arguments) do table.insert(arguments, v) end
       local tv = terminal.class(common.merge(config.plugins.terminal, {
         shell = config.plugins.plugin_manager.lpm_binary_path,

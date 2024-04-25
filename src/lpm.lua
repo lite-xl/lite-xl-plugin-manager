@@ -1473,16 +1473,21 @@ function Bottle:apply(addons, config)
   local changes = false
   local applying = {}
   local applied = {}
+  local installed = {}
 
-  for i, addon in ipairs(addons) do
-    if not addon:is_core() and not addon:is_installed(self) then
-      addon:install(self, applying)
+  for i, addons in ipairs(addons) do
+    local installed_addons = common.grep(addons, function(addon) return addon:is_installed(self) or addon:is_core(self) end)
+    if #installed_addons == 0 then
+      addons[1]:install(self, applying)
       changes = true
+      table.insert(installed, addons[1])
+    else
+      table.insert(installed, installed_addons[1])
     end
-    applied[addon.id] = true
+    applied[addons[1].id] = true
   end
   for i, addon in pairs(self:installed_addons()) do
-    if #common.grep(addons, function(p) return p:depends_on(addon) end) == 0 then
+    if #common.grep(installed, function(p) return p:depends_on(addon) end) == 0 then
       if not applied[addon.id] and not addon:is_core(self) and not addon:is_bundled(self) then
         addon:uninstall(self)
         changes = true
