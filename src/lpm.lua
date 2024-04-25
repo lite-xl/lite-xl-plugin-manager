@@ -1488,7 +1488,7 @@ function Bottle:apply(addons, config)
   end
   for i, addon in pairs(self:installed_addons()) do
     if #common.grep(installed, function(p) return p:depends_on(addon) end) == 0 then
-      if not applied[addon.id] and not addon:is_core(self) and not addon:is_bundled(self) then
+      if not applied[addon.id] and not addon:is_core(self) and not addon:is_bundled(self) and addon.type ~= "meta" then
         addon:uninstall(self)
         changes = true
       end
