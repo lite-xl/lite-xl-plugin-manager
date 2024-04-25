@@ -266,7 +266,7 @@ end
 PluginManager.promise = Promise
 PluginManager.view = require "plugins.plugin_manager.plugin_view"
 
-
+-- This will be significantly simplified when the plugin loading monolith is broken up a bit.
 if config.plugins.plugin_manager.addons then
   local target_plugin_directory = config.plugins.plugin_manger.adddon_directory or (USERDIR .. PATHSEP .. "projects" .. PATHSEP .. common.basename(system.absolute_path(".")))
 
