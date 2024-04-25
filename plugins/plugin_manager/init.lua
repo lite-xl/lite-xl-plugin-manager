@@ -268,7 +268,7 @@ PluginManager.view = require "plugins.plugin_manager.plugin_view"
 
 
 if config.plugins.plugin_manager.addons then
-  local target_plugin_directory = USERDIR .. PATHSEP .. "projects" .. PATHSEP .. common.basename(system.absolute_path("."))
+  local target_plugin_directory = config.plugins.plugin_manger.adddon_directory or (USERDIR .. PATHSEP .. "projects" .. PATHSEP .. common.basename(system.absolute_path(".")))
 
   local mod_version_regex =
     regex.compile([[--.*mod-version:(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:$|\s)]])
@@ -427,6 +427,7 @@ if config.plugins.plugin_manager.addons then
   end
 
   local addons = {}
+  local added_addons = {}
   for i,v in ipairs(config.plugins.plugin_manager.addons) do
     if type(v) == 'table' then
       local string = ""
@@ -441,23 +442,25 @@ if config.plugins.plugin_manager.addons then
       string = string .. v.id
       if v.version then string = string .. ":" .. v.version end
       table.insert(addons, string)
+      added_addons[v.id] = true
     else
       table.insert(addons, v)
+      added_addons[v] = true
     end
   end
   local plugins = system.list_dir(USERDIR .. PATHSEP .. "plugins")
-  local old_configs = {}
-  for i,v in ipairs(plugins or {}) do
-    local id = v:gsub("%.lua", "")
-    if config.plugins[id] ~= false and id ~= "plugin_manager" then
-      old_configs[id] = config.plugins[id]
-      config.plugins[id] = false
-    end
-  end
   run({ "apply", table.unpack(addons), }, { userdir = target_plugin_directory, cachedir =  USERDIR .. PATHSEP .. "lpm" }):done(function(status)
     if json.decode(status)["changed"] then command.perform("core:restart") end
   end)
   lpm_load_plugins()
+  local old_configs = {}
+  for i,v in ipairs(plugins or {}) do
+    local id = v:gsub("%.lua$", "")
+    if config.plugins[id] ~= false and id ~= "plugin_manager" and not added_addons[id] then
+      old_configs[id] = config.plugins[id]
+      config.plugins[id] = false
+    end
+  end
 end
 
 
