@@ -50,7 +50,7 @@ if get_option('static')
 
     lpm_source += configure_file(
         capture: false,
-        command: [lua_exe, '-e', 'f = string.dump(assert(loadfile("@INPUT0@"))) io.open("@OUTPUT0@", "wb"):write("unsigned char lpm_luac[] = \"" .. f:gsub(".", function (c) return string.format("\\\x%02X",string.byte(c)) end) .. "\";unsigned int lpm_luac_len = " .. #f .. ";")'],
+        command: [lua_exe, '-e', 'f = string.dump(assert(load(io.lines("@INPUT@","L"), "=lpm.lua")) io.open("@OUTPUT0@", "wb"):write("unsigned char lpm_luac[] = \"" .. f:gsub(".", function (c) return string.format("\\\x%02X",string.byte(c)) end) .. "\";unsigned int lpm_luac_len = " .. #f .. ";")'],
         input: files('src/lpm.lua'),
         output: 'lpm.lua.c'
     )

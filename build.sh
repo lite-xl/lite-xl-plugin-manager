@@ -41,7 +41,7 @@ fi
 # Build the pre-packaged lua file into the executbale.
 if [[ "$@" == *"-DLPM_STATIC"* ]]; then
   [[ ! -e "lua.exe" ]] && { $HOSTCC -Ilib/lua -o lua.exe lib/lua/onelua.c -lm || exit -1; }
-  ./lua.exe -e 'io.open("src/lpm.lua.c", "wb"):write("unsigned char lpm_luac[] = \""..string.dump(loadfile("src/lpm.lua")):gsub(".",function(c) return string.format("\\x%02X",string.byte(c)) end).."\";unsigned int lpm_luac_len = sizeof(lpm_luac)-1;")'
+  ./lua.exe -e 'io.open("src/lpm.lua.c", "wb"):write("unsigned char lpm_luac[] = \""..string.dump(load(io.lines("src/lpm.lua","L"), "=lpm.lua")):gsub(".",function(c) return string.format("\\x%02X",string.byte(c)) end).."\";unsigned int lpm_luac_len = sizeof(lpm_luac)-1;")'
 fi
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && COMPILE_FLAGS="$COMPILE_FLAGS -DLUA_USE_LINUX" && LINK_FLAGS="$LINK_FLAGS -ldl"
