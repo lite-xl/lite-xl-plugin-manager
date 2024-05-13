@@ -539,6 +539,15 @@ global({
 global({ "HOME", "USERDIR", "CACHEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL", "MASK", "settings", "repositories", "lite_xls", "system_bottle", "progress_bar_label", "write_progress_bar" })
 global({ Addon = {}, Repository = {}, LiteXL = {}, Bottle = {}, lpm = {}, log = {} })
 
+-- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
+-- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons
+-- Ignore any requries that are in CORE_PLUGINS.
+local CORE_PLUGINS = {
+  autocomplete = true, autoreload = true, contextmenu = true, detectindent = true, drawwhitespace = true, language_c = true, language_cpp = true, language_css = true, language_dart = true,
+  language_html = true, language_js = true, language_lua = true, language_md = true, language_python = true, language_xml = true, lineguide = true, linewrapping = true, macro = true,
+  projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true
+}
+
 local function engage_locks(func, err, warn)
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
   local lockfile = CACHEDIR .. PATHSEP .. ".lock"
@@ -1139,14 +1148,6 @@ function Repository:parse_manifest(repo_id)
 end
 
 
--- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
--- assuming each .lua file under the `addons` folder is a addon. also parse the README, if present, and see if any of the addons
--- Ignore any requries that are in CORE_PLUGINS.
-local CORE_PLUGINS = {
-  autocomplete = true, autoreload = true, contextmenu = true, detectindent = true, drawwhitespace = true, language_c = true, language_cpp = true, language_css = true, language_dart = true,
-  language_html = true, language_js = true, language_lua = true, language_md = true, language_python = true, language_xml = true, lineguide = true, linewrapping = true, macro = true,
-  projectsearch = true, quote = true, reflow = true, scale = true, tabularize = true, toolbarview = true, treeview = true, trimwhitespace = true, workspace = true
-}
 function Repository:generate_manifest(repo_id)
   if not self.local_path and not self.commit and not self.branch then error("requires an instantiation") end
   local path = self.local_path
@@ -1592,8 +1593,25 @@ function Bottle:all_addons()
               description = (hash[id] and hash[id][1].description or nil),
               repo_path = (hash[id] and hash[id][1].local_path or nil)
             }))
+            if not hash[id] then hash[id] = t[#t] end
           end
         end
+      end
+    end
+  end
+  -- If we can't find the datadir, assume that we have the core plugins installed.
+  if not system.stat(self.lite_xl.datadir_path) then
+    for id, v in pairs(CORE_PLUGINS) do
+      if not hash[id] then
+        table.insert(t, Addon.new(nil, {
+          id = id,
+          type = "plugin",
+          location = "core",
+          organization = "singleton",
+          local_path = nil,
+          mod_version = self.lite_xl.mod_version,
+          path = "plugins" .. PATHSEP .. id .. ".lua"
+        }))
       end
     end
   end
