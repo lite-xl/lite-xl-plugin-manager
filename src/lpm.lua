@@ -772,7 +772,10 @@ function Addon:get_install_path(bottle)
   local folder = self.type == "library" and "libraries" or (self.type .. "s")
   local path = (((self:is_core(bottle) or self:is_bundled()) and bottle.lite_xl.datadir_path) or (bottle.local_path and (bottle.local_path .. PATHSEP .. "user") or USERDIR)) .. PATHSEP .. folder
   if self:is_asset() and self.organization == "singleton" then
-    path = path .. PATHSEP .. (self.path or (self.url and common.basename(self.url) or self.id))
+    if (self.path or self.url) and common.basename(self.path or self.url):gsub("%.%w+$", "") ~= self.id then
+      log.warning(string.format("Mistmatch between asset url/path filename and id; (%s vs. %s)", self.path or self.url, self.id))
+    end
+    path = path .. PATHSEP .. (self.path and common.basename(self.path) or (self.url and common.basename(self.url) or self.id))
   else
     path = path .. PATHSEP .. self.id
     if self.organization == "singleton" then path = path .. ".lua" end
