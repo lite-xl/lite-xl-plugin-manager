@@ -720,7 +720,7 @@ function Addon.new(repository, metadata)
   local plural_type = type == "library" and "libraries" or (type .. "s")
   if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. plural_type  .. PATHSEP .. self.id .. ".lua") then self.path = plural_type .. PATHSEP .. self.id .. ".lua" end
   if not self.path and repository and repository.local_path and system.stat(repository.local_path .. PATHSEP .. plural_type .. PATHSEP .. self.id) then self.path = plural_type .. PATHSEP .. self.id end
-  self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.path and not self.url) or (self.path and not self.path:find("%.lua$"))) and "complex" or "singleton")
+
   if self.dependencies and #self.dependencies > 0 then
     local t = {}
     for i,v in ipairs(self.dependencies) do t[v] = {} end
@@ -735,6 +735,7 @@ function Addon.new(repository, metadata)
       self.local_path = (repository.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", ""):gsub("%.$", "")) or "")) or nil
     end
   end
+  self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.path and not self.url) or not (self.local_path and (system.stat(self.local_path) or {}).type == "file")) and "complex" or "singleton")
   return self
 end
 
