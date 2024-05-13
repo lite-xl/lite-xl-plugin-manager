@@ -735,7 +735,7 @@ function Addon.new(repository, metadata)
       self.local_path = (repository.local_path .. (self.path and (PATHSEP .. self.path:gsub("^/", ""):gsub("%.$", "")) or "")) or nil
     end
   end
-  self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.path and not self.url) or not (self.local_path and (system.stat(self.local_path) or {}).type == "file")) and "complex" or "singleton")
+  self.organization = metadata.organization or (((self.files and #self.files > 0) or (not self.url and (not self.path or not (self.local_path and (system.stat(self.local_path) or {}).type == "file")))) and "complex" or "singleton")
   return self
 end
 
