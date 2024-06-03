@@ -9,7 +9,7 @@
 
 SRCS="src/*.c"
 COMPILE_FLAGS="$CFLAGS -Ilib/prefix/include" # We specifically rename this and LDFLAGS, because exotic build environments export these to subprcoesses.
-LINK_FLAGS="$LDFLAGS -lm -Llib/prefix/lib"   # And ideally we don't want to mess with the underlying build processes, unless we're explicit about it.
+LINK_FLAGS="$LDFLAGS -lm -Llib/prefix/lib -Llib/prefix/lib64"   # And ideally we don't want to mess with the underlying build processes, unless we're explicit about it.
 
 [[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libzip/build lib/mbedtls/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
 cmake --version >/dev/null 2>/dev/null || { echo "Please ensure that you have cmake installed." && exit -1; }
