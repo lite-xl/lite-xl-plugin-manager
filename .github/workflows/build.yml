@@ -107,14 +107,14 @@ jobs:
           name: ${{ env.BIN }}
 
   build-macos:
-    runs-on: macos-11
-    env: { CC: clang }
-
     strategy:
       matrix:
         config:
-          - { arch: x86_64, llvm: x86_64 }
-          - { arch: aarch64, llvm: arm64 }
+          - { arch: x86_64, runner: macos-13 } # macos-13 runs on Intel runners
+          - { arch: aarch64, runner: macos-14 } # macos-14 runs on M1 runners
+
+    runs-on: ${{ matrix.config.runner }}
+    env: { CC: clang }
 
     steps:
       - name: Checkout code
@@ -132,7 +132,7 @@ jobs:
 
       - name: Build
         run: |
-          ./build.sh clean && CFLAGS="-arch ${{ matrix.config.llvm }}" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3
+          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
