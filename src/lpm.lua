@@ -788,7 +788,15 @@ function Addon:is_core(bottle) return self.location == "core" end
 function Addon:is_bundled(bottle) return self.location == "bundled" end
 function Addon:is_installed(bottle)
   if self:is_core(bottle) or self:is_bundled(bottle) or not self.repository then return true end
-  if self.type == "meta" and self:is_explicitly_installed(bottle) then return true end
+  if self.type == "meta" then
+    if self:is_explicitly_installed(bottle) then return true end
+    for k, v in pairs(self.dependencies) do
+      if #common.grep({ bottle:get_addon(k) }, function(a) return a:is_installed(bottle) end) == 0 then
+        return false
+      end
+    end
+    return true
+  end
   local install_path = self:get_install_path(bottle)
   if not system.stat(install_path) then return false end
   if self:is_asset() then return true end
