@@ -483,12 +483,12 @@ static int lpm_fetch(lua_State* L) {
     git_repository_free(repository);
     return luaL_error(L, "git remote fetch error: %s", git_error_last_string());
   }
-  const char* refspec = lua_gettop(L) >= 3 ? luaL_checkstring(L, 3) : NULL;
+  const char* refspec = luaL_optstring(L, 3, NULL);
   git_fetch_options fetch_opts = GIT_FETCH_OPTIONS_INIT;
   fetch_opts.download_tags = GIT_REMOTE_DOWNLOAD_TAGS_ALL;
   fetch_opts.callbacks.payload = L;
   #if (LIBGIT2_VER_MAJOR == 1 && LIBGIT2_VER_MINOR >= 7) || LIBGIT2_VER_MAJOR > 1
-    fetch_opts.depth = 1;
+  fetch_opts.depth = lua_toboolean(L, 4) ? GIT_FETCH_DEPTH_FULL : 1;
   #endif
   if (no_verify_ssl)
     fetch_opts.callbacks.certificate_check = lpm_git_transport_certificate_check_cb;

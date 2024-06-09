@@ -1262,10 +1262,11 @@ function Repository:fetch()
       end
       if not exists or self.branch then
         log.progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
-        if self.commit then
-          system.fetch(temporary_path or path, write_progress_bar, self.commit)
-        elseif self.branch then
-          system.fetch(temporary_path or path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
+        local status, err = pcall(system.fetch, temporary_path or path, write_progress_bar, self.commit or ("+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch))
+        if not status and err:find("cannot fetch a specific object") then
+          system.fetch(temporary_path or path, write_progress_bar, nil, true)
+        elseif not status then
+          error(err, 0)
         end
         common.reset(temporary_path or path, self.commit or self.branch, "hard")
       end
