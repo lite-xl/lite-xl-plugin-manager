@@ -1567,6 +1567,7 @@ end
 
 function Bottle:invalidate_cache()
   self.all_addons_cache = nil
+  self.installed_cache = nil
 end
 
 function Bottle:all_addons()
@@ -1993,7 +1994,7 @@ function lpm.install(type, ...)
   if #to_install == 0 and #potential_addon_list == 0 then error("no addons specified for install") end
   local installing = {}
   common.each(to_install, function(e)
-    if not installing[e.id] then
+    if not installing[e.id] and (REINSTALL or not e:is_installed(system_bottle)) then
       e:install(system_bottle, installing)
     end
   end)
