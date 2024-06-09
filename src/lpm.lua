@@ -1603,20 +1603,18 @@ function Bottle:all_addons()
       end
     end
   end
-  -- If we can't find the datadir, assume that we have the core plugins installed.
-  if not system.stat(self.lite_xl.datadir_path) then
-    for id, v in pairs(CORE_PLUGINS) do
-      if not hash[id] then
-        table.insert(t, Addon.new(nil, {
-          id = id,
-          type = "plugin",
-          location = "core",
-          organization = "singleton",
-          local_path = nil,
-          mod_version = self.lite_xl.mod_version,
-          path = "plugins" .. PATHSEP .. id .. ".lua"
-        }))
-      end
+  -- Ensure we have at least one instance of each core plugin.
+  for id, v in pairs(CORE_PLUGINS) do
+    if not hash[id] then
+      table.insert(t, Addon.new(nil, {
+        id = id,
+        type = "plugin",
+        location = "core",
+        organization = "singleton",
+        local_path = nil,
+        mod_version = self.lite_xl.mod_version,
+        path = "plugins" .. PATHSEP .. id .. ".lua"
+      }))
     end
   end
   self.all_addons_cache = t
