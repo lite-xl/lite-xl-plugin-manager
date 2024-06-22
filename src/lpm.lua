@@ -1526,6 +1526,10 @@ function Bottle:run(args)
   local path = not self.is_system and (self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) or self.lite_xl:get_binary_path()
   if not system.stat(path) then error("cannot find bottle executable " .. path) end
   local line = path .. (#args > 0 and " " or "") .. table.concat(common.map(args, function(arg)
+    if PLATFORM == "windows" then
+      -- windows uses " for quotes and needs doubling quotes for escaping them
+      return '"' .. arg:gsub('"+', function(s) return s..s end) .. '"'
+    end
     return "'" .. arg:gsub("'", "'\"'\"'"):gsub("\\", "\\\\") .. "'"
   end), " ")
   if VERBOSE then log.action("Running " .. line) end
