@@ -1,4 +1,4 @@
--- mod-version:3 --lite-xl 2.1 --priority:5
+-- mod-version:4 --lite-xl 3.0 --priority:5
 
 local core = require "core"
 local common = require "core.common"
@@ -471,9 +471,9 @@ end
 
 
 command.add(nil, {
-  ["plugin-manager:install"] = function()
+  ["plugin-manager:install"] = function(root_view)
     PluginManager:get_addons({ progress = PluginManager.view.progress_callback })
-    core.command_view:enter("Enter plugin name",
+    root_view.command_view:enter("Enter plugin name",
       function(name)
         PluginManager:get_addon(name, { progress = PluginManager.view.progress_callback }):done(function(addon)
           core.log("Attempting to install plugin " .. name .. "...")
@@ -496,9 +496,9 @@ command.add(nil, {
       end
     )
   end,
-  ["plugin-manager:uninstall"] = function()
+  ["plugin-manager:uninstall"] = function(root_view)
     PluginManager:get_addons({ progress = PluginManager.view.progress_callback })
-    core.command_view:enter("Enter plugin name",
+    root_view.command_view:enter("Enter plugin name",
       function(name)
         PluginManager:get_addon(name, { progress = PluginManager.view.progress_callback }):done(function(addon)
           core.log("Attempting to uninstall plugin " .. addon.id .. "...")
@@ -521,8 +521,8 @@ command.add(nil, {
       end
     )
   end,
-  ["plugin-manager:add-repository"] = function()
-    core.command_view:enter("Enter repository url",
+  ["plugin-manager:add-repository"] = function(root_view)
+    root_view.command_view:enter("Enter repository url",
       function(url)
         PluginManager:add(url):done(function()
           core.log("Successfully added repository " .. url .. ".")
@@ -530,9 +530,9 @@ command.add(nil, {
       end
     )
   end,
-  ["plugin-manager:remove-repository"] = function()
+  ["plugin-manager:remove-repository"] = function(root_view)
     PluginManager:get_addons({ progress = PluginManager.view.progress_callback })
-    core.command_view:enter("Enter repository url",
+    root_view.command_view:enter("Enter repository url",
       function(url)
         PluginManager:remove(url):done(function()
           core.log("Successfully removed repository " .. url .. ".")

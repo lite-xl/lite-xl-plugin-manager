@@ -21,7 +21,6 @@ end
 
 
 local plugin_view = nil
-PluginView.menu = ContextMenu()
 
 function PluginView:new()
   PluginView.super.new(self)
@@ -51,34 +50,6 @@ end
 
 function PluginView:get_name()
   return "Plugin Manager"
-end
-
-
-local root_view_update = RootView.update
-function RootView:update(...)
-  root_view_update(self, ...)
-  PluginView.menu:update()
-end
-
-
-local root_view_draw = RootView.draw
-function RootView:draw(...)
-  root_view_draw(self, ...)
-  PluginView.menu:draw()
-end
-
-
-local root_view_on_mouse_moved = RootView.on_mouse_moved
-function RootView:on_mouse_moved(...)
-  if PluginView.menu:on_mouse_moved(...) then return end
-  return root_view_on_mouse_moved(self, ...)
-end
-
-
-local on_view_mouse_pressed = RootView.on_view_mouse_pressed
-function RootView.on_view_mouse_pressed(button, x, y, clicks)
-  local handled = PluginView.menu:on_mouse_pressed(button, x, y, clicks)
-  return handled or on_view_mouse_pressed(button, x, y, clicks)
 end
 
 
@@ -461,14 +432,16 @@ keymap.add {
 }
 
 
-PluginView.menu:register(function() return core.active_view:is(PluginView) end, {
-  { text = "Install", command = "plugin-manager:install-hovered" },
-  { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
-  { text = "View Source", command = "plugin-manager:view-source-hovered" },
-  { text = "View README", command = "plugin-manager:view-readme-hovered" },
-  ContextMenu.DIVIDER,
-  { text = "Refresh Listing", command = "plugin-manager:refresh-all" },
-  { text = "Upgrade All", command = "plugin-manager:upgrade-all" },
-})
+function PluginView:on_context_menu()
+  return { items = {
+    { text = "Install", command = "plugin-manager:install-hovered" },
+    { text = "Uninstall", command = "plugin-manager:uninstall-hovered" },
+    { text = "View Source", command = "plugin-manager:view-source-hovered" },
+    { text = "View README", command = "plugin-manager:view-readme-hovered" },
+    ContextMenu.DIVIDER,
+    { text = "Refresh Listing", command = "plugin-manager:refresh-all" },
+    { text = "Upgrade All", command = "plugin-manager:upgrade-all" }
+  } }
+end
 
 return PluginView
