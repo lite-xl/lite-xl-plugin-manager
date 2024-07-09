@@ -1,4 +1,4 @@
--- mod-version:3 --lite-xl 2.1 --priority:5
+-- mod-version:4 --lite-xl 3.0 --priority:5
 
 local core = require "core"
 local common = require "core.common"
