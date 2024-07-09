@@ -5,7 +5,7 @@
       "version": "0.1",
       "description": "A GUI interface to Adam's lite-xl plugin manager.",
       "path": "plugins/plugin_manager",
-      "mod_version": 3,
+      "mod_version": 4,
       "files": [
         {
           "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux",
@@ -71,6 +71,7 @@
       "description": "A welcome screen for lite-xl, that on first start, invites a user to install the meta_addons package, or access the plugin manager.",
       "type": "plugin",
       "path": "plugins/welcome.lua",
+      "mod_version": 4,
       "version": "0.1",
       "dependencies": {
         "plugin_manager": {}
@@ -85,6 +86,32 @@
     }
   ],
   "lite-xls": [
+    {
+      "version": "3.0-preview",
+      "mod_version": 4,
+      "files": [
+        {
+          "arch": "x86_64-linux",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-x86_64-linux-portable.tar.gz",
+          "checksum": "SKIP"
+        },
+        {
+          "arch": "x86_64-windows",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-x86_64-windows-portable.zip",
+          "checksum": "SKIP"
+        },
+        {
+          "arch": "x86_64-darwin",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-universal-darwin-portable.tar.gz",
+          "checksum": "SKIP"
+        },
+        {
+          "arch": "aarch64-darwin",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-universal-darwin-portable.tar.gz",
+          "checksum": "SKIP"
+        }
+      ]
+    },
     {
       "version": "2.1.1-simplified",
       "mod_version": 3,
@@ -108,7 +135,7 @@
     }
   ],
   "remotes": [
-    "https://github.com/lite-xl/lite-xl-plugins.git:master",
+    "https://github.com/adamharrison/lite-xl-plugins.git:3.0",
     "https://github.com/lite-xl/lite-xl-colors.git:master"
   ]
 }
