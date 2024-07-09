@@ -1960,7 +1960,6 @@ function lpm.lite_xl_run(version, ...)
   end)
   local bottle = Bottle.new(lite_xl, addons, CONFIG)
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
-  if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
     bottle:run(common.slice(arguments, i + 1))
     if EPHEMERAL then bottle:destruct() end
