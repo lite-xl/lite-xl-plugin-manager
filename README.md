@@ -75,10 +75,10 @@ There are also tagged releases, for specified versions.
 
 You can get a feel for how to use `lpm` by typing `./lpm --help`.
 
-You can also use `scoop` to grab `lpm`, courtesy of @cvladan:
+You can also use `scoop` to grab `lpm`:
 
 ```
-scoop install https://gist.githubusercontent.com/cvladan/416c1945c9e446a6fc64ba766d6ee4ef/raw/lite-xl-plugin-manager.json
+scoop install https://gist.githubusercontent.com/mizu-048/17b965b5319016762f58484dbac8bc71/raw/4dde327f04dd22c7caba8f5d488e9331c033745f/lite-xl-plugin-manager.json
 ```
 
 Please note, that _meson_ is _not_ necessarily the best way to compile `lpm`. If you have troubles with it, please do consider using the build.sh script.
