@@ -701,7 +701,7 @@ function Addon.__index(self, idx) return rawget(self, idx) or Addon[idx] end
 function Addon.new(repository, metadata)
   if type(metadata.id) ~= 'string' or metadata.id:find("[^a-z0-9%-_]") then error("addon requires a valid id " .. (metadata.id and "(" .. metadata.id .. " is invalid)" or "")) end
   local type = metadata.type or "plugin"
-  if metadata.type ~= "meta" and not metadata.path and not metadata.files and not metadata.url then metadata.path = "." end
+  if metadata.type ~= "meta" and not metadata.path and not metadata.files and not metadata.url and not metadata.remote then metadata.path = "." end
   if metadata.path then metadata.path = metadata.path:gsub("/", PATHSEP) end
   local self = setmetatable(common.merge({
     repository = repository,
