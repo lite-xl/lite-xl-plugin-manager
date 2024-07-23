@@ -839,7 +839,9 @@ function Addon:get_compatibilities(bottle)
           potential_addon:is_installed(bottle) or
           (compare_version(compatible_addons[addon].version, potential_addon.version) and not compatible_addons[addon]:is_installed(bottle))
         then
-          compatible_addons[addon] = potential_addon
+          if not compatible_addons[addon] or not potential_addon:is_stub() then
+            compatible_addons[addon] = potential_addon
+          end
         end
       else
         incompatible_addons[addon] = incompatibilities
@@ -906,7 +908,7 @@ function Addon:install(bottle, installing)
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, { target = path, checksum = self.checksum, callback = write_progress_bar })
       if VERBOSE then log.action("Downloaded file " .. self.url .. " to " .. path) end
-    else -- local addon that has a local path
+    else -- local addon that has a local pathx
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
       if self.path then
@@ -1697,7 +1699,7 @@ function Bottle:get_addon(id, version, filter)
     end
   end
   return table.unpack(common.sort(common.uniq(candidates), function (a,b)
-    return (a.replaces == id and b.replaces ~= id) or (a.version > b.version)
+    return (a.replaces == id and b.replaces ~= id) or (a.version > b.version) or (not a:is_stub() and b:is_stub())
   end))
 end
 
