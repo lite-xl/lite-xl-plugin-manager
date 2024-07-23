@@ -65,7 +65,7 @@ typedef struct {
   #else
     pthread_t thread;
   #endif
-} thread_t;
+} lpm_thread_t;
 
 typedef struct {
   #if _WIN32
@@ -73,10 +73,10 @@ typedef struct {
   #else
     pthread_mutex_t mutex;
   #endif
-} mutex_t;
+} lpm_mutex_t;
 
-static mutex_t* new_mutex() {
-  mutex_t* mutex = malloc(sizeof(mutex_t));
+static lpm_mutex_t* new_mutex() {
+  lpm_mutex_t* mutex = malloc(sizeof(lpm_mutex_t));
   #if _WIN32
     mutex->mutex = CreateMutex(NULL, FALSE, NULL);
   #else
@@ -85,7 +85,7 @@ static mutex_t* new_mutex() {
   return mutex;
 }
 
-static void free_mutex(mutex_t* mutex) {
+static void free_mutex(lpm_mutex_t* mutex) {
   #if _WIN32
     CloseHandle(mutex->mutex);
   #else
@@ -94,7 +94,7 @@ static void free_mutex(mutex_t* mutex) {
   free(mutex);
 }
 
-static void lock_mutex(mutex_t* mutex) {
+static void lock_mutex(lpm_mutex_t* mutex) {
   #if _WIN32
     WaitForSingleObject(mutex->mutex, INFINITE);
   #else
@@ -102,7 +102,7 @@ static void lock_mutex(mutex_t* mutex) {
   #endif
 }
 
-static void unlock_mutex(mutex_t* mutex) {
+static void unlock_mutex(lpm_mutex_t* mutex) {
   #if _WIN32
     ReleaseMutex(mutex->mutex);
   #else
@@ -113,14 +113,14 @@ static void unlock_mutex(mutex_t* mutex) {
 
 #if _WIN32
 static DWORD windows_thread_callback(void* data) {
-  thread_t* thread = data;
+  lpm_thread_t* thread = data;
   thread->data = thread->func(thread->data);
   return 0;
 }
 #endif
 
-static thread_t* create_thread(void* (*func)(void*), void* data) {
-  thread_t* thread = malloc(sizeof(thread_t));
+static lpm_thread_t* create_thread(void* (*func)(void*), void* data) {
+  lpm_thread_t* thread = malloc(sizeof(lpm_thread_t));
   #if _WIN32
     thread->func = func;
     thread->data = data;
@@ -131,7 +131,7 @@ static thread_t* create_thread(void* (*func)(void*), void* data) {
   return thread;
 }
 
-static void* join_thread(thread_t* thread) {
+static void* join_thread(lpm_thread_t* thread) {
   if (!thread)
     return NULL;
   void* retval;
@@ -562,7 +562,7 @@ typedef struct {
   int complete;
   int error_code;
   char data[512];
-  thread_t* thread;
+  lpm_thread_t* thread;
 } fetch_context_t;
 
 static int lpm_fetch_callback(lua_State* L, const git_transfer_progress *stats) {
