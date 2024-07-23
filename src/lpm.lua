@@ -1014,20 +1014,20 @@ function Addon:is_explicitly_installed(bottle)
 end
 
 
-function Addon:get_orphaned_dependencies(bottle)
+function Addon:get_orphaned_dependencies(bottle, uninstalling)
   local t = {}
+  uninstalling = uninstalling or { [self.id] = true } 
   local installed_addons = system_bottle:installed_addons()
-  for id, options in pairs(self.dependencies) do
-    local dependency = bottle:get_addon(id, options.version)
+  for i, id in ipairs(common.canonical_order(self.dependencies)) do
+    local options = self.dependencies[id]
+    local dependency = common.grep({ bottle:get_addon(id, options.version) }, function(e) return e.type == "meta" or e:is_installed(bottle) end)[1]
     if dependency then
-      if  ( dependency.type == "meta" or dependency:is_installed(bottle) )
-      and #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) end) == 0
+      if  #common.grep(installed_addons, function(addon) return addon ~= self and addon:depends_on(dependency) and not uninstalling[addon.id] end) == 0
       and not ( dependency:is_explicitly_installed(bottle) or dependency:is_core(bottle) )
       then
         table.insert(t, dependency)
-        if dependency.type == "meta" then
-          t = common.concat(t, dependency:get_orphaned_dependencies(bottle))
-        end
+        uninstalling[dependency.id] = true
+        t = common.concat(t, dependency:get_orphaned_dependencies(bottle, uninstalling))
       end
     end
   end
@@ -1611,7 +1611,8 @@ function Bottle:all_addons()
               mod_version = self.lite_xl.mod_version,
               path = addon_type .. PATHSEP .. v,
               description = (hash[id] and hash[id][1].description or nil),
-              repo_path = (hash[id] and hash[id][1].local_path or nil)
+              repo_path = (hash[id] and hash[id][1].local_path or nil),
+              dependencies = (hash[id] and hash[id][1].dependencies or nil)
             }))
             if not hash[id] then hash[id] = t[#t] end
           end
