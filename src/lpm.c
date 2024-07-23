@@ -1516,8 +1516,14 @@ static int lpm_get(lua_State* L) {
     if (!host)
       return luaL_error(L, "can't resolve hostname %s", context->hostname);
     context->s = socket(AF_INET, SOCK_STREAM, 0);
-    if (threaded)
-      fcntl(context->s, F_SETFL, fcntl(context->s, F_GETFL, 0) | O_NONBLOCK);
+    if (threaded) {
+      #if _WIN32
+        unsigned long ul = 1;
+        ioctlsocket(context->s, FIONBIO, (unsigned long *) &ul);
+      #else
+        fcntl(context->s, F_SETFL, fcntl(context->s, F_GETFL, 0) | O_NONBLOCK);
+      #endif
+    }
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(port);
     dest_addr.sin_addr.s_addr = *(long*)(host->h_addr);
