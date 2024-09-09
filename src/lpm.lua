@@ -568,7 +568,7 @@ local function colorize(text, color)
 end
 
 local SHOULD_HIDE_CURSOR
-local function show_cursor()
+local function show_cursor(override)
   if SHOULD_HIDE_CURSOR then
     io.stdout:write("\x1B[?25h")
     io.stdout:flush()
@@ -624,6 +624,7 @@ function log.progress_action(message, func)
     return err
   else
     log.action(message)
+    func()
   end
 end
 
@@ -1225,7 +1226,7 @@ function Repository:generate_manifest(repo_id)
               path = path:gsub("\\", "")
               addon_map[id].remote = path
               pcall(function()
-                local repo = Repository.url(path):add()
+                local repo = Repository.url(path):add()[1]
                 addon_map[id].remote = path .. ":" .. (repo.branch or repo.commit)
               end)
             end
@@ -1347,17 +1348,17 @@ end
 function Repository:add(pull_remotes)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
   local manifest, remotes = self:fetch():parse_manifest()
+  local repos = { self }
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do
       if not common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
         lpm.thread(function()
-          table.insert(repositories, remote)
-          remote:add(pull_remotes == "recursive" and "recursive" or false)
+          common.concat(repos, remote:add(pull_remotes == "recursive" and "recursive" or false))
         end)
       end
     end
   end
-  return self
+  return repos
 end
 
 
@@ -1376,14 +1377,15 @@ function Repository:update(pull_remotes)
     self.manifest = nil
     manifest, remotes = self:parse_manifest()
   end
+  local repos = { self }
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do
       if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
-        remote:add(pull_remotes == "recursive" and "recursive" or false)
-        table.insert(repositories, remote)
+        repos = common.concat(repos, remote:add(pull_remotes == "recursive" and "recursive" or false))
       end
     end
   end
+  return repos
 end
 
 
@@ -1777,16 +1779,18 @@ end
 
 local DEFAULT_REPOS
 function lpm.repo_init(repos)
-  lpm.operation("lpm init", function()
-    DEFAULT_REPOS = { Repository.url(DEFAULT_REPO_URL) }
-    common.mkdirp(CACHEDIR)
-    if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
+  DEFAULT_REPOS = { Repository.url(DEFAULT_REPO_URL) }
+  common.mkdirp(CACHEDIR)
+  if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
+    lpm.operation("lpm init", function()
       for i, repository in ipairs(repos or DEFAULT_REPOS) do
-        lpm.thread(function() repositories[i] = repository:add(true) end)
+        lpm.thread(function() 
+          repositories = common.concat(repositories, repository:add(true))
+        end)
       end
-      lpm.repo_save()
-    end
-  end)
+    end)
+    lpm.repo_save()
+  end
 end
 
 
@@ -1798,9 +1802,9 @@ function lpm.repo_add(...)
     if repo then -- if we're alreayd a repo, put this at the head of the resolution list
       table.remove(repositories, idx)
     else
-      repo = Repository.url(url):add(AUTO_PULL_REMOTES and "recursive" or false)
+      repos = Repository.url(url):add(AUTO_PULL_REMOTES and "recursive" or false)
     end
-    table.insert(repositories, 1, repo)
+    repositories = common.concat(repos, repositories)
     repo:update()
   end
   lpm.repo_save()
@@ -1955,7 +1959,7 @@ local function retrieve_addons(lite_xl, arguments, filters)
     if arguments[i] == "--" then break end
     local str = arguments[i]
     if is_argument_repo(str) and not str:find("@") then
-      table.insert(repositories, 1, Repository.url(str):add(AUTO_PULL_REMOTES))
+      repositories = common.concat(Repository.url(str):add(AUTO_PULL_REMOTES), repositories)
       system_bottle:invalidate_cache()
       repositories[1].explicit = true
     else
@@ -2177,7 +2181,7 @@ function lpm.unstub(type, ...)
   for i, identifier in ipairs({ ... }) do
     if not identifier then error('unrecognized identifier ' .. identifier) end
     if is_argument_repo(identifier) then
-      table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
+      repositories = common.concat(Repository.url(identifier):add(AUTO_PULL_REMOTES), repositories)
       system_bottle:invalidate_cache()
     else
       local potential_addons = { system_bottle:get_addon(identifier, nil, { mod_version = system_bottle.lite_xl.mod_version }) }
