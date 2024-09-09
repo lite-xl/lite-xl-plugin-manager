@@ -2254,6 +2254,7 @@ function lpm.setup()
       end
     else
       if DATADIR then system_lite_xl.datadir_path = DATADIR end
+      if MOD_VERSION then system_lite_xl.mod_version = MOD_VERSION end
       table.insert(system_lite_xl.tags, "system")
     end
     system_bottle = Bottle.new(system_lite_xl, nil, nil, true)
