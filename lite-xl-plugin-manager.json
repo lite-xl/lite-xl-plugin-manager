@@ -1,0 +1,30 @@
+{
+    "version": "latest",
+    "description": "Plugin and package manager for Lite XL editor.",
+    "homepage": "https://github.com/lite-xl/lite-xl-plugin-manager",
+    "license": "LPM",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe#/lpm.exe",
+            "checksum": "SKIP"
+        }
+    },
+    "bin": "lpm.exe",
+    "shortcuts": [
+		[
+			"lpm.exe", 
+			"Lite-XL Plugin Manager"
+		]
+	],
+    "checkver": {
+        "url": "https://github.com/lite-xl/lite-xl-plugin-manager/tags",
+        "regex": "/releases/tag/(?:v|V)?([\\d.]+)"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe"
+            }
+        }
+    }
+}
