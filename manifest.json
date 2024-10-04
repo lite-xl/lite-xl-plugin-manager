@@ -71,7 +71,7 @@
       "description": "A welcome screen for lite-xl, that on first start, invites a user to install the meta_addons package, or access the plugin manager.",
       "type": "plugin",
       "path": "plugins/welcome.lua",
-      "mod_version": 3,
+      "mod_version": 4,
       "version": "0.1",
       "dependencies": {
         "plugin_manager": {}
@@ -135,7 +135,7 @@
     }
   ],
   "remotes": [
-    "https://github.com/lite-xl/lite-xl-plugins.git:3.0",
+    "https://github.com/adamharrison/lite-xl-plugins.git:3.0",
     "https://github.com/lite-xl/lite-xl-colors.git:master"
   ]
 }
