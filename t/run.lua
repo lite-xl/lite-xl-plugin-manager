@@ -175,6 +175,8 @@ local function run_tests(tests, arg)
       print("[PASSED]")
     end
   end
+  io.stdout:write("\x1B[?25h")
+  io.stdout:flush()
   os.exit(fail_count)
 end
 

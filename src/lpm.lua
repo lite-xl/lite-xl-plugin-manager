@@ -1363,7 +1363,7 @@ end
 
 function LiteXL:get_binary_path(arch)
   if self.binary_path and self.binary_path[arch or DEFAULT_ARCH] then return self.binary_path[arch or DEFAULT_ARCH] end
-  return self.local_path .. PATHSEP .. "lite-xl." .. (arch or DEFAULT_ARCH)
+  return self.local_path .. PATHSEP .. "lite-xl"
 end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
@@ -1395,7 +1395,7 @@ function LiteXL:install()
       if file.arch and common.grep(ARCH, function(e) return e == file.arch end)[1] then
         if not file.checksum then error("requires a checksum") end
         local basename = common.basename(file.url)
-        local archive = basename:find("%.zip$") or basename:find("%.tar%.gz$")
+        local archive = assert(basename:find("%.zip$") or basename:find("%.tar%.gz$"), "lite-xl files must be archives")
         local path = self.local_path .. PATHSEP .. (archive and basename or "lite-xl")
         log.action("Downloading file " .. file.url .. "...")
         common.get(file.url, { target = path, checksum = file.checksum, callback = write_progress_bar })
@@ -1403,6 +1403,13 @@ function LiteXL:install()
         if archive then
           log.action("Extracting file " .. basename .. " in " .. self.local_path)
           system.extract(path, self.local_path)
+          -- because this is a lite-xl archive binary, we should expect to find a `lite-xl` folder, containing the lite-xl binary, and a data directory
+          -- we want to move these into the primary directory, then delete the archive and the directory
+          common.rename(self.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "dir")
+          common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
+          common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "lite-xl")
+          common.rmrf(self.local_path .. PATHSEP .. "dir")
+          common.rmrf(path)
         end
       end
     end
@@ -1778,7 +1785,7 @@ function lpm.repo_update(...)
   end
 end
 
-local function get_lite_xl(version)
+function lpm.get_lite_xl(version)
   return common.first(common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end)), function(lite_xl) return lite_xl.version == version end)
 end
 
@@ -1804,14 +1811,14 @@ end
 
 function lpm.lite_xl_rm(version)
   if not version then error("requires a version") end
-  local lite_xl = get_lite_xl(version) or error("can't find lite_xl version " .. version)
+  local lite_xl = lpm.get_lite_xl(version) or error("can't find lite_xl version " .. version)
   lite_xls = common.grep(lite_xls, function(l) return l ~= lite_xl end)
   lpm.lite_xl_save()
 end
 
 function lpm.lite_xl_install(version)
   if not version then error("requires a version") end
-  (get_lite_xl(version) or error("can't find lite-xl version " .. version)):install()
+  (lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)):install()
 end
 
 
@@ -1819,7 +1826,7 @@ function lpm.lite_xl_switch(version, target)
   if not version then error("requires a version") end
   target = target or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
   if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly as a second argument") end
-  local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  local lite_xl = lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)
   if not lite_xl:is_installed() then log.action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
   local stat = system.stat(target)
   if stat and stat.symlink then os.remove(target) end
@@ -1832,7 +1839,7 @@ end
 
 
 function lpm.lite_xl_uninstall(version)
-  (get_lite_xl(version) or error("can't find lite-xl version " .. version)):uninstall()
+  (lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)):uninstall()
 end
 
 
@@ -1895,7 +1902,7 @@ local function is_argument_repo(arg)
   return arg:find("^http") or arg:find("[\\/]") or arg == "."
 end
 
-local function retrieve_addons(lite_xl, arguments, filters)
+function lpm.retrieve_addons(lite_xl, arguments, filters)
   local addons = {}
   local i = 1
   while i <= #arguments do
@@ -1936,7 +1943,7 @@ end
 
 function lpm.apply(...)
   local arguments = { ... }
-  local addons, i = retrieve_addons(system_bottle.lite_xl, arguments)
+  local addons, i = lpm.retrieve_addons(system_bottle.lite_xl, arguments)
   if #arguments >= i then error("invalid use of --") end
   local changed = system_bottle:apply(addons, CONFIG)
   if JSON then
@@ -1947,15 +1954,23 @@ function lpm.apply(...)
 end
 
 
-function lpm.lite_xl_run(version, ...)
-  if not version then error("requires a version or arguments") end
-  local arguments = { ... }
-  if not version:find("^%d+") and version ~= "system" then
-    table.insert(arguments, 1, version)
-    version = "system"
+function lpm.lite_xl_run(...)
+  local version, version_idx = "system", 1
+  local arguments = { }
+  for i,v in ipairs({ ... }) do
+    if i == 1 and is_argument_repo(v) and not v:find("@") then
+      table.insert(repositories, 1, Repository.url(v):add(AUTO_PULL_REMOTES))
+      system_bottle:invalidate_cache()
+      repositories[1].explicit = true
+    elseif v:find("^%d+") or v == "system" then
+      assert(version == "system", "cannot specify multiple versions")
+      version, version_idx = v, i
+    else
+      table.insert(arguments, v)
+    end
   end
-  local lite_xl = get_lite_xl(version) or error("can't find lite-xl version " .. version)
-  local potential_addons, i = retrieve_addons(lite_xl, arguments)
+  local lite_xl = lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  local potential_addons, i = lpm.retrieve_addons(lite_xl, arguments)
   local addons = common.map(potential_addons, function(potentials)
     return common.grep(potentials, function(addon)
       return not addon:is_core(system_bottle) and not addon:is_orphan(system_bottle)
@@ -1982,7 +1997,7 @@ function lpm.install(type, ...)
   local to_install = {}
   local to_explicitly_install = {}
 
-  local potential_addon_list = retrieve_addons(system_bottle.lite_xl, arguments, { type = type })
+  local potential_addon_list = lpm.retrieve_addons(system_bottle.lite_xl, arguments, { type = type })
   for i, potential_addons in ipairs(potential_addon_list) do
     local id = potential_addons[1].id
     local addons = common.grep(potential_addons, function(e) return e:is_installable(system_bottle) and (not e:is_installed(system_bottle) or REINSTALL) end)
