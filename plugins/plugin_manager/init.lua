@@ -113,7 +113,7 @@ local function run(cmd, options)
           while true do
             local chunk = v[1]:read_stdout(2048)
             if config.plugins.plugin_manager.debug and chunk ~= nil then io.stdout:write(chunk) io.stdout:flush() end
-            if chunk and v[1]:running() and #chunk == 0 then break end
+            if chunk and #chunk == 0 then break end
             if chunk ~= nil and #chunk > 0 then
               v[3] = v[3] .. chunk
               progress_line, v[3] = extract_progress(v[3])
