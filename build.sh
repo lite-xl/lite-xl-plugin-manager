@@ -23,6 +23,10 @@ if [[ "$@" != *"-lz"* ]]; then
   [[ ! -e "lib/zlib/build" ]] && { cd lib/zlib && mkdir build && cd build && $CC $COMPILE_FLAGS -O3 -D_LARGEFILE64_SOURCE -I.. ../*.c -c && $AR rc libz.a *.o && cp libz.a ../../prefix/lib && cp ../*.h ../../prefix/include && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -lz"
 fi
+if [[ "$@" != *"-llzma"* ]]; then
+  [ ! -e "lib/xz/build" ] && { cd lib/xz && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS&& $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  LINK_FLAGS="$LINK_FLAGS -llzma"
+fi
 if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* && "$@" != *"-lmbedx509"* ]]; then
   [ ! -e "lib/mbedtls/build" ] && { cd lib/mbedtls && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -DMBEDTLS_DEBUG_C -w" cmake .. $CMAKE_DEFAULT_FLAGS  -G "Unix Makefiles" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="$COMPILE_FLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -lmbedtls -lmbedx509 -lmbedcrypto"
@@ -32,7 +36,7 @@ if [[ "$@" != *"-lgit2"* ]]; then
   LINK_FLAGS="-lgit2 $LINK_FLAGS"
 fi
 if [[ "$@" != *"-lzip"* ]]; then
-  [ ! -e "lib/libzip/build" ] && { cd lib/libzip && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=OFF -DENABLE_ZSTD=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  [ ! -e "lib/libzip/build" ] && { cd lib/libzip && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=ON -DENABLE_ZSTD=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -lzip"
 fi
 [[ "$@" != *"-lmicrotar"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -Ilib/microtar/src" && SRCS="$SRCS lib/microtar/src/microtar.c"

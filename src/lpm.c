@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <git2.h>
+#include <lzma.h>
 #include <mbedtls/sha256.h>
 #include <mbedtls/x509.h>
 #include <mbedtls/entropy.h>
@@ -873,10 +874,33 @@ static int mkdirp(lua_State* L, char* path, int len) {
 #define FA_RDONLY       0x01            // FILE_ATTRIBUTE_READONLY
 #define FA_DIREC        0x10            // FILE_ATTRIBUTE_DIRECTORY
 
+// Strips .tar.gz to .tar, .tgz to .tar, .txz to .tar, .tar.xz to .tar.
+// Assumes sizeof(dst) >= sizeof(src)
+static const char* strip_to_tar(char* dst, const char* src) {
+  int len = strlen(src);
+  if (strstr(src, ".tar") && (strstr(src, ".gz") || strstr(src, ".xz"))) {
+    strncpy(dst, src, imin(len - 3, PATH_MAX));
+    len -= 3;
+  } else if (strstr(src, ".tgz") || strstr(src, ".txz")) {
+    strncpy(dst, src, imin(len - 3, PATH_MAX));
+    strcat(dst, "tar");
+  } else
+    strcpy(dst, src);
+  dst[len] = 0;
+  return dst;
+}
+
 static int lpm_extract(lua_State* L) {
   const char* src = luaL_checkstring(L, 1);
   const char* dst = luaL_checkstring(L, 2);
 
+  if (strlen(src) > PATH_MAX)
+    return luaL_error(L, "source path too large");
+
+  char error[128] = {0};
+  uint8_t inbuf[4096];
+  uint8_t outbuf[4096];
+    
   if (strstr(src, ".zip")) {
     int zip_error_code;
     zip_t* archive = zip_open(src, ZIP_RDONLY, &zip_error_code);
@@ -962,62 +986,84 @@ static int lpm_extract(lua_State* L) {
 
     if (strstr(src, ".gz") || strstr(src, ".tgz")) {
       gzFile gzfile = gzopen(src, "rb");
-
       if (!gzfile)
         return luaL_error(L, "can't open tar.gz archive %s: %s", src, strerror(errno));
-
-      char buffer[8192];
-      int len = strlen(src) - 3;
-
-      if (strstr(src, ".tar"))
-        strncpy(actual_src, src, len < PATH_MAX ? len : PATH_MAX);
-      else if (strstr(src, ".tgz")) {
-        strncpy(actual_src, src, len < PATH_MAX ? len : PATH_MAX);
-        strcat(actual_src, "tar");
-        len = strlen(src);
-      }
-      else
-        strcpy(actual_src, dst);
-
-      actual_src[len] = 0;
-      FILE* file = lua_fopen(L, actual_src, "wb");
-
+      FILE* file = lua_fopen(L, strip_to_tar(actual_src, src), "wb");
       if (!file) {
         gzclose(gzfile);
         return luaL_error(L, "can't open %s for writing: %s", actual_src, strerror(errno));
       }
-
       while (1) {
-        int length = gzread(gzfile, buffer, sizeof(buffer));
+        int length = gzread(gzfile, inbuf, sizeof(inbuf));
         if (length == 0)
           break;
-        fwrite(buffer, sizeof(char), length, file);
+        fwrite(inbuf, sizeof(char), length, file);
       }
-
-      char error[128];
-      error[0] = 0;
-      if (!gzeof(gzfile)) {
-        int error_number;
-        strncpy(error, gzerror(gzfile, &error_number), sizeof(error));
-        error[sizeof(error)-1] = 0;
-      }
-
+      char error[128] = {0};
+      int error_code = 0;
+      if (!gzeof(gzfile))
+        strncpy(error, gzerror(gzfile, &error_code), sizeof(error) - 1);
+        
       fclose(file);
       gzclose(gzfile);
-
-      if (error[0])
+      
+      if (error_code)
         return luaL_error(L, "can't unzip gzip archive %s: %s", src, error);
+    } else if (strstr(src, ".xz") || strstr(src, ".txz")) {
+      lzma_stream strm = LZMA_STREAM_INIT;
+      lzma_ret ret = lzma_stream_decoder(&strm, UINT64_MAX, LZMA_CONCATENATED);
+      if (ret != LZMA_OK)
+        return luaL_error(L, "can't unzip xz archive %s: %s", src, error);
+      lzma_action action = LZMA_RUN;
+  
+      FILE* input = lua_fopen(L, src, "rb");
+      if (!input)
+        return luaL_error(L, "can't open %s for reading: %s", src, strerror(errno));
+      FILE* output = lua_fopen(L, strip_to_tar(actual_src, src), "wb");
+      if (!output) {
+        fclose(input);
+        return luaL_error(L, "can't open %s for writing: %s", actual_src, strerror(errno));
+      }
 
-    } else
+      strm.next_in = inbuf;
+      strm.avail_in = 0;
+      strm.next_out = outbuf;
+      strm.avail_out = sizeof(outbuf);
+      
+      while (ret != LZMA_STREAM_END) {
+        if (strm.avail_in == 0 && !feof(input)) {
+          strm.next_in = inbuf;
+          if ((strm.avail_in = fread(inbuf, 1, sizeof(inbuf), input)) < 0) {
+            lua_pushfstring(L, "can't read and unzip xz archive: %s: %s\n", src, strerror(errno));
+            break;
+          }
+          if (feof(input))
+            action = LZMA_FINISH;
+        }
+        ret = lzma_code(&strm, action);
+        if (strm.avail_out == 0 || ret == LZMA_STREAM_END) {
+          size_t write_size = sizeof(outbuf) - strm.avail_out;
+          if (fwrite(outbuf, 1, write_size, output) != write_size) {
+            lua_pushfstring(L, "can't write unzip xz archive: %s: %s\n", src, strerror(errno));
+            break;
+          }
+          strm.avail_out = sizeof(outbuf);
+          strm.next_out = outbuf;
+        }
+        if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
+          lua_pushfstring(L, "can't unzip xz archive %s, error: %d\n", src, ret);
+          break;
+        }
+      }
+      fclose(input);
+      fclose(output);
+      if (ret != LZMA_OK && ret != LZMA_STREAM_END)
+        lua_error(L);
+    } else 
       strcpy(actual_src, src);
 
     if (strstr(src, ".tar") || strstr(src, ".tgz")) {
-      /* It's incredibly slow to do it this way, probably because of all the seeking.
-      For now, just gunzip the whole file at once, and then untar it.
-      tar.read = gzip_read;
-      tar.seek = gzip_seek;
-      tar.close = gzip_close;*/
-
+      // It's incredily slow to seek/read directly from a gzfile; so just unzip to an intermediate file first.
       mtar_t tar = {0};
       int err;
       if ((err = mtar_open(&tar, actual_src, "r")))
@@ -1162,7 +1208,7 @@ static int lpm_extract(lua_State* L) {
         }
       }
       mtar_close(&tar);
-      if (strstr(src, ".gz") || strstr(src, ".tgz"))
+      if (strcmp(actual_src, src) != 0)
         unlink(actual_src);
     }
   }
