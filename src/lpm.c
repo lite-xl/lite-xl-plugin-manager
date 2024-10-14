@@ -855,7 +855,7 @@ static int mkdirp(lua_State* L, char* path, int len) {
     if (path[i] == '/' && i > 0) {
       path[i] = 0;
       #ifdef _WIN32
-        LPCSTR wpath = lua_toutf16(L, path);
+        LPCWSTR wpath = lua_toutf16(L, path);
         if (_wmkdir(wpath) && errno != EEXIST) {
           lua_pop(L, 1);
           return -1;
