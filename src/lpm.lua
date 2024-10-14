@@ -1715,7 +1715,9 @@ local function get_repository(url)
   if not url then error("requires a repository url") end
   local r = Repository.url(url)
   for i,v in ipairs(repositories) do
-    if (v.repo_path and v.repo_path == r.repo_path) or (v.remote and v.remote == r.remote and v.branch == r.branch and v.commit == r.commit) then return i, v end
+    if ((v.repo_path and v.repo_path == r.repo_path) or (v.remote and v.remote == r.remote)) and v.branch == r.branch and v.commit == r.commit then 
+      return i, v
+    end
   end
   return nil
 end
@@ -1863,17 +1865,19 @@ function lpm.lite_xl_list()
   for i,repo in ipairs(repositories) do
     if not repo.lite_xls then error("can't find lite-xl for repo " .. repo:url()) end
     for j, lite_xl in ipairs(repo.lite_xls) do
-      table.insert(result["lite-xls"], {
-        version = lite_xl.version,
-        mod_version = lite_xl.mod_version,
-        repository = repo:url(),
-        tags = lite_xl.tags,
-        is_system = lite_xl:is_system(),
-        is_installed = lite_xl:is_installed(),
-        status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
-        local_path = lite_xl:is_installed() and lite_xl.local_path
-      })
-      max_version = math.max(max_version, #lite_xl.version)
+      if not common.first(result["lite-xls"], function(l) return l.version == lite_xl.version end) then
+        table.insert(result["lite-xls"], {
+          version = lite_xl.version,
+          mod_version = lite_xl.mod_version,
+          repository = repo:url(),
+          tags = lite_xl.tags,
+          is_system = lite_xl:is_system(),
+          is_installed = lite_xl:is_installed(),
+          status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
+          local_path = lite_xl:is_installed() and lite_xl.local_path
+        })
+        max_version = math.max(max_version, #lite_xl.version)
+      end
     end
   end
   if JSON then
