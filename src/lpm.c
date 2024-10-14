@@ -652,8 +652,12 @@ static int lpm_fetchk(lua_State* L, int status, lua_KContext ctx) {
     join_thread(context->thread);
     git_repository_free(context->repository);
     lua_pushstring(L, context->data[0] == 0 ? NULL : context->data);
-    if (context->callback_function)
+    if (context->callback_function) {
+      lua_rawgeti(L, LUA_REGISTRYINDEX, context->callback_function);
+      lua_pushboolean(L, 1);
+      lua_pcall(L, 1, 0, 0);
       luaL_unref(L, LUA_REGISTRYINDEX, context->callback_function);
+    }
     luaL_unref(L, LUA_REGISTRYINDEX, (int)ctx);
     if (context->error_code) {
       return lua_error(L);
