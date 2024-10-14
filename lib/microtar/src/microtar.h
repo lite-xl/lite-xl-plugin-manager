@@ -33,17 +33,18 @@ enum {
 };
 
 enum {
-  MTAR_TREG   = '0',
-  MTAR_TLNK   = '1',
-  MTAR_TSYM   = '2',
-  MTAR_TCHR   = '3',
-  MTAR_TBLK   = '4',
-  MTAR_TDIR   = '5',
-  MTAR_TFIFO  = '6',
-  MTAR_TEHR   = 'x', //  PAX file format
-  MTAR_TEHRA  = 'g', //  PAX file format
-  MTAR_TGFP   = 'K', //  GNU file format
-  MTAR_TGLP   = 'L'  //  GNU file format
+  MTAR_TREG  = '0',
+  MTAR_TLNK  = '1',
+  MTAR_TSYM  = '2',
+  MTAR_TCHR  = '3',
+  MTAR_TBLK  = '4',
+  MTAR_TDIR  = '5',
+  MTAR_TFIFO = '6',
+  MTAR_TCON  = '7',
+  MTAR_TEHR  = 'x', //  PAX file format
+  MTAR_TEHRA = 'g', //  PAX file format
+  MTAR_TGLP  = 'K', //  GNU file format
+  MTAR_TGFP  = 'L'  //  GNU file format
 };
 
 typedef struct {

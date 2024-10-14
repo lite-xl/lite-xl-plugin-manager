@@ -332,15 +332,7 @@ int mtar_update_header(mtar_header_t *h, mtar_header_t *oh) {
 
 
 int mtar_clear_header(mtar_header_t *h){
-  h->mode = 0;
-  h->owner = 0;
-  h->size = 0;
-  h->mtime = 0;
-  h->type = 0;
-  
-  memset(h->name, 0, sizeof(h->name));
-  memset(h->linkname, 0, sizeof(h->linkname));
-  
+  memset(h, 0, sizeof(mtar_header_t));
   return MTAR_ESUCCESS;
 }
 

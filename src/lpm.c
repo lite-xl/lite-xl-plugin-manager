@@ -56,6 +56,8 @@
 
 #define HTTPS_RESPONSE_HEADER_BUFFER_LENGTH 8192
 
+static int imin(int a, int b) { return a < b ? a : b; }
+static int imax(int a, int b) { return a > b ? a : b; }
 
 typedef struct {
   #if _WIN32
@@ -847,16 +849,21 @@ static int lpm_certs(lua_State* L) {
 }
 
 
-static int mkdirp(char* path, int len) {
+static int mkdirp(lua_State* L, char* path, int len) {
   for (int i = 0; i < len; ++i) {
     if (path[i] == '/' && i > 0) {
       path[i] = 0;
-      #ifndef _WIN32
-        if (mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
+      #ifdef _WIN32
+        LPCSTR wpath = lua_toutf16(L, path);
+        if (_wmkdir(wpath) && errno != EEXIST) {
+          lua_pop(L, 1);
+          return -1;
+        }
+        lua_pop(L, 1);
       #else
-        if (mkdir(path) && errno != EEXIST)
+        if (mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
       #endif
-        return -1;
+          return -1;
       path[i] = '/';
     }
   }
@@ -896,7 +903,7 @@ static int lpm_extract(lua_State* L) {
       char target[MAX_PATH];
       int target_length = snprintf(target, sizeof(target), "%s/%s", dst, zip_name);
 
-      if (mkdirp(target, target_length)) {
+      if (mkdirp(L, target, target_length)) {
         zip_fclose(zip_file);
         zip_close(archive);
         return luaL_error(L, "can't extract zip archive file %s, can't create directory %s: %s", src, target, strerror(errno));
@@ -950,9 +957,7 @@ static int lpm_extract(lua_State* L) {
       zip_fclose(zip_file);
     }
     zip_close(archive);
-  }
-
-  else {
+  } else {
     char actual_src[PATH_MAX];
 
     if (strstr(src, ".gz") || strstr(src, ".tgz")) {
@@ -971,9 +976,8 @@ static int lpm_extract(lua_State* L) {
         strcat(actual_src, "tar");
         len = strlen(src);
       }
-      else{
+      else
         strcpy(actual_src, dst);
-      }
 
       actual_src[len] = 0;
       FILE* file = lua_fopen(L, actual_src, "wb");
@@ -1019,136 +1023,143 @@ static int lpm_extract(lua_State* L) {
       if ((err = mtar_open(&tar, actual_src, "r")))
         return luaL_error(L, "can't open tar archive %s: %s", src, mtar_strerror(err));
 
-      mtar_header_t h;
-      mtar_header_t before_h;
-      mtar_header_t allways_h;
-      int has_ext_before = 0;
-      int has_ext_allways = 0;
-
-      mtar_clear_header(&before_h);
-      mtar_clear_header(&allways_h);
-
+      mtar_header_t h = {0}, before_h = {0}, always_h = {0};
+      int has_ext_before = 0, has_ext_always = 0;
+      char target[MAX_PATH];
+      
       while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD ) {
-        if (h.type == MTAR_TREG) {
+        switch (h.type) {
+          case MTAR_TSYM:
+          case MTAR_TDIR:
+          case MTAR_TCON:
+          case MTAR_TREG: {
+            if (has_ext_before) {
+              mtar_update_header(&h, &before_h);
+              has_ext_before = 0;
+              mtar_clear_header(&before_h);
+            } else if (has_ext_always) {
+              mtar_update_header(&h, &always_h);
+            }
+            int target_length = snprintf(target, sizeof(target), "%s/%s", dst, h.name);
 
-          if (has_ext_before) {
-            mtar_update_header(&h, &before_h);
-            has_ext_before = 0;
-            mtar_clear_header(&before_h);
-          }
-          if (has_ext_allways)
-            mtar_update_header(&h, &allways_h);
+            if (mkdirp(L, target, target_length)) {
+              mtar_close(&tar);
+              return luaL_error(L, "can't extract tar archive file %s, can't create directory %s: %s", src, target, strerror(errno));
+            }
 
-          char target[MAX_PATH];
-          int target_length = snprintf(target, sizeof(target), "%s/%s", dst, h.name);
-
-          if (mkdirp(target, target_length)) {
-            mtar_close(&tar);
-            return luaL_error(L, "can't extract tar archive file %s, can't create directory %s: %s", src, target, strerror(errno));
-          }
-
-          FILE* file = fopen(target, "wb");
-          if (!file) {
-            mtar_close(&tar);
-            return luaL_error(L, "can't extract tar archive file %s, can't create file %s: %s", src, target, strerror(errno));
-          }
-
-          if (chmod(target, h.mode))
-            return luaL_error(L, "can't extract tar archive file %s, can't chmod file %s: %s", src, target, strerror(errno));
-
-          char buffer[8192];
-          int remaining = h.size;
-          while (remaining > 0) {
-            int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-
-            int err = mtar_read_data(&tar, buffer, read_size);
-            if (err != MTAR_ESUCCESS) {
+            if (h.type == MTAR_TSYM) {
+              lua_pushcfunction(L, lpm_symlink);
+              lua_pushstring(L, h.linkname);
+              lua_pushlstring(L, target, target_length);
+              lua_pcall(L, 2, 0, 0);
+            } else if (h.type == MTAR_TDIR) {
+              lua_pushcfunction(L, lpm_mkdir);
+              lua_pushlstring(L, target, target_length);
+              lua_pcall(L, 1, 0, 0);
+            } else {
+              FILE* file = lua_fopen(L, target, "wb");
+              if (!file) {
+                mtar_close(&tar);
+                return luaL_error(L, "can't extract tar archive file %s, can't create file %s: %s", src, target, strerror(errno));
+              }
+              char buffer[8192];
+              int remaining = h.size;
+              while (remaining > 0) {
+                int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+                int err = mtar_read_data(&tar, buffer, read_size);
+                if (err != MTAR_ESUCCESS) {
+                  fclose(file);
+                  mtar_close(&tar);
+                  return luaL_error(L, "can't read file %s: %s", target, mtar_strerror(err));
+                }
+                fwrite(buffer, sizeof(char), read_size, file);
+                remaining -= read_size;
+              }
               fclose(file);
+            }
+            if (h.type != MTAR_TSYM && chmod(target, h.mode)) {
               mtar_close(&tar);
-              return luaL_error(L, "can't read file %s: %s", target, mtar_strerror(err));
+              return luaL_error(L, "can't extract tar archive file %s, can't chmod file %s: %s", src, target, strerror(errno));
+            }
+          } break;
+          case MTAR_TEHR:
+          case MTAR_TEHRA: {
+            mtar_header_t *h_to_change;
+            if (h.type == MTAR_TEHR) {
+              h_to_change = &before_h;
+              has_ext_before = 1;
+            } else {
+              h_to_change = &always_h;
+              has_ext_always = 1;
             }
 
-            fwrite(buffer, sizeof(char), read_size, file);
-            remaining -= read_size;
-          }
+            char buffer[4096] = {0};
+            char current_read[8192] = {0}; // If a line is more than 8192 char long, will not work!
+            char last_read[4096] = {0};
+            int remaining = h.size;
 
-          fclose(file);
-        }
 
-        else if (h.type == MTAR_TEHR || h.type == MTAR_TEHRA) {
-          mtar_header_t *h_to_change;
-          if (h.type == MTAR_TEHR)
-            h_to_change = &before_h;
-          else
-            h_to_change = &allways_h;
+            while (remaining > 0) {
+              int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+              remaining -= read_size;
 
-          char buffer[4096] = {0};
-          char current_read[8192] = {0}; // If a line is more than 8192 char long, will not work!
-          char last_read[4096] = {0};
-          int remaining = h.size;
+              if (mtar_read_data(&tar, buffer, read_size) != MTAR_ESUCCESS) {
+                mtar_close(&tar);
+                return luaL_error(L, "Error while reading extended: %s", strerror(errno));
+              }
 
-          has_ext_before = 1;
+              strcpy(current_read, last_read);
+              current_read[strlen(last_read)] = '\0';
+              strcat(current_read, buffer);
+              current_read[strlen(last_read) + read_size] = '\0';
 
-          while (remaining > 0) {
-            int read_size = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-            remaining -= read_size;
+              char *n_line_ptr = NULL;
+              char **l_line_ptr = NULL;
+              char *line = strtok_r(current_read, "\n", &n_line_ptr);
 
-            if (mtar_read_data(&tar, buffer, read_size) != MTAR_ESUCCESS) {
+              while (line != NULL) {
+                char *in_line_ptr = NULL;
+                strtok_r(line, " ", &in_line_ptr);
+                char *header_key = strtok_r(NULL, "=", &in_line_ptr);
+                char *header_val = strtok_r(NULL, "=", &in_line_ptr);
+
+                if (!strcmp(header_key, "path"))      strcpy(h_to_change->name, header_val);
+                if (!strcmp(header_key, "linkpath"))  strcpy(h_to_change->linkname, header_val);
+                  // possibility to add more later
+
+                l_line_ptr = &n_line_ptr;
+                line = strtok_r(NULL, "\n", &n_line_ptr);
+              }
+
+              if (current_read[strlen(last_read) + read_size - 1] != '\n')
+                strcpy(last_read, strtok_r(current_read, "\n", l_line_ptr));
+              else
+                memset(last_read, 0, strlen(last_read));
+            }
+          } break;
+          case MTAR_TGFP: {
+            has_ext_before = 1;
+            int read_size = imin(h.size, (int)sizeof(before_h.name));
+            if (mtar_read_data(&tar, before_h.name, read_size) != MTAR_ESUCCESS) {
               mtar_close(&tar);
-              return luaL_error(L, "Error while reading extended: %s", strerror(errno));
+              return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
             }
-
-            strcpy(current_read, last_read);
-            current_read[strlen(last_read)] = '\0';
-            strcat(current_read, buffer);
-            current_read[strlen(last_read) + read_size] = '\0';
-
-            char *n_line_ptr = NULL;
-            char **l_line_ptr = NULL;
-            char *line = strtok_r(current_read, "\n", &n_line_ptr);
-
-            while (line != NULL) {
-              char *in_line_ptr = NULL;
-              strtok_r(line, " ", &in_line_ptr);
-              char *header_key = strtok_r(NULL, "=", &in_line_ptr);
-              char *header_val = strtok_r(NULL, "=", &in_line_ptr);
-
-              if (!strcmp(header_key, "path"))      strcpy(h_to_change->name, header_val);
-              if (!strcmp(header_key, "linkpath"))  strcpy(h_to_change->linkname, header_val);
-                // possibility to add more later
-
-              l_line_ptr = &n_line_ptr;
-              line = strtok_r(NULL, "\n", &n_line_ptr);
+          } break;
+          case MTAR_TGLP: {
+            has_ext_before = 1;
+            int read_size = imin(h.size, (int)sizeof(before_h.linkname));
+            fprintf(stderr, "READ SIZE: %d\n", read_size);
+            if (mtar_read_data(&tar, before_h.linkname, read_size) != MTAR_ESUCCESS) {
+              mtar_close(&tar);
+              return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
             }
-
-            if (current_read[strlen(last_read) + read_size - 1] != '\n')
-              strcpy(last_read, strtok_r(current_read, "\n", l_line_ptr));
-            else
-              memset(last_read, 0, strlen(last_read));
-          }
+          } break;
         }
-
-        else if (h.type == MTAR_TGFP) {
-          has_ext_before = 1;
-          int read_size = before_h.size < sizeof(before_h.name) ? before_h.size : sizeof(before_h.name);
-
-          if (mtar_read_data(&tar, before_h.name, read_size) != MTAR_ESUCCESS) {
-            mtar_close(&tar);
-            return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
-          }
+        int err;
+        if (err = mtar_next(&tar)) {
+          mtar_close(&tar);
+          return luaL_error(L, "Error while reading tar archive: %s", mtar_strerror(err));
         }
-
-        else if (h.type == MTAR_TGLP) {
-          has_ext_before = 1;
-          int read_size = before_h.size < sizeof(before_h.linkname) ? before_h.size : sizeof(before_h.linkname);
-
-          if (mtar_read_data(&tar, before_h.linkname, read_size) != MTAR_ESUCCESS) {
-            mtar_close(&tar);
-            return luaL_error(L, "Error while reading GNU extended: %s", strerror(errno));
-          }
-        }
-
-        mtar_next(&tar);
       }
       mtar_close(&tar);
       if (strstr(src, ".gz") || strstr(src, ".tgz"))
@@ -1198,8 +1209,6 @@ static const char* get_header(const char* buffer, const char* header, int* len) 
   return NULL;
 }
 
-static int imin(int a, int b) { return a < b ? a : b; }
-static int imax(int a, int b) { return a > b ? a : b; }
 
 typedef enum {
   STATE_CONNECT,
