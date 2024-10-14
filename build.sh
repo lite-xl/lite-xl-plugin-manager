@@ -37,7 +37,7 @@ if [[ "$@" != *"-lgit2"* ]]; then
 fi
 if [[ "$@" != *"-lzip"* ]]; then
   [ ! -e "lib/libzip/build" ] && { cd lib/libzip && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=ON -DENABLE_ZSTD=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
-  LINK_FLAGS="$LINK_FLAGS -lzip"
+  LINK_FLAGS="$LINK_FLAGS -lzip -llzma"
 fi
 [[ "$@" != *"-lmicrotar"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -Ilib/microtar/src" && SRCS="$SRCS lib/microtar/src/microtar.c"
 [[ "$@" != *"-llua"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -Ilib/lua -DMAKE_LIB=1" && SRCS="$SRCS lib/lua/onelua.c"
