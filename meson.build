@@ -7,6 +7,7 @@ project('lpm',
 cc = meson.get_compiler('c')
 
 zlib_dep = dependency('zlib')
+lzma_dep = dependency('liblzma')
 mbedtls_dep = dependency('mbedtls', version: '<3', required: false)
 libgit2_dep = dependency('libgit2')
 libzip_dep = dependency('libzip')
@@ -57,4 +58,4 @@ if get_option('static')
     cflags += '-DLPM_STATIC'
 endif
 
-executable('lpm', lpm_source, dependencies: [zlib_dep, mbedtls_dep, libgit2_dep, libzip_dep, lua_dep, microtar_dep], c_args: cflags)
+executable('lpm', lpm_source, dependencies: [zlib_dep, lzma_dep, mbedtls_dep, libgit2_dep, libzip_dep, lua_dep, microtar_dep], c_args: cflags)
