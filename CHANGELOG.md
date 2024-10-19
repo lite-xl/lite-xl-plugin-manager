@@ -1,7 +1,7 @@
 # 1.3.0
 
 * Signficiant workflow changes, courtesy of Takase "Big T" @takase1121.
-* Significantly increased performance of installing lots of plugins (like when constructing bottles).
+* Significantly increased performance of installing lots of plugins (like when constructing bottles) (~50x speed improvement).
 * Better debugging facilities for HTTP requests.
 * Better support for modifying bottles (including the system bottle) in a delta, rather than deleting and recreating.
 * Fixed an issue with not always detecting orphaned dependencies in meta plugins.

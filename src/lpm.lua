@@ -1302,7 +1302,7 @@ end
 
 function Repository:add(pull_remotes)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
-  local manifest, remotes = self:fetch():parse_manifest()
+  local manifest, remotes = self:fetch_if_not_present():parse_manifest()
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do
       if not common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
