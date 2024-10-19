@@ -24,7 +24,7 @@ if [[ "$@" != *"-lz"* ]]; then
   LINK_FLAGS="$LINK_FLAGS -lz"
 fi
 if [[ "$@" != *"-llzma"* ]]; then
-  [ ! -e "lib/xz/build" ] && { cd lib/xz && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS&& $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  [ ! -e "lib/xz/build" ] && { cd lib/xz && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DHAVE_ENCODERS=false && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -llzma"
 fi
 if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* && "$@" != *"-lmbedx509"* ]]; then
