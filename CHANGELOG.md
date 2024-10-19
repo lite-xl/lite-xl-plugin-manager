@@ -1,3 +1,21 @@
+# 1.3.0
+
+* Signficiant workflow changes, courtesy of Takase "Big T" @takase1121.
+* Significantly increased performance of installing lots of plugins (like when constructing bottles).
+* Better debugging facilities for HTTP requests.
+* Better support for modifying bottles (including the system bottle) in a delta, rather than deleting and recreating.
+* Fixed an issue with not always detecting orphaned dependencies in meta plugins.
+* Fixed a bug where metaplugins didn't quite flag themselves as installed.
+* Fixed a bug where some plugins were erroneously classified as complex.
+* Fixed a bug where windows executions didn't always work with quotes.
+* Fixed a bug where sometimes newlines weren't emitted when downloading things leading to weird UI stuff.
+* Automatically determines mod-version of lite-xls when possible, instead of assuming `MOD_VERSION_LATEST` if not specified.
+* Allowed HTTP requests to be run in coroutines, so that we can other things while we're waiting for data.
+* Added in support for applying lists of plugins in `plugin_manager` based on a config that can be specified per project.
+* Updated the scoop manifest, courtesy of @maksimaliabyshev.
+* Added in support for `.xz`/LZMA compression.
+* Fixed several bugs with extended tar formats.
+
 # 1.2.9
 
 * Fixed a major bug which caused lpm to stop working in CI pipelines without `$TERM` defined.
