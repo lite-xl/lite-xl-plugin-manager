@@ -6,6 +6,7 @@
 * Better support for modifying bottles (including the system bottle) in a delta, rather than deleting and recreating.
 * Fixed an issue with not always detecting orphaned dependencies in meta plugins.
 * Fixed a bug where metaplugins didn't quite flag themselves as installed.
+* Fixed a bug where the system lite-xl was not determined at runtime, but saved.
 * Fixed a bug where some plugins were erroneously classified as complex.
 * Fixed a bug where windows executions didn't always work with quotes.
 * Fixed a bug where sometimes newlines weren't emitted when downloading things leading to weird UI stuff.
