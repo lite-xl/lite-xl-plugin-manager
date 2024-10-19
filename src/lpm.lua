@@ -831,7 +831,7 @@ function Addon:get_compatibilities(bottle)
   local dependency_list = common.canonical_order(self.dependencies)
   for _, addon in ipairs(dependency_list) do
     local v = self.dependencies[addon]
-    local potential_addons = { bottle:get_addon(addon, v.version, { mod_version = bottle.lite_xl.mod_version }) }
+    local potential_addons = { bottle:get_addon(addon, v.version, MOD_VERSION ~= "any" and { mod_version = bottle.lite_xl.mod_version }) }
     for i, potential_addon in ipairs(potential_addons) do
       local incomaptibilities = common.grep(installed_addons, function(p) return p:is_incompatible(potential_addon) end)
       if #incomaptibilities == 0 then
@@ -1368,7 +1368,7 @@ end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
-function LiteXL:is_compatible(addon) return not addon.mod_version or compatible_modversion(self.mod_version, addon.mod_version) end
+function LiteXL:is_compatible(addon) return not addon.mod_version or MOD_VERSION == "any" or compatible_modversion(self.mod_version, addon.mod_version) end
 function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
@@ -1467,7 +1467,7 @@ function Bottle:construct()
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   if self.config then
-    common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. self.config)
+    common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true" or "") .. self.config)
   end
 
   -- Always copy the executbale, because of the way that lite determines the user folder (for now).
@@ -1518,7 +1518,7 @@ function Bottle:apply(addons, config)
     end
   end
   if config then
-    common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'default' and DEFAULT_CONFIG_HEADER or config)
+    common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'default' and (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true" or "")) or config)
     changes = true
   end
   return changes
@@ -1802,12 +1802,14 @@ function lpm.lite_xl_add(version, path)
   if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " lite-xl already exists") end
   local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
   local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
-  local binary_stat, data_stat = system.stat(binary_path), system.stat(data_path)
-  if not binary_stat then error("can't find binary path " .. binary_path) end
-  if not data_stat then error("can't find data path " .. data_path) end
-  local path_stat = system.stat(path:gsub(PATHSEP .. "$", ""))
-  if not path_stat then error("can't find lite-xl path " .. path) end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = MOD_VERSION or LATEST_MOD_VERSION }))
+  local binary_stat = assert(system.stat(binary_path), "can't find binary path " .. binary_path)
+  local data_stat = assert(system.stat(data_path), "can't find data path " .. data_path)
+  local path_stat = assert(system.stat(path:gsub(PATHSEP .. "$", "")), "can't find lite-xl path " .. path)
+  local mod_version = MOD_VERSION
+  if mod_version == "any" or not mod_version then
+    mod_version = common.read(data_path .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
+  end
+  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = mod_version or LATEST_MOD_VERSION }))
   lpm.lite_xl_save()
 end
 
@@ -2242,7 +2244,13 @@ function lpm.setup()
   lpm.repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
   repositories, lite_xls = {}, {}
   if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
-  repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
+  if REPOSITORY then
+    for i, url in ipairs(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }) do
+      table.insert(repositories, Repository.url(url):add(AUTO_PULL_REMOTES))
+    end
+  else
+    repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
+  end
   lite_xls = common.map(settings.lite_xls or {}, function(lite_xl) return LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }) end)
 
   if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
@@ -2261,6 +2269,10 @@ function lpm.setup()
       local lite_xl_datadir = common.first(lite_xl_datadirs, function(p) return p and system.stat(p) end)
 
       if not BINARY and not DATADIR and system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
+      local mod_version = MOD_VERSION
+      if mod_version == "any" or not mod_version then
+        mod_version = common.read(DATADIR .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
+      end
       local detected_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [DEFAULT_ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
       if not system_lite_xl then
         system_lite_xl = detected_lite_xl
@@ -2281,7 +2293,6 @@ function lpm.setup()
     system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, nil, true)
   end
   if not system_bottle then system_bottle = Bottle.new(nil, nil, nil, true) end
-  if REPOSITORY then repositories = common.map(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end) end
 end
 
 function lpm.command(ARGS)
@@ -2478,6 +2489,9 @@ Flags have the following effects:
                            steps to install and whatnot.
   --quiet                  Outputs nothing but explicit responses.
   --mod-version=version    Sets the mod version of lite-xl to install addons.
+                           Can be set to "any", which will retrieve the latest
+                           specified, and will add 
+                           `config.skip_plugins_version = true` to a bottle.
   --version                Returns version information.
   --help                   Displays this help text.
   --ssl-certs              Sets the SSL certificate store. Can be a directory,
@@ -2617,7 +2631,7 @@ not commonly used publically.
   ARCH = ARGS["arch"] or { DEFAULT_ARCH }
   ASSUME_YES = ARGS["assume-yes"] or FORCE
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION")
-  if MOD_VERSION == "any" then MOD_VERSION = nil end
+  assert(not MOD_VERSION or MOD_VERSION == "any" or MOD_VERSION:find("^%d+$"), "--mod-version must be either 'any' or a number.")
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
   USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
