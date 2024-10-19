@@ -1807,7 +1807,7 @@ function lpm.lite_xl_add(version, path)
   local path_stat = assert(system.stat(path:gsub(PATHSEP .. "$", "")), "can't find lite-xl path " .. path)
   local mod_version = MOD_VERSION
   if mod_version == "any" or not mod_version then
-    mod_version = common.read(data_path .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
+    mod_version = common.read(data_path .. PATHSEP .. "core" .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
   end
   table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = mod_version or LATEST_MOD_VERSION }))
   lpm.lite_xl_save()
@@ -2270,14 +2270,16 @@ function lpm.setup()
 
       if not BINARY and not DATADIR and system_lite_xl then error("can't find existing system lite (does " .. system_lite_xl:get_binary_path() .. " exist? was it moved?); run `lpm purge`, or specify --binary and --datadir.") end
       local mod_version = MOD_VERSION
-      if mod_version == "any" or not mod_version then
-        mod_version = common.read(DATADIR .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
+      if lite_xl_datadir and (mod_version == "any" or not mod_version) then
+        local path = lite_xl_datadir .. PATHSEP .. "core" .. PATHSEP .. "start.lua"
+        if system.stat(path) then
+          mod_version = common.read(path):match("MOD_VERSION_MAJOR%s=%s(%d+)")
+        end
       end
-      local detected_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [DEFAULT_ARCH] = lite_xl_binary }, mod_version = MOD_VERSION or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
+      local detected_lite_xl = LiteXL.new(nil, { path = directory, datadir_path = lite_xl_datadir, binary_path = { [DEFAULT_ARCH] = lite_xl_binary }, mod_version = mod_version or LATEST_MOD_VERSION, version = "system", tags = { "system", "local" } })
       if not system_lite_xl then
         system_lite_xl = detected_lite_xl
         table.insert(lite_xls, system_lite_xl)
-        lpm.lite_xl_save()
       else
         lite_xls = common.grep(lite_xls, function(e) return e ~= system_lite_xl end)
         system_lite_xl = detected_lite_xl
