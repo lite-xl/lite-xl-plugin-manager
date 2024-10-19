@@ -826,9 +826,10 @@ function Addon:get_path(bottle)
 end
 
 function Addon:get_compatibilities(bottle)
+  local dependency_list = common.canonical_order(self.dependencies)
+  if #dependency_list == 0 then return {}, {} end 
   local compatible_addons, incompatible_addons = {}, {}
   local installed_addons = bottle:installed_addons()
-  local dependency_list = common.canonical_order(self.dependencies)
   for _, addon in ipairs(dependency_list) do
     local v = self.dependencies[addon]
     local potential_addons = { bottle:get_addon(addon, v.version, MOD_VERSION ~= "any" and { mod_version = bottle.lite_xl.mod_version }) }
@@ -861,6 +862,7 @@ function Addon:install(bottle, installing)
   local install_path = self:get_install_path(bottle)
   if install_path:find(USERDIR, 1, true) ~= 1 and install_path:find(TMPDIR, 1, true) ~= 1 then error("invalid install path: " .. install_path) end
   local temporary_install_path = TMPDIR .. PATHSEP .. install_path:sub(((install_path:find(TMPDIR, 1, true) == 1) and #TMPDIR or #USERDIR) + 2)
+  
   local status, err = pcall(function()
     installing = installing or {}
     installing[self.id] = true
