@@ -1467,7 +1467,7 @@ function Bottle:construct()
   if not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   if self.config then
-    common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true" or "") .. self.config)
+    common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. self.config)
   end
 
   -- Always copy the executbale, because of the way that lite determines the user folder (for now).
@@ -1518,7 +1518,7 @@ function Bottle:apply(addons, config)
     end
   end
   if config then
-    common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'default' and (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true" or "")) or config)
+    common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'default' and (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "")) or config)
     changes = true
   end
   return changes
@@ -2470,6 +2470,7 @@ It has the following commands:
                                            else to run your configuration.
 
   lpm purge                                Completely purge all state for LPM.
+  lpm bottle purge                         Purges all bottles.
   lpm -                                    Read these commands from stdin in
                                            an interactive print-eval loop.
   lpm help                                 Displays this help text.
