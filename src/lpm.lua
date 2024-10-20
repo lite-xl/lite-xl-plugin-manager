@@ -1922,8 +1922,7 @@ function lpm.retrieve_addons(lite_xl, arguments, filters)
       local repo, remainder = common.split("@", str)
       if not remainder then repo = nil end
       local id, version = common.split(":", remainder or str)
-
-      local potentials = { system_bottle:get_addon(id, version, common.merge({ mod_version = lite_xl.mod_version, repository = repo }, filters or {})) }
+      local potentials = { system_bottle:get_addon(id, version, common.merge({ mod_version = (MOD_VERSION ~= "any" and (MOD_VERSION or lite_xl.mod_version)), repository = repo }, filters or {})) }
       local uniq = {}
       local found_one = false
       for i, addon in ipairs(potentials) do
