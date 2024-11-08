@@ -123,12 +123,15 @@ local tests = {
     lpm("install lsp --mask lintplus")
     assert_exists(userdir .. "/plugins/lsp")
     assert_not_exists(userdir .. "/plugins/lintplus")
+  end,
+  ["13_repos"] = function()
+    lpm("repo add https://github.com/jgmdev/lite-xl-threads.git")
   end
 }
 
 local last_command_result, last_command
 lpm = function(cmd)
-  last_command = arg[0] .. " --quiet --json --assume-yes --userdir=" .. userdir .. " " .. cmd
+  last_command = arg[0] .. " --quiet --json --assume-yes --mod-version=3 --userdir=" .. userdir .. " " .. cmd
   local pipe = io.popen(last_command, "r")
   local result = pipe:read("*all")
   last_command_result = result ~= "" and json.decode(result) or nil
