@@ -691,8 +691,7 @@ static int lpm_fetch(lua_State* L) {
   int ctx = luaL_ref(L, LUA_REGISTRYINDEX);
   if (lua_is_main_thread(L)) {
     lpm_fetch_thread(context);
-    lpm_fetchk(L, 0, ctx);
-    return 0;
+    return lpm_fetchk(L, 0, ctx);
   } else {
     context->thread = create_thread(lpm_fetch_thread, context);
     return lua_yieldk(L, 0, (lua_KContext)ctx, lpm_fetchk);

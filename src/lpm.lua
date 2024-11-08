@@ -1258,8 +1258,9 @@ function Repository:fetch()
       common.mkdirp(temporary_path)
       log.progress_action("Fetching " .. self.remote .. "...")
       system.init(temporary_path, self.remote)
-      self.branch = system.fetch(temporary_path, write_progress_bar):gsub("^refs/heads/", "")
+      self.branch = system.fetch(temporary_path, write_progress_bar)
       if not self.branch then error("Can't find remote branch for " .. self.remote) end
+      self.branch = self.branch:gsub("^refs/heads/", "")
       path = self.repo_path .. PATHSEP .. self.branch
       self.local_path = path
       common.reset(temporary_path, self.branch, "hard")
