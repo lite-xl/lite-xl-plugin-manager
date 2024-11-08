@@ -1828,6 +1828,7 @@ end
 
 
 function lpm.lite_xl_switch(version, target)
+  if not DEFAULT_RELEASE_URL or #DEFAULT_RELEASE_URL == 0 then error("switch has been disabled on lpm version " .. VERSION .. "; please switch it however you installed it") end
   if not version then error("requires a version") end
   target = target or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
   if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly as a second argument") end
