@@ -1,3 +1,9 @@
+# 1.3.1
+
+* Fixed a bug relating to repository fetching.
+* Ensured test suite runs on any auto-detected setup.
+* Disabled `switch` in the case that lpm was buitl without a release URL.
+
 # 1.3.0
 
 * Signficiant workflow changes, courtesy of Takase "Big T" @takase1121.
