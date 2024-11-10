@@ -1625,7 +1625,7 @@ function Bottle:all_addons()
               repo_path = (hash[id] and hash[id][1].local_path or nil),
               dependencies = (hash[id] and hash[id][1].dependencies or nil)
             }))
-            if not hash[id] then hash[id] = t[#t] end
+            if not hash[id] then hash[id] = { t[#t] } end
           end
         end
       end
