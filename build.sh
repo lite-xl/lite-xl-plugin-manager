@@ -7,8 +7,18 @@
 : ${BIN=lpm}
 : ${JOBS=4}
 
+# The build options are available:
+# clean              Cleans the build directory.
+# -g                 Compile with debug support.
+# -l<library>        Compiles against the shared system version of the specified library.
+# -DLPM_NO_GIT       Compiles without libgit2 support.
+# -DLPM_NO_NETWORK   Compiles without network support.
+# -DLPM_NO_THREADS   Compiles without threading support.
+# -DLPM_VERSION      Sets the specific version.
+# -DLPM_STATIC       Bundles lpm.lua into the binary executable.
+
 SRCS="src/*.c"
-COMPILE_FLAGS="$CFLAGS -I`pwd`/lib/prefix/include" # We specifically rename this and LDFLAGS, because exotic build environments export these to subprcoesses.
+COMPILE_FLAGS="$CFLAGS -I`pwd`/lib/prefix/include" # We specifically rename this and LDFLAGS, because exotic build environments export these to subprocesses.
 LINK_FLAGS="$LDFLAGS -lm -L`pwd`/lib/prefix/lib -L`pwd`/lib/prefix/lib64"   # And ideally we don't want to mess with the underlying build processes, unless we're explicit about it.
 
 [[ "$@" == "clean" ]] && rm -rf lib/libgit2/build lib/zlib/build lib/libzip/build lib/xz/build lib/mbedtls/build lib/prefix lua $BIN *.exe src/lpm.luac src/lpm.lua.c && exit 0
@@ -27,12 +37,13 @@ if [[ "$@" != *"-llzma"* ]]; then
   [ ! -e "lib/xz/build" ] && { cd lib/xz && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DHAVE_ENCODERS=false && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -llzma"
 fi
-if [[ "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* && "$@" != *"-lmbedx509"* ]]; then
+if [[ "$@" != *"-DLPM_NO_NETWORK"* && "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* && "$@" != *"-lmbedx509"* ]]; then
   [ ! -e "lib/mbedtls/build" ] && { cd lib/mbedtls && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -DMBEDTLS_DEBUG_C -w" cmake .. $CMAKE_DEFAULT_FLAGS  -G "Unix Makefiles" -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF $SSL_CONFIGURE && CFLAGS="$COMPILE_FLAGS $CFLAGS_MBEDTLS -DMBEDTLS_MD4_C=1 -w" $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -lmbedtls -lmbedx509 -lmbedcrypto"
 fi
-if [[ "$@" != *"-lgit2"* ]]; then
-  [ ! -e "lib/libgit2/build" ] && { cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=mbedTLS && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+if [[ "$@" != *"-DLPM_NO_GIT"* && "$@" != *"-lgit2"* ]]; then
+  [[ "$@" != *"-DLPM_NO_NETWORK"* ]] && USE_HTTPS="mbedTLS" || USE_HTTPS="OFF"
+  [ ! -e "lib/libgit2/build" ] && { cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=$USE_HTTPS && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="-lgit2 $LINK_FLAGS"
 fi
 if [[ "$@" != *"-lzip"* ]]; then
@@ -48,9 +59,11 @@ if [[ "$@" == *"-DLPM_STATIC"* ]]; then
   ./lua.exe -e 'io.open("src/lpm.lua.c", "wb"):write("unsigned char lpm_luac[] = \""..string.dump(load(io.lines("src/lpm.lua","L"), "=lpm.lua")):gsub(".",function(c) return string.format("\\x%02X",string.byte(c)) end).."\";unsigned int lpm_luac_len = sizeof(lpm_luac)-1;")'
 fi
 
-[[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]] && COMPILE_FLAGS="$COMPILE_FLAGS -DLUA_USE_LINUX" && LINK_FLAGS="$LINK_FLAGS -ldl"
-[[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]]                  && LINK_FLAGS="$LINK_FLAGS -lbcrypt -lws2_32 -lz -lwinhttp -lole32 -lcrypt32 -lrpcrt4 -lsecur32"
-[[ $OSTYPE == *'darwin'* ]]                                   && LINK_FLAGS="$LINK_FLAGS -liconv -framework Security -framework Foundation"
+[[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]]                && COMPILE_FLAGS="$COMPILE_FLAGS -DLUA_USE_LINUX" && LINK_FLAGS="$LINK_FLAGS -ldl"
+[[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]]                                 && LINK_FLAGS="$LINK_FLAGS -lbcrypt -lz -lole32 -lcrypt32 -lrpcrt4 -lsecur32"
+[[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && "$@" != *"-DLPM_NO_NETWORK"* && LINK_FLAGS="$LINK_FLAGS -lws2_32 -lwinhttp"
+[[ $OSTYPE == *'darwin'* ]]                                                  && LINK_FLAGS="$LINK_FLAGS -liconv -framework Foundation"
+[[ $OSTYPE == *'darwin'* ]] && "$@" != *"-DLPM_NO_NETWORK"*                  && LINK_FLAGS="$LINK_FLAGS -framework Security"
 
 [[ " $@" != *" -g"* && " $@" != *" -O"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -O3" && LINK_FLAGS="$LINK_FLAGS -s -flto"
 $CC $COMPILE_FLAGS $SRCS $@ -o $BIN $LINK_FLAGS

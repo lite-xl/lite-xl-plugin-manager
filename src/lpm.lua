@@ -2379,7 +2379,8 @@ xpcall(function()
     ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
-    repository = "string", ephemeral = "flag", mask = "array", raw = "string", plugin = "array",
+    repository = "string", ephemeral = "flag", mask = "array", raw = "string", plugin = "array", ["no-network"] = "flag",
+    ["no-git"] = "flag",
     -- filtration flags
     author = "array", tag = "array", stub = "array", dependency = "array", status = "array",
     type = "array", name = "array"
@@ -2629,6 +2630,8 @@ not commonly used publically.
   PROGRESS = ARGS["progress"]
   REINSTALL = ARGS["reinstall"]
   NO_COLOR = ARGS["no-color"]
+  if not NO_NETWORK then NO_NETWORK = ARGS["no-network"] end
+  if not NO_GIT then NO_GIT = ARGS["no-git"] end
   DATADIR = common.normalize_path(ARGS["datadir"])
   BINARY = common.normalize_path(ARGS["binary"])
   NO_INSTALL_OPTIONAL = ARGS["no-install-optional"]
@@ -2705,43 +2708,45 @@ not commonly used publically.
   repositories = {}
   if ARGS[2] == "purge" then return lpm.purge() end
   local ssl_certs = ARGS["ssl-certs"] or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
-  if ssl_certs then
-    if ssl_certs == "noverify" then
-      system.certs("noverify")
-    else
-      local stat = system.stat(ssl_certs)
-      if not stat then error("can't find " .. ssl_certs) end
-      system.certs(stat.type, ssl_certs)
-    end
-  else
-    local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
-      "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
-      "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
-      "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
-      "/etc/pki/tls/cacert.pem",                           -- OpenELEC
-      "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
-      "/etc/ssl/cert.pem",                                 -- Alpine Linux (and Mac OSX)
-      "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
-      "/system/etc/security/cacerts",                      -- Android
-      "/usr/local/share/certs",                            -- FreeBSD
-      "/etc/pki/tls/certs",                                -- Fedora/RHEL
-      "/etc/openssl/certs",                                -- NetBSD
-      "/var/ssl/certs",                                    -- AIX
-    }
-    if PLATFORM == "windows" then
-      common.mkdirp(TMPDIR)
-      system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
-    else
-      local has_certs = false
-      for i, path in ipairs(paths) do
-        local stat = system.stat(path)
-        if stat then
-          has_certs = true
-          system.certs(stat.type, path)
-          break
-        end
+  if not NO_NETWORK then
+    if ssl_certs then
+      if ssl_certs == "noverify" then
+        system.certs("noverify")
+      else
+        local stat = system.stat(ssl_certs)
+        if not stat then error("can't find " .. ssl_certs) end
+        system.certs(stat.type, ssl_certs)
       end
-      if not has_certs then error("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs") end
+    else
+      local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
+        "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
+        "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
+        "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
+        "/etc/pki/tls/cacert.pem",                           -- OpenELEC
+        "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
+        "/etc/ssl/cert.pem",                                 -- Alpine Linux (and Mac OSX)
+        "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
+        "/system/etc/security/cacerts",                      -- Android
+        "/usr/local/share/certs",                            -- FreeBSD
+        "/etc/pki/tls/certs",                                -- Fedora/RHEL
+        "/etc/openssl/certs",                                -- NetBSD
+        "/var/ssl/certs",                                    -- AIX
+      }
+      if PLATFORM == "windows" then
+        common.mkdirp(TMPDIR)
+        system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
+      else
+        local has_certs = false
+        for i, path in ipairs(paths) do
+          local stat = system.stat(path)
+          if stat then
+            has_certs = true
+            system.certs(stat.type, path)
+            break
+          end
+        end
+        if not has_certs then error("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs") end
+      end
     end
   end
 
