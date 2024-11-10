@@ -58,4 +58,17 @@ if get_option('static')
     cflags += '-DLPM_STATIC'
 endif
 
-executable('lpm', lpm_source, dependencies: [zlib_dep, lzma_dep, mbedtls_dep, libgit2_dep, libzip_dep, lua_dep, microtar_dep], c_args: cflags)
+lpm_exe = executable('lpm',
+    lpm_source,
+    dependencies: [
+        zlib_dep,
+        lzma_dep,
+        mbedtls_dep,
+        libgit2_dep,
+        libzip_dep,
+        lua_dep,
+        microtar_dep
+    ],
+    c_args: cflags,
+    install: true,
+)
