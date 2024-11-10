@@ -1162,7 +1162,7 @@ function Repository:parse_manifest(repo_id)
     end)
     if not status then error("error parsing manifest for " .. self:url() .. ": " .. err) end
   end
-  return self.manifest, self.remotes
+  return self.manifest, self.remotes or {}
 end
 
 
@@ -1252,6 +1252,7 @@ end
 -- useds to fetch things from a generic place
 function Repository:fetch()
   if self:is_local() then return self end
+  if self.remote:find("^http") and NO_NETWORK then log.warning("ignoring fetch operation for " .. self.remote) return self end
   local path, temporary_path
   local status, err = pcall(function()
     if not self.branch and not self.commit then
@@ -1320,7 +1321,7 @@ end
 
 function Repository:update(pull_remotes)
   local manifest, remotes = self:parse_manifest()
-  if self.branch then
+  if self.branch and (not self:url():find("^http") or not NO_NETWORK) then
     log.progress_action("Updating " .. self:url() .. "...")
     local status, err = pcall(system.fetch, self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
     if not status then -- see https://github.com/lite-xl/lite-xl-plugin-manager/issues/85
@@ -1334,7 +1335,7 @@ function Repository:update(pull_remotes)
   end
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do
-      if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.comit end) then
+      if common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
         remote:add(pull_remotes == "recursive" and "recursive" or false)
         table.insert(repositories, remote)
       end
