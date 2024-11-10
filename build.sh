@@ -60,8 +60,8 @@ if [[ "$@" == *"-DLPM_STATIC"* ]]; then
 fi
 
 [[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]]                && COMPILE_FLAGS="$COMPILE_FLAGS -DLUA_USE_LINUX" && LINK_FLAGS="$LINK_FLAGS -ldl"
-[[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]] && "$@" != *"-DLPM_NO_NETWORK"* && LINK_FLAGS="$LINK_FLAGS -lws2_32 -lwinhttp"
 [[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]]                                 && LINK_FLAGS="$LINK_FLAGS -lbcrypt -lz -lole32 -lcrypt32 -lrpcrt4 -lsecur32"
+[[ $OSTYPE == 'msys'* || $CC == *'mingw'* && "$@" != *"-DLPM_NO_NETWORK"* ]] && LINK_FLAGS="$LINK_FLAGS -lws2_32 -lwinhttp"
 [[ $OSTYPE == *'darwin'* ]]                                                  && LINK_FLAGS="$LINK_FLAGS -liconv -framework Foundation"
 [[ $OSTYPE == *'darwin'* ]] && "$@" != *"-DLPM_NO_NETWORK"*                  && LINK_FLAGS="$LINK_FLAGS -framework Security"
 
