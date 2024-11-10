@@ -1,4 +1,5 @@
 _S = {}
+for k,v in pairs(_G) do _S[k] = true end
 function global(g) if #g > 0 then for i,v in ipairs(g) do rawset(_S, g[i], true) end else for k,v in pairs(g) do rawset(_G, k, v) rawset(_S, k, true) end end  end
 setmetatable(_G, { __index = function(t, k) if not rawget(_S, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k, v) if rawget(_S, k) then rawset(t, k, v) else error("cannot set global variable: " .. k, 2) end end })
 
@@ -606,6 +607,7 @@ end
 
 
 function common.get(source, options)
+  assert(not NO_NETWORK, "aborting networking action")
   options = options or {}
   if not options.depth then options.depth = {} end
   table.insert(options.depth, source)
