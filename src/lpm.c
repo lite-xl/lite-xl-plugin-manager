@@ -4,7 +4,9 @@
   #include <windows.h>
   #include <fileapi.h>
 #else
-  #include <pthread.h>
+  #ifndef LPM_NO_THRAEDS
+    #include <pthread.h>
+  #endif
   #include <netdb.h>
   #include <sys/socket.h>
   #include <sys/ioctl.h>
@@ -80,36 +82,44 @@ typedef struct {
 
 static lpm_mutex_t* new_mutex() {
   lpm_mutex_t* mutex = malloc(sizeof(lpm_mutex_t));
-  #if _WIN32
-    mutex->mutex = CreateMutex(NULL, FALSE, NULL);
-  #else
-    pthread_mutex_init(&mutex->mutex, NULL);
+  #ifndef LPM_NO_THREADS
+    #if _WIN32
+      mutex->mutex = CreateMutex(NULL, FALSE, NULL);
+    #else
+      pthread_mutex_init(&mutex->mutex, NULL);
+    #endif
   #endif
   return mutex;
 }
 
 static void free_mutex(lpm_mutex_t* mutex) {
-  #if _WIN32
-    CloseHandle(mutex->mutex);
-  #else
-    pthread_mutex_destroy(&mutex->mutex);
+  #ifndef LPM_NO_THREADS
+    #if _WIN32
+      CloseHandle(mutex->mutex);
+    #else
+      pthread_mutex_destroy(&mutex->mutex);
+    #endif
   #endif
   free(mutex);
 }
 
 static void lock_mutex(lpm_mutex_t* mutex) {
-  #if _WIN32
-    WaitForSingleObject(mutex->mutex, INFINITE);
-  #else
-    pthread_mutex_lock(&mutex->mutex);
+  #ifndef LPM_NO_THREADS
+    #if _WIN32
+      WaitForSingleObject(mutex->mutex, INFINITE);
+    #else
+      pthread_mutex_lock(&mutex->mutex);
+    #endif
   #endif
 }
 
 static void unlock_mutex(lpm_mutex_t* mutex) {
-  #if _WIN32
-    ReleaseMutex(mutex->mutex);
-  #else
-    pthread_mutex_unlock(&mutex->mutex);
+  #ifndef LPM_NO_THREADS
+    #if _WIN32
+      ReleaseMutex(mutex->mutex);
+    #else
+      pthread_mutex_unlock(&mutex->mutex);
+    #endif
   #endif
 }
 
@@ -124,12 +134,16 @@ static DWORD windows_thread_callback(void* data) {
 
 static lpm_thread_t* create_thread(void* (*func)(void*), void* data) {
   lpm_thread_t* thread = malloc(sizeof(lpm_thread_t));
-  #if _WIN32
-    thread->func = func;
-    thread->data = data;
-    thread->thread = CreateThread(NULL, 0, windows_thread_callback, thread, 0, NULL);
+  #ifndef LPM_NO_THREADS
+    #if _WIN32
+      thread->func = func;
+      thread->data = data;
+      thread->thread = CreateThread(NULL, 0, windows_thread_callback, thread, 0, NULL);
+    #else
+      pthread_create(&thread->thread, NULL, func, data);
+    #endif
   #else
-    pthread_create(&thread->thread, NULL, func, data);
+    func(data);
   #endif
   return thread;
 }
@@ -137,11 +151,13 @@ static lpm_thread_t* create_thread(void* (*func)(void*), void* data) {
 static void* join_thread(lpm_thread_t* thread) {
   if (!thread)
     return NULL;
-  void* retval;
-  #if _WIN32
-    WaitForSingleObject(thread->thread, INFINITE);
-  #else
-    pthread_join(thread->thread, &retval);
+  void* retval = NULL;
+  #ifndef LPM_NO_THREADS
+    #if _WIN32
+      WaitForSingleObject(thread->thread, INFINITE);
+    #else
+      pthread_join(thread->thread, &retval);
+    #endif
   #endif
   free(thread);
   return retval;
@@ -594,9 +610,13 @@ static int lpm_git_transfer_progress_cb(const git_transfer_progress *stats, void
 }
 
 static int lua_is_main_thread(lua_State* L) {
-  int is_main = lua_pushthread(L);
-  lua_pop(L, 1);
-  return is_main;
+  #ifndef LPM_NO_THREADS
+    int is_main = lua_pushthread(L);
+    lua_pop(L, 1);
+    return is_main;
+  #else
+    return 1;
+  #endif
 }
 
 static void* lpm_fetch_thread(void* ctx) {
