@@ -72,3 +72,13 @@ lpm_exe = executable('lpm',
     c_args: cflags,
     install: true,
 )
+
+if (get_option('install_plugin'))
+    lite_datadir = get_option('lite_datadir')
+    if lite_datadir == ''
+        # No path given, assume a default
+        lite_datadir = get_option('datadir') + '/lite-xl'
+    endif
+
+    install_subdir('plugins', install_dir : lite_datadir)
+endif
