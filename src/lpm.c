@@ -251,6 +251,7 @@ typedef struct {
 	unsigned long long bitlen;
 	int state[8];
 } SHA256_CTX;
+
 #define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
 #define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
 #define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
@@ -260,7 +261,7 @@ typedef struct {
 #define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
 #define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
 static void sha256_transform(SHA256_CTX *ctx, const unsigned char* data) {
-  static const int k[64] = {
+  static const unsigned int k[64] = {
     0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
     0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
     0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -271,7 +272,7 @@ static void sha256_transform(SHA256_CTX *ctx, const unsigned char* data) {
     0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
   };
 
-	int a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+	unsigned int a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
 
 	for (i = 0, j = 0; i < 16; ++i, j += 4)
 		m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
