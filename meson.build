@@ -58,7 +58,7 @@ if get_option('static')
     cflags += '-DLPM_STATIC'
 endif
 
-executable('lpm',
+lpm_exe = executable('lpm',
     lpm_source,
     dependencies: [
         zlib_dep,
