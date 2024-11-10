@@ -85,7 +85,7 @@ jobs:
 
       - name: Build
         run: |
-          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -static -O3
+          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_STATIC_ALLOW_DYNAMIC_LOADING -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -static -O3
 
       - name: Run Tests
         if: ${{ matrix.config.native }}
@@ -132,7 +132,7 @@ jobs:
 
       - name: Build
         run: |
-          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3
+          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_STATIC_ALLOW_DYNAMIC_LOADING -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

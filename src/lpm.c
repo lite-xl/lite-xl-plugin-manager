@@ -1841,8 +1841,13 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "DEFAULT_REPO_URL");
   lua_pushliteral(L, LPM_DEFAULT_RELEASE);
   lua_setglobal(L, "DEFAULT_RELEASE_URL");
-  #ifndef LPM_STATIC
+  #if !defined(LPM_STATIC)
   if (luaL_loadfile(L, "src/lpm.lua") || lua_pcall(L, 0, 1, 0)) {
+  #elif defined(LPM_STATIC_ALLOW_DYNAMIC_LOADING)
+  if (
+    (getenv("LPM_STARTUP_SCRIPT") != NULL ? luaL_loadfile(L, getenv("LPM_STARTUP_SCRIPT")) : luaL_loadbuffer(L, lpm_luac, lpm_luac_len, "lpm.lua"))
+    || lua_pcall(L, 0, 1, 0)
+  ) {
   #else
   if (luaL_loadbuffer(L, lpm_luac, lpm_luac_len, "lpm.lua") || lua_pcall(L, 0, 1, 0)) {
   #endif

@@ -1,1 +1,2 @@
 option('static', type : 'boolean', value : false, description: 'Build the pre-packaged lua file into the executable.')
+option('static_allow_dynamic_loading', type : 'boolean', value : true, description: 'When using static=true, allows lpm to load the lua file externally.')

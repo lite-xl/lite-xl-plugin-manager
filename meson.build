@@ -56,6 +56,9 @@ if get_option('static')
         output: 'lpm.lua.c'
     )
     cflags += '-DLPM_STATIC'
+    if get_option('static_allow_dynamic_loading')
+        cflags += '-DLPM_STATIC_ALLOW_DYNAMIC_LOADING'
+    endif
 endif
 
 executable('lpm', lpm_source, dependencies: [zlib_dep, lzma_dep, mbedtls_dep, libgit2_dep, libzip_dep, lua_dep, microtar_dep], c_args: cflags)
