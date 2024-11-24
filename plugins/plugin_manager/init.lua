@@ -124,7 +124,8 @@ local function run(cmd, options)
               has_chunk = true
             else
               still_running = false
-              if v[1]:returncode() == 0 then
+              local return_code = v[1]:returncode()
+              if return_code == 0 or return_code == nil then
                 progress_line, v[3] = extract_progress(v[3])
                 v[2]:resolve(v[3])
               else
