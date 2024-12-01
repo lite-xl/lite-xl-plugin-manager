@@ -1425,7 +1425,9 @@ end
 
 function LiteXL:uninstall()
   if not system.stat(self.local_path) then error("lite-xl " .. self.version .. " not installed") end
-  common.rmrf(self.local_path)
+  if prompt("This will delete " .. self.local_path .. ". Are you sure you want to continue?") then 
+    common.rmrf(self.local_path) 
+  end
 end
 
 
