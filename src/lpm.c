@@ -1882,38 +1882,38 @@ static const luaL_Reg system_lib[] = {
   { NULL,        NULL }
 };
 
-#ifndef ARCH_PROCESSOR
+#ifndef LPM_ARCH_PROCESSOR
   #if defined(__x86_64__) || defined(_M_AMD64) || defined(__MINGW64__)
-    #define ARCH_PROCESSOR "x86_64"
+    #define LPM_ARCH_PROCESSOR "x86_64"
   #elif defined(__i386__) || defined(_M_IX86) || defined(__MINGW32__)
-    #define ARCH_PROCESSOR "x86"
+    #define LPM_ARCH_PROCESSOR "x86"
   #elif defined(__aarch64__) || defined(_M_ARM64) || defined (_M_ARM64EC)
-    #define ARCH_PROCESSOR "aarch64"
+    #define LPM_ARCH_PROCESSOR "aarch64"
   #elif defined(__arm__) || defined(_M_ARM)
-    #define ARCH_PROCESSOR "arm"
+    #define LPM_ARCH_PROCESSOR "arm"
   #elif defined(__riscv_xlen) && __riscv_xlen == 32
-    #define ARCH_PROCESSOR "riscv32"
+    #define LPM_ARCH_PROCESSOR "riscv32"
   #elif defined(__riscv_xlen) && __riscv_xlen == 64
-    #define ARCH_PROCESSOR "riscv64"
+    #define LPM_ARCH_PROCESSOR "riscv64"
   #else
-    #error "Please define -DARCH_PROCESSOR."
+    #error "Please define -DLPM_ARCH_PROCESSOR."
   #endif
 #endif
-#ifndef ARCH_PLATFORM
+#ifndef LPM_ARCH_PLATFORM
   #if _WIN32
-    #define ARCH_PLATFORM "windows"
+    #define LPM_ARCH_PLATFORM "windows"
   #elif __ANDROID__
-    #define ARCH_PLATFORM "android"
+    #define LPM_ARCH_PLATFORM "android"
   #elif __linux__
-    #define ARCH_PLATFORM "linux"
+    #define LPM_ARCH_PLATFORM "linux"
   #elif __APPLE__
-    #define ARCH_PLATFORM "darwin"
+    #define LPM_ARCH_PLATFORM "darwin"
   #else
-    #error "Please define -DARCH_PLATFORM."
+    #error "Please define -DLPM_ARCH_PLATFORM."
   #endif
 #endif
-#ifndef LITE_ARCH_TUPLE
-  #define LITE_ARCH_TUPLE ARCH_PROCESSOR "-" ARCH_PLATFORM
+#ifndef LPM_ARCH_TUPLE
+  #define LPM_ARCH_TUPLE LPM_ARCH_PROCESSOR "-" LPM_ARCH_PLATFORM
 #endif
 
 
@@ -1926,9 +1926,9 @@ static const luaL_Reg system_lib[] = {
 // If this is defined as empty string, we disable self-upgrading, as well as switching the executable symlink.
 #ifndef LPM_DEFAULT_RELEASE
   #if _WIN32
-    #define LPM_DEFAULT_RELEASE "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/%r/lpm." LITE_ARCH_TUPLE ".exe"
+    #define LPM_DEFAULT_RELEASE "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/%r/lpm." LPM_ARCH_TUPLE ".exe"
   #else
-    #define LPM_DEFAULT_RELEASE "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/%r/lpm." LITE_ARCH_TUPLE
+    #define LPM_DEFAULT_RELEASE "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/%r/lpm." LPM_ARCH_TUPLE
   #endif
 #endif
 
@@ -1936,6 +1936,7 @@ static const luaL_Reg system_lib[] = {
   extern const char lpm_luac[];
   extern unsigned int lpm_luac_len;
 #endif
+
 
 int main(int argc, char* argv[]) {
   lua_State* L = luaL_newstate();
@@ -1950,7 +1951,7 @@ int main(int argc, char* argv[]) {
   lua_setglobal(L, "ARGV");
   lua_pushliteral(L, LPM_VERSION);
   lua_setglobal(L, "VERSION");
-  lua_pushliteral(L, ARCH_PLATFORM);
+  lua_pushliteral(L, LPM_ARCH_PLATFORM);
   lua_setglobal(L, "PLATFORM");
   #ifdef LPM_NO_NETWORK
     lua_pushboolean(L, 1);
@@ -1964,6 +1965,18 @@ int main(int argc, char* argv[]) {
     lua_pushboolean(L, 0);
   #endif
   lua_setglobal(L, "NO_GIT");
+  #ifdef LPM_NO_LXL
+    lua_pushboolean(L, 1);
+  #else
+    lua_pushboolean(L, 0);
+  #endif
+  lua_setglobal(L, "NO_LXL");
+  #ifdef LPM_NO_REMOTE_EXECUTABLE
+    lua_pushboolean(L, 1);
+  #else
+    lua_pushboolean(L, 0);
+  #endif
+  lua_setglobal(L, "NO_REMOTE_EXEUCTABLE");
   #if _WIN32
     DWORD handles[] = { STD_OUTPUT_HANDLE, STD_ERROR_HANDLE };
     int setVirtualProcessing = 0;
@@ -2012,7 +2025,7 @@ int main(int argc, char* argv[]) {
   #endif
   lua_setglobal(L, "EXEFILE");
 
-  lua_pushliteral(L, LITE_ARCH_TUPLE);
+  lua_pushliteral(L, LPM_ARCH_TUPLE);
   lua_setglobal(L, "DEFAULT_ARCH");
   lua_pushliteral(L, LPM_DEFAULT_REPOSITORY);
   lua_setglobal(L, "DEFAULT_REPO_URL");
