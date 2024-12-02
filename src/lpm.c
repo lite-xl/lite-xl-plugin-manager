@@ -1,4 +1,6 @@
 #ifdef _WIN32
+  // prevent windows.h from including winsock.h, which will allow us to include winsock2.h
+  #define _WINSOCKAPI_
   #include <direct.h>
   #include <windows.h>
   #include <process.h>
