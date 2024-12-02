@@ -1,6 +1,6 @@
 name: CI
 on:
-  push:
+  push: { branches: ['!master'] }
   pull_request: { branches: ['*'] }
   workflow_dispatch:
   workflow_call:
