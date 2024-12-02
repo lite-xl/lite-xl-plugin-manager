@@ -345,7 +345,9 @@ command.add(PluginView, {
     end
     core.command_view:enter("Filter Plugins", {
       submit = on_filter,
-      suggest = on_filter
+      suggest = on_filter,
+      text = plugin_view.filter_text or "",
+      select_text = true
     })
   end,
   ["plugin-manager:clear-filter"] = function()
