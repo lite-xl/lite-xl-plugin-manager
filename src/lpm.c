@@ -145,7 +145,7 @@ static lpm_thread_t* create_thread(void* (*func)(void*), void* data) {
     #if _WIN32
       thread->func = func;
       thread->data = data;
-      thread->thread (HANDLE) _beginthreadex(NULL, 0, &windows_thread_callback, thread, 0, NULL);
+      thread->thread = (HANDLE) _beginthreadex(NULL, 0, &windows_thread_callback, thread, 0, NULL);
     #else
       pthread_create(&thread->thread, NULL, func, data);
     #endif
