@@ -435,7 +435,7 @@ keymap.add {
   ["home"]        = "plugin-manager:scroll-page-top",
   ["end"]         = "plugin-manager:scroll-page-bottom",
   ["lclick"]      = "plugin-manager:select",
-  ["ctrl+f"]      = "plugin-manager:find",
+  ["ctrl+f"]      = "plugin-manager:filter",
   ["ctrl+r"]      = "plugin-manager:refresh-all",
   ["ctrl+u"]      = "plugin-manager:upgrade-all",
   ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
