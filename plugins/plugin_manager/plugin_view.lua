@@ -34,7 +34,6 @@ function PluginView:new()
   self.selected_plugin = nil
   self.selected_plugin_idx = nil
   self.initialized = false
-  self.offset_y = 1
   self.plugin_manager = require "plugins.plugin_manager"
   self.sort = { asc = true, column = 1 }
   self.progress_callback = function(progress)
@@ -108,7 +107,7 @@ function PluginView:on_mouse_moved(x, y, dx, dy)
   if self.initialized then
     local th = style.font:get_height()
     local lh = th + style.padding.y
-    local offset = math.floor((y - self.position.y + self.scroll.y) / lh)
+    local offset = math.floor((y - self.position.y - (self.filter_text and self.filter_text ~= "" and lh or 0) + self.scroll.y) / lh)
     self.hovered_plugin = offset > 0 and self:get_sorted_plugins()[offset]
     self.hovered_plugin_idx = offset > 0 and offset
   end
@@ -162,11 +161,15 @@ function PluginView:get_sorted_plugins()
 end
 
 
+function PluginView:get_table_content_offset()
+  return ((self.filter_text and self.filter_text ~= "") and 2 or 1) * (style.font:get_height() + style.padding.y)
+end
+
+
 function PluginView:get_scrollable_size()
   if not self.initialized then return math.huge end
   local th = style.font:get_height() + style.padding.y
-  local plugins = self:get_sorted_plugins()
-  return th * (#self:get_sorted_plugins() + 1) -- don't forget the header
+  return (th * #self:get_sorted_plugins()) + self:get_table_content_offset()
 end
 
 
@@ -204,21 +207,26 @@ function PluginView:draw()
     return self:draw_loading_screen(self.progress and self.progress.label, self.progress and self.progress.percent)
   end
 
-
-  local ox, oy = self:get_content_offset()
-  oy = oy + lh * self.offset_y
-
-  local x, y = ox + style.padding.x, oy
-  for i, v in ipairs(self.plugin_table_columns) do
-    if i == self.sort.column then
-      renderer.draw_rect(x, self.position.y + (self.sort.asc and lh - 1 or 0), self.widths[i], 1, style.caret)
-    end
-    common.draw_text(style.font, style.accent, v, "left", x, self.position.y, self.widths[i], lh)
-    x = x + self.widths[i] + style.padding.x
+  local header_x, header_y = self.position.x + style.padding.x, self.position.y
+  local sorted_plugins = self:get_sorted_plugins()
+  if self.filter_text and self.filter_text ~= "" then
+    local total = #self:get_plugins()
+    local msg = string.format('Showing %d out of %d plugin%s matching the criteria: %q', #sorted_plugins, total, total > 1 and "s" or "", self.filter_text)
+    common.draw_text(style.font, style.text, msg, "left", header_x, header_y, self.size.x, lh)
+    header_y = header_y + lh
   end
 
-  core.push_clip_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, self.size.y)
-  local sorted_plugins = self:get_sorted_plugins()
+  for i, v in ipairs(self.plugin_table_columns) do
+    if i == self.sort.column then
+      renderer.draw_rect(header_x, header_y + (self.sort.asc and lh - 1 or 0), self.widths[i], 1, style.caret)
+    end
+    common.draw_text(style.font, style.accent, v, "left", header_x, header_y, self.widths[i], lh)
+    header_x = header_x + self.widths[i] + style.padding.x
+  end
+
+  local ox, oy = self:get_content_offset()
+  ox, oy = ox + style.padding.x, oy + self:get_table_content_offset()
+  core.push_clip_rect(self.position.x, self.position.y + self:get_table_content_offset(), self.size.x, self.size.y)
   for i, plugin in ipairs(sorted_plugins) do
     local x, y = ox, oy
     if y + lh >= self.position.y and y <= self.position.y + self.size.y then
