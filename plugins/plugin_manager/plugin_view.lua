@@ -115,6 +115,7 @@ end
 
 
 function PluginView:refresh(no_refetch, on_complete)
+  if self.loading then return end
   self.loading = true
   local function complete()
     self.loading = false
