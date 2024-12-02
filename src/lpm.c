@@ -1642,7 +1642,7 @@ static int lpm_extract(lua_State* L) {
           }
         }
       }
-      default:
+      default: break;
     }
     finish:
     if (context->file) {
