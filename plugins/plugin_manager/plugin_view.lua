@@ -226,7 +226,7 @@ function PluginView:draw()
   end
 
   local ox, oy = self:get_content_offset()
-  ox, oy = ox + style.padding.x, oy + self:get_table_content_offset()
+  oy = oy + self:get_table_content_offset()
   core.push_clip_rect(self.position.x, self.position.y + self:get_table_content_offset(), self.size.x, self.size.y)
   for i, plugin in ipairs(sorted_plugins) do
     local x, y = ox, oy
