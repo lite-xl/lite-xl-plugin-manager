@@ -1,7 +1,9 @@
 name: CI
 on:
-  push: { branches: [master] }
+  push:
+  pull_request: { branches: ['*'] }
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   build:
@@ -140,50 +142,3 @@ jobs:
           path: ${{ env.BIN }}
           name: ${{ env.BIN }}
 
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [build, build-macos]
-    env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set Environment Variables
-        run: |
-          echo VERSION=`git describe --tags --abbrev=0 --match "v*" | tail -c +2` >> $GITHUB_ENV
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: lpm.*
-          path: artifacts
-          merge-multiple: true
-
-      - name: Create Release(s)
-        run: |
-          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md | tail -n +2 > NOTES.md
-          gh release delete -y continuous || true;
-          gh release create -t 'Continuous Release' -F NOTES.md continuous ./artifacts/*
-          if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
-            gh release delete -y v$VERSION || true;
-            gh release create -t v$VERSION -F NOTES.md v$VERSION ./artifacts/*
-            gh release delete -y latest || true;
-            gh release create -t latest -F NOTES.md latest ./artifacts/*
-            git branch -f latest HEAD
-            git tag -f latest
-            git push -f origin refs/heads/latest
-            git push -f origin refs/tags/latest
-          fi
-          git tag -f continuous
-          git push -f origin refs/tags/continuous
-
-      - name: Discord Notification
-        env: { DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}" }
-        run: |
-          if [[ -n "$DISCORD_WEBHOOK" ]] && [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
-            perl -e 'use JSON qw(encode_json from_json); $/ = undef; print encode_json({ content => "## Lite XL Plugin Manager $ENV{VERSION} has been released!\nhttps://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/v$ENV{VERSION}\n@release:lpm\n### Changes in $ENV{VERSION}:\n" . <> })' < NOTES.md |
-              curl -H 'Content-Type:application/json' $DISCORD_WEBHOOK -X POST -d "$(</dev/stdin)"
-          fi
