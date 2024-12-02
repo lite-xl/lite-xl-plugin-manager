@@ -1,6 +1,7 @@
 #ifdef _WIN32
   #include <direct.h>
   #include <windows.h>
+  #include <process.h>
   #include <fileapi.h>
 #else
   #ifndef LPM_NO_THRAEDS
@@ -80,7 +81,7 @@ typedef struct {
 
 typedef struct {
   #if _WIN32
-    HANDLE mutex;
+    CRITICAL_SECTION mutex;
   #else
     pthread_mutex_t mutex;
   #endif
@@ -90,7 +91,7 @@ static lpm_mutex_t* new_mutex() {
   lpm_mutex_t* mutex = malloc(sizeof(lpm_mutex_t));
   #ifndef LPM_NO_THREADS
     #if _WIN32
-      mutex->mutex = CreateMutex(NULL, FALSE, NULL);
+      InitializeCriticalSection(&mutex->mutex);
     #else
       pthread_mutex_init(&mutex->mutex, NULL);
     #endif
@@ -101,7 +102,7 @@ static lpm_mutex_t* new_mutex() {
 static void free_mutex(lpm_mutex_t* mutex) {
   #ifndef LPM_NO_THREADS
     #if _WIN32
-      CloseHandle(mutex->mutex);
+      DeleteCriticalSection(&mutex->mutex);
     #else
       pthread_mutex_destroy(&mutex->mutex);
     #endif
@@ -112,7 +113,7 @@ static void free_mutex(lpm_mutex_t* mutex) {
 static void lock_mutex(lpm_mutex_t* mutex) {
   #ifndef LPM_NO_THREADS
     #if _WIN32
-      WaitForSingleObject(mutex->mutex, INFINITE);
+      EnterCriticalSection(&mutex->mutex);
     #else
       pthread_mutex_lock(&mutex->mutex);
     #endif
@@ -122,7 +123,7 @@ static void lock_mutex(lpm_mutex_t* mutex) {
 static void unlock_mutex(lpm_mutex_t* mutex) {
   #ifndef LPM_NO_THREADS
     #if _WIN32
-      ReleaseMutex(mutex->mutex);
+      LeaveCriticalSection(&mutex->mutex);
     #else
       pthread_mutex_unlock(&mutex->mutex);
     #endif
@@ -131,7 +132,7 @@ static void unlock_mutex(lpm_mutex_t* mutex) {
 
 
 #if _WIN32
-static DWORD windows_thread_callback(void* data) {
+static WINAPI unsigned int windows_thread_callback(void* data) {
   lpm_thread_t* thread = data;
   thread->data = thread->func(thread->data);
   return 0;
@@ -144,7 +145,7 @@ static lpm_thread_t* create_thread(void* (*func)(void*), void* data) {
     #if _WIN32
       thread->func = func;
       thread->data = data;
-      thread->thread = CreateThread(NULL, 0, windows_thread_callback, thread, 0, NULL);
+      thread->thread (HANDLE) _beginthreadex(NULL, 0, &windows_thread_callback, thread, 0, NULL);
     #else
       pthread_create(&thread->thread, NULL, func, data);
     #endif
@@ -161,6 +162,8 @@ static void* join_thread(lpm_thread_t* thread) {
   #ifndef LPM_NO_THREADS
     #if _WIN32
       WaitForSingleObject(thread->thread, INFINITE);
+      CloseHandle(thread->thread);
+      retval = thread->data;
     #else
       pthread_join(thread->thread, &retval);
     #endif
