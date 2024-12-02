@@ -348,6 +348,10 @@ command.add(PluginView, {
       suggest = on_filter
     })
   end,
+  ["plugin-manager:clear-filter"] = function()
+    plugin_view.filter_text = nil
+    plugin_view:refresh(true)
+  end,
   ["plugin-manager:scroll-page-up"] = function()
     plugin_view.scroll.to.y = math.max(plugin_view.scroll.y - plugin_view.size.y, 0)
   end,
@@ -439,7 +443,8 @@ keymap.add {
   ["ctrl+r"]      = "plugin-manager:refresh-all",
   ["ctrl+u"]      = "plugin-manager:upgrade-all",
   ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
-  ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
+  ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
+  ["escape"]      = "plugin-manager:clear-filter",
 }
 
 
