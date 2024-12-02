@@ -1,10 +1,10 @@
 #ifdef _WIN32
   // prevent windows.h from including winsock.h, which will allow us to include winsock2.h
-  #define _WINSOCKAPI_
-  #include <direct.h>
+  #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
+  #include <direct.h>
+  #include <wincrypt.h>
   #include <process.h>
-  #include <fileapi.h>
 #else
   #ifndef LPM_NO_THRAEDS
     #include <pthread.h>
