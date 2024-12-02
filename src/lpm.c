@@ -399,7 +399,7 @@ static int lpm_hash(lua_State* L) {
     }
     fclose(file);
   } else {
-    sha256_update(&hash_ctx, data, len);
+    sha256_update(&hash_ctx, (unsigned char *) data, len);
   }
   sha256_final(&hash_ctx, buffer);
   lua_pushhexstring(L, buffer, digest_length);
@@ -1210,7 +1210,7 @@ static int lpm_extract(lua_State* L) {
           } break;
         }
         int err;
-        if (err = mtar_next(&tar)) {
+        if ((err = mtar_next(&tar))) {
           mtar_close(&tar);
           return luaL_error(L, "Error while reading tar archive: %s", mtar_strerror(err));
         }
@@ -1451,7 +1451,7 @@ static int lpm_extract(lua_State* L) {
 
 
   static int lpm_socket_write(get_context_t* context, int len) {
-    return context->is_ssl ? mbedtls_ssl_write(&context->ssl, context->buffer, len) : write(context->s, context->buffer, len);
+    return context->is_ssl ? mbedtls_ssl_write(&context->ssl, (unsigned char *) context->buffer, len) : write(context->s, context->buffer, len);
   }
 
   static int lpm_socket_read(get_context_t* context, int len) {
@@ -1459,7 +1459,7 @@ static int lpm_extract(lua_State* L) {
       len = sizeof(context->buffer) - context->buffer_length;
     if (len == 0)
       return len;
-    len = context->is_ssl ? mbedtls_ssl_read(&context->ssl, &context->buffer[context->buffer_length], len) : read(context->s, &context->buffer[context->buffer_length], len);
+    len = context->is_ssl ? mbedtls_ssl_read(&context->ssl, (unsigned char *) &context->buffer[context->buffer_length], len) : read(context->s, &context->buffer[context->buffer_length], len);
     if (len > 0)
       context->buffer_length += len;
     return len;
@@ -1637,6 +1637,7 @@ static int lpm_extract(lua_State* L) {
           }
         }
       }
+      default:
     }
     finish:
     if (context->file) {
