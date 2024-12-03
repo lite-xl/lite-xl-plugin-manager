@@ -876,8 +876,8 @@ static int mkdirp(lua_State* L, char* path, int len) {
         lua_pop(L, 1);
       #else
         if (mkdir(path, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH) && errno != EEXIST)
-      #endif
           return -1;
+      #endif
       path[i] = '/';
     }
   }
