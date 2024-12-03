@@ -2588,6 +2588,10 @@ not commonly used publically.
     [target]                         target, or the current working directory.
 ]]
     )
+    if LPM_RUN_FROM_GUI then
+      io.stderr:write(colorize("\n\nYou can close this window by pressing Enter.", "cyan"))
+      io.stdin:read("*l")
+    end
     return 0
   end
 
