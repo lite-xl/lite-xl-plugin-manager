@@ -1998,6 +1998,10 @@ int main(int argc, char* argv[]) {
   #else
     lua_pushboolean(L, isatty(fileno(stdout)));
   #endif
+  #if _WIN32
+    lua_pushboolean(L, GetConsoleProcessList(&(DWORD){ 0 }, 1) == 1);
+    lua_setglobal(L, "LPM_RUN_FROM_GUI");
+  #endif
   lua_setglobal(L, "TTY");
   #if _WIN32
     lua_pushliteral(L, "\\");
