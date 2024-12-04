@@ -1,17 +1,13 @@
 #ifdef _WIN32
+  // needed for symbolic link creation and VT processing stuff
+  #undef _WIN32_WINNT
+  #define _WIN32_WINNT 0x0600 // _WIN32_WINNT_VISTA
   // prevent windows.h from including winsock.h, which will allow us to include winsock2.h
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
   #include <direct.h>
   #include <wincrypt.h>
   #include <process.h>
-
-  #ifndef SYMBOLIC_LINK_FLAG_DIRECTORY
-    #define SYMBOLIC_LINK_FLAG_DIRECTORY 0x1
-  #endif
-  #ifndef SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
-    #define SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE 0x2
-  #endif
 #else
   #ifndef LPM_NO_THRAEDS
     #include <pthread.h>
