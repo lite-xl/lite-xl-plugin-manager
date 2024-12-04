@@ -446,7 +446,12 @@ static int lpm_symlink(lua_State* L) {
       return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
     return 0;
   #else
-    return luaL_error(L, "can't create symbolic link %s: your operating system sucks", luaL_checkstring(L, 2));
+    DWORD flags = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE | ((GetFileAttributesW(lua_toutf16(L, luaL_checkstring(L, 2))) & FILE_ATTRIBUTE_DIRECTORY) ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0);
+    if (!CreateSymbolicLinkW(lua_toutf16(L, luaL_checkstring(L, 2)), lua_toutf16(L, luaL_checkstring(L, 1)), flags)) {
+      DWORD err = GetLastError();
+      return luaL_win32_error(L, err, "can't create symbolic link %s%s", luaL_checkstring(L, 2), err == ERROR_PRIVILEGE_NOT_HELD ? " (did you enable Windows Developer Mode?)" : "");
+    }
+    return 0;
   #endif
 }
 
