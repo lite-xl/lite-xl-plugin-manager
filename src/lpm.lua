@@ -2812,7 +2812,7 @@ not commonly used publically.
 
   repositories = {}
   if ARGS[2] == "purge" then return lpm.purge() end
-  local ssl_certs = ARGS["ssl-certs"] or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
+  local ssl_certs = ARGS["ssl-certs"] or os.getenv("LPM_CERTS") or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
   if not NO_NETWORK then
     if ssl_certs and ssl_certs ~= "system" then
       if ssl_certs == "noverify" then
