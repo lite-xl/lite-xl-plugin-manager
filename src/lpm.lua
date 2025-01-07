@@ -412,6 +412,7 @@ function common.handleize(str) return str:lower():gsub("[^a-z0-9%-_]+", "-"):gsu
 function common.is_commit_hash(hash) return #hash == 40 and not hash:find("[^a-f0-9]") end
 function common.dirname(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(1, #path - s) end
 function common.basename(path) local s = path:reverse():find("[/\\]") if not s then return path end return path:sub(#path - s + 2) end
+function common.exists(path) return path and system.stat(path) and path end
 function common.path(exec)
   -- On windows, in theory to resolve things, we also check the working directory even without a PATHSEP.
   if exec:find(PATHSEP) or PLATFORM == "windows" and system.stat(exec) then return exec end
@@ -506,10 +507,11 @@ function common.args(arguments, options)
   for k,v in pairs(arguments) do if math.type(k) ~= "integer" then args[k] = v end end
   while i <= #arguments do
     local s,e, option, value = arguments[i]:find("%-%-([^=]+)=?(.*)")
-    if s and options[option] then
-      local flag_type = options[option]
+    local option_name = s and option:gsub("^no%-", "")
+    if options[option_name] then
+      local flag_type = options[option_name]
       if flag_type == "flag" then
-        args[option] = true
+        args[option] = not option:find("^no-") and true or false
       elseif flag_type == "string" or flag_type == "number" or flag_type == "array" then
         if not value or value == "" then
           if i == #arguments then error("option " .. option .. " requires a " .. flag_type) end
@@ -537,7 +539,7 @@ global({
   EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or "",
   SHOULD_COLOR = ((PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")) or false
 })
-global({ "HOME", "USERDIR", "CACHEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL", "MASK", "settings", "repositories", "lite_xls", "system_bottle", "progress_bar_label", "write_progress_bar" })
+global({ "HOME", "USERDIR", "CACHEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL", "MASK", "settings", "repositories", "lite_xls", "system_bottle", "primary_lite_xl", "progress_bar_label", "write_progress_bar" })
 global({ Addon = {}, Repository = {}, LiteXL = {}, Bottle = {}, lpm = {}, log = {} })
 
 -- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
@@ -1373,6 +1375,7 @@ function LiteXL:get_binary_path(arch)
 end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
+function LiteXL:is_primary() return primary_lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
 function LiteXL:is_compatible(addon) return not addon.mod_version or MOD_VERSION == "any" or compatible_modversion(self.mod_version, addon.mod_version) end
 function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
@@ -1432,23 +1435,38 @@ end
 
 
 function Bottle.__index(t, k) return Bottle[k] end
-function Bottle.new(lite_xl, addons, config, is_system)
+function Bottle.new(metadata)
   local self = setmetatable({
-    lite_xl = lite_xl,
-    addons = addons,
-    config = config,
-    is_system = is_system
+    name = metadata.name,
+    lite_xl = metadata.lite_xl,
+    addons = metadata.addons,
+    config = metadata.config,
+    is_system = metadata.is_system
   }, Bottle)
-  if not is_system then
-    table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end)
-    self.hash = system.hash(lite_xl.version .. " " .. common.join(" ", common.map(self.addons, function(p) return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version end)) .. (config or "") .. (EPHEMERAL and "E" or ""))
-    if EPHEMERAL then
+  if not metadata.is_system then
+    if self.addons then table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end) end
+    self.hash = system.hash(self.name or (((self.lite_xl and self.lite_xl.version or "")) .. " " .. common.join(" ", common.map(self.addons, function(p) 
+      return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version 
+    end)) .. (metadata.config or "") .. (EPHEMERAL and "E" or "")))
+    if self.name then
+      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "named" .. PATHSEP .. self.name
+    elseif EPHEMERAL then
       for i = 1, 1000 do
-        self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash .. "-" .. i
+        self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "auto" .. PATHSEP .. self.hash .. "-" .. i
         if not system.stat(self.local_path) then break elseif i == 1000 then error("can't create epehemeral bottle") end
       end
     else
-      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
+      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "auto" .. self.hash
+    end
+  end
+  if self.name and self:is_constructed() then -- if we exist, and we have a name, find out what lxl version we are
+    local path = self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION
+    local s = system.stat(path)
+    if s and s.symlink then
+      self.lite_xl = s and common.first(lite_xls, function(l) return l:get_binary_path() == s.symlink end)
+    elseif s then
+      local hash = system.hash(path, "file")
+      self.lite_xl = common.first(lite_xls, function(l) return system.hash(l:get_binary_path(), "file") == hash end)
     end
   end
   return self
@@ -1466,23 +1484,31 @@ local style = require "core.style"
 
 function Bottle:construct()
   if self.is_system then error("system bottle cannot be constructed") end
-  if self:is_constructed() and not REINSTALL then error("bottle " .. self.hash .. " already constructed") end
+  if self:is_constructed() and not REINSTALL then error("bottle " .. (self.name or self.hash) .. " already constructed") end
   -- swap out the local path for a temporary path while we construct the bottle to make things atomic
   local local_path = self.local_path
-  self.local_path = TMPDIR .. PATHSEP .. "bottles" .. PATHSEP .. self.hash
+  self.local_path = TMPDIR .. PATHSEP .. "bottles" .. PATHSEP .. (self.name or self.hash)
   common.rmrf(self.local_path)
 
-  if not self.lite_xl:is_installed() then self.lite_xl:install() end
+  if self.lite_xl and not self.lite_xl:is_installed() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or ""))
 
-  -- Always copy the executbale, because of the way that lite determines the user folder (for now).
-  common.copy(self.lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
-  system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, 448) -- chmod to rwx-------\
-  if SYMLINK then
-    system.symlink(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
-  else
-    common.copy(self.lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
+
+  local hardcopy = SYMLINK == false
+  local lite_xl = self.lite_xl
+  if SYMLINK ~= false and common.exists((lite_xl or primary_lite_xl).local_path .. PATHSEP .. "user") then
+    log.warning("your " .. (lite_xl and "specified" or "primary") .. " lite-xl has a user folder next to it. creating a hard copy of lite-xl for this bottle")
+    lite_xl = lite_xl or primary_lite_xl
+    hardcopy = true
+  end
+  local construct = hardcopy and common.copy or system.symlink
+  if lite_xl then -- if no lite_xl, we're assuming that we're using the system version with a LITE_PREFIX environment variable. 
+    construct(lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
+    if hardcopy then
+      system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, 448) -- chmod to rwx-------\
+    end
+    construct(lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
   end
   local installing = {}
   for i,addon in ipairs(self.addons) do
@@ -1532,13 +1558,13 @@ end
 
 function Bottle:destruct()
   if self.is_system then error("system bottle cannot be destructed") end
-  if not self:is_constructed() then error("lite-xl " .. self.version .. " not constructed") end
+  if not self:is_constructed() then error("bottle " .. (self.name or self.hash) .. " not constructed") end
   common.rmrf(self.local_path)
 end
 
 function Bottle:run(args)
   args = args or {}
-  local path = not self.is_system and (self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) or self.lite_xl:get_binary_path()
+  local path = common.exists(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) or (self.lite_xl or primary_lite_xl):get_binary_path()
   if not system.stat(path) then error("cannot find bottle executable " .. path) end
   local line = path .. (#args > 0 and " " or "") .. table.concat(common.map(args, function(arg)
     if PLATFORM == "windows" then
@@ -1547,6 +1573,8 @@ function Bottle:run(args)
     end
     return "'" .. arg:gsub("'", "'\"'\"'"):gsub("\\", "\\\\") .. "'"
   end), " ")
+  if VERBOSE then log.action("Setting LITE_USERDIR to " .. self.local_path .. PATHSEP .. "user") end
+  system.setenv("LITE_USERDIR", self.local_path .. PATHSEP .. "user")
   if VERBOSE then log.action("Running " .. line) end
   return os.execute(line)
 end
@@ -1794,11 +1822,14 @@ function lpm.repo_update(...)
 end
 
 function lpm.get_lite_xl(version)
+  if version == "primary" then return primary_lite_xl end
   return common.first(common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end)), function(lite_xl) return lite_xl.version == version end)
 end
 
 function lpm.lite_xl_save()
-  settings.lite_xls = common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path } end)
+  settings.lite_xls = common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) 
+    return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path, primary = primary_lite_xl == l } 
+  end)
   lpm.settings_save()
 end
 
@@ -1833,19 +1864,8 @@ end
 
 
 function lpm.lite_xl_switch(version, target)
-  if not DEFAULT_RELEASE_URL or #DEFAULT_RELEASE_URL == 0 then error("switch has been disabled on lpm version " .. VERSION .. "; please switch it however you installed it") end
-  if not version then error("requires a version") end
-  target = target or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
-  if not target then error("can't find installed lite-xl. please provide a target to install the symlink explicitly as a second argument") end
-  local lite_xl = lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)
-  if not lite_xl:is_installed() then log.action("Installing lite-xl " .. lite_xl.version) lite_xl:install() end
-  local stat = system.stat(target)
-  if stat and stat.symlink then os.remove(target) end
-  system.symlink(lite_xl:get_binary_path(), target)
-  if not common.path('lite-xl' .. EXECUTABLE_EXTENSION) then
-    os.remove(target)
-    error(target .. " is not on your $PATH; please supply a target that can be found on your $PATH, called `lite-xl`.")
-  end
+  primary_lite_xl = (lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version))
+  lpm.lite_xl_save()
 end
 
 
@@ -1862,7 +1882,6 @@ function lpm.lite_xl_list()
       version = lite_xl.version,
       mod_version = lite_xl.mod_version,
       tags = lite_xl.tags,
-      is_system = lite_xl:is_system(),
       is_installed = lite_xl:is_installed(),
       status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
       local_path = lite_xl:is_installed() and lite_xl.local_path or nil,
@@ -1880,7 +1899,6 @@ function lpm.lite_xl_list()
           mod_version = lite_xl.mod_version,
           repository = repo:url(),
           tags = lite_xl.tags,
-          is_system = lite_xl:is_system(),
           is_installed = lite_xl:is_installed(),
           status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
           local_path = lite_xl:is_installed() and lite_xl.local_path
@@ -1905,7 +1923,7 @@ function lpm.lite_xl_list()
       print(string.format("%" .. max_version .. "s | %10s | %s", "Version", "Status", "Location"))
       print(string.format("%" .. max_version .."s | %10s | %s", "-------", "---------", "---------------------------"))
       for i, lite_xl in ipairs(result["lite-xls"]) do
-        print(string.format("%" .. max_version .. "s | %10s | %s", (lite_xl.is_system and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.is_installed and lite_xl.local_path or lite_xl.repository)))
+        print(string.format("%" .. max_version .. "s | %10s | %s", (common.first(lite_xl.tags, function(t) return t == "primary" end) and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.is_installed and lite_xl.local_path or lite_xl.repository)))
       end
     end
   end
@@ -1965,30 +1983,37 @@ function lpm.apply(...)
   end
 end
 
+function lpm.retrieve_installable_addons(lite_xl, arguments, filters)
+  local potential_addons, i = lpm.retrieve_addons(lite_xl, arguments, filters)
+  return common.map(potential_addons, function(potentials)
+    return common.grep(potentials, function(addon)
+      return not addon:is_core(system_bottle) and not addon:is_orphan(system_bottle)
+    end)[1]
+  end), i
+end
 
 function lpm.lite_xl_run(...)
-  local version, version_idx = "system", 1
+  local bottle = nil
+  local version, version_idx = "primary", 1
   local arguments = { }
   for i,v in ipairs({ ... }) do
     if i == 1 and is_argument_repo(v) and not v:find("@") then
       table.insert(repositories, 1, Repository.url(v):add(AUTO_PULL_REMOTES))
       system_bottle:invalidate_cache()
       repositories[1].explicit = true
-    elseif v:find("^%d+") or v == "system" then
+    elseif v:find("^%d+") or v == "system" or v == "primary" then
       assert(version == "system", "cannot specify multiple versions")
       version, version_idx = v, i
+    elseif i == 1 then
+      bottle = lpm.get_bottle(v)
+      if not bottle then table.insert(arguments, v) end
     else
       table.insert(arguments, v)
     end
   end
-  local lite_xl = lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)
-  local potential_addons, i = lpm.retrieve_addons(lite_xl, arguments)
-  local addons = common.map(potential_addons, function(potentials)
-    return common.grep(potentials, function(addon)
-      return not addon:is_core(system_bottle) and not addon:is_orphan(system_bottle)
-    end)[1]
-  end)
-  local bottle = Bottle.new(lite_xl, addons, CONFIG)
+  local lite_xl = (bottle and bottle.lite_xl) or lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  local addons, i = lpm.retrieve_installable_addons(lite_xl, arguments)
+  bottle = bottle or Bottle.new({ lite_xl = lite_xl, addons = addons, config = CONFIG })
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
   return function()
     bottle:run(common.slice(arguments, i + 1))
@@ -2035,7 +2060,7 @@ function lpm.install(type, ...)
   lpm.settings_save()
 end
 
-local function get_table(headers, rows)
+local function get_table(headers, rows, options)
   local maxes = common.map(headers, function(h) return #h end)
   for i,row in ipairs(rows) do for k,v in ipairs(row) do
     if type(v) == "table" then v = table.concat(v, ", ") else v = tostring(v) end
@@ -2235,6 +2260,61 @@ function lpm.self_upgrade(release)
   end
 end
 
+function lpm.get_bottle(name)
+  local bottle = Bottle.new({ name = name })
+  if not bottle:is_constructed() then return nil end
+  return bottle 
+end
+
+function lpm.bottle_add(name, version, ...)
+  if not name:find("^[a-z0-9A-Z%-%._]+$") then error("invalid name for bottle, must be ^[a-z0-9A-Z%-%._]+$") end
+  local arguments = { ... }
+  if not version:find("^%d+") and version ~= "system" and version ~= "primary" then 
+    table.insert(arguments, 1, version)
+    version = nil
+  end
+  local lite_xl = lpm.get_lite_xl(version or "primary") or error("can't find lite-xl version " .. (version or "primary"))
+  local addons, i = lpm.retrieve_installable_addons(lite_xl, arguments)
+  if #arguments >= i then error("invalid use of --") end
+  Bottle.new({ lite_xl = version and lite_xl, name = name, addons = addons, config = CONFIG }):construct()
+end
+
+function lpm.bottle_rm(name)
+  Bottle.new({ name = name }):destruct()
+end
+
+function lpm.bottle_run(name, ...)
+  (lpm.get_bottle(name) or error("can't find bottle " .. name)):run(...)
+end
+
+function lpm.bottle_list(name, ...)
+  local named_folder = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "named"
+  local bottles = common.map(system.stat(named_folder) and system.ls(named_folder) or {}, function(e) return Bottle.new({ name = e }) end)
+  local result = { ["bottles"] = { } }
+  local max_version = 0
+  for i,bottle in ipairs(bottles) do
+    table.insert(result.bottles, {
+      name = bottle.name,
+      local_path = bottle.local_path,
+      lite_xl = bottle.lite_xl and bottle.lite_xl.version or nil
+    })
+  end
+  if JSON then
+    io.stdout:write(json.encode(result) .. "\n")
+  else
+    if VERBOSE then
+      for i, bottle in ipairs(result.bottles) do
+        if i ~= 0 then print("---------------------------") end
+        print("Name:       " .. bottle.name)
+        print("Path:       " .. bottle.local_path)
+        print("Version:    " .. (bottle.lite_xl or "none"))
+      end
+    else
+      print(get_table({ "Name", "Version", "Path" }, common.map(result.bottles, function(b) return { b.name, b.lite_xl or "none", b.local_path } end)))
+    end
+  end
+end
+
 function lpm.bottle_purge()
   common.rmrf(CACHEDIR .. PATHSEP .. "bottles")
 end
@@ -2257,7 +2337,14 @@ function lpm.setup()
   else
     repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
   end
-  lite_xls = common.map(settings.lite_xls or {}, function(lite_xl) return LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }) end)
+  lite_xls = {}
+  for i, lite_xl in ipairs(settings.lite_xls or {}) do
+    table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }))
+    if lite_xl.primary then 
+      primary_lite_xl = lite_xls[#lite_xls] 
+      table.insert(primary_lite_xl.tags, "primary")
+    end
+  end
 
   if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
   if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
@@ -2296,11 +2383,16 @@ function lpm.setup()
       if MOD_VERSION then system_lite_xl.mod_version = MOD_VERSION end
       table.insert(system_lite_xl.tags, "system")
     end
-    system_bottle = Bottle.new(system_lite_xl, nil, nil, true)
+    system_bottle = Bottle.new({ lite_xl = system_lite_xl, is_system = true })
+    if not primary_lite_xl then 
+      primary_lite_xl = system_lite_xl 
+      table.insert(system_lite_xl.tags, "primary")
+    end
   else
-    system_bottle = Bottle.new(LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), nil, nil, true)
+    system_bottle = Bottle.new({ lite_xl = LiteXL.new(nil, { mod_version = MOD_VERSION or LATEST_MOD_VERSION, datadir_path = DATADIR, version = "system", tags = { "system", "local" } }), is_system = true })
   end
-  if not system_bottle then system_bottle = Bottle.new(nil, nil, nil, true) end
+  if not system_bottle then system_bottle = Bottle.new({ is_system = true }) end
+  if not primary_lite_xl then primary_lite_xl = lite_xls[1] end
 end
 
 function lpm.command(ARGS)
@@ -2333,6 +2425,10 @@ function lpm.command(ARGS)
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm.lite_xl_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "rm" then return lpm.lite_xl_rm(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" then error("unknown lite-xl command: " .. ARGS[3])
+  elseif ARGS[2] == "bottle" and ARGS[3] == "add" then return lpm.bottle_add(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "bottle" and ARGS[3] == "rm" then return lpm.bottle_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "bottle" and ARGS[3] == "run" then return lpm.bottle_run(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "bottle" and ARGS[3] == "list" then return lpm.bottle_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm.bottle_purge(common.slice(ARGS, 4))
   elseif ARGS[2] == "run" then return lpm.lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm.lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
@@ -2516,7 +2612,7 @@ Flags have the following effects:
                            and other network activity.
   --progress               For JSON mode, lines of progress as JSON objects.
                            By default, JSON does not emit progress lines.
-  --symlink                Use symlinks where possible when installing modules.
+  --[no-]symlink           Use symlinks where possible when installing modules.
                            If a repository contains a file of the same name as a
                            `files` download in the primary directory, will also
                            symlink that, rather than downloading.

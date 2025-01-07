@@ -447,15 +447,14 @@ static int lpm_symlink(lua_State* L) {
   #ifndef _WIN32
     if (symlink(luaL_checkstring(L, 1), luaL_checkstring(L, 2)))
       return luaL_error(L, "can't create symlink %s: %s", luaL_checkstring(L, 2), strerror(errno));
-    return 0;
   #else
     DWORD flags = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE | ((GetFileAttributesW(lua_toutf16(L, luaL_checkstring(L, 2))) & FILE_ATTRIBUTE_DIRECTORY) ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0);
     if (!CreateSymbolicLinkW(lua_toutf16(L, luaL_checkstring(L, 2)), lua_toutf16(L, luaL_checkstring(L, 1)), flags)) {
       DWORD err = GetLastError();
       return luaL_win32_error(L, err, "can't create symbolic link %s%s", luaL_checkstring(L, 2), err == ERROR_PRIVILEGE_NOT_HELD ? " (did you enable Windows Developer Mode?)" : "");
     }
-    return 0;
   #endif
+  return 0;
 }
 
 static int lpm_chmod(lua_State* L) {
@@ -1872,6 +1871,18 @@ static int lpm_time(lua_State* L) {
   return 1;
 }
 
+static int lpm_setenv(lua_State* L) {
+#ifdef _WIN32
+  if (!SetEnvironmentVariableW(lua_toutf16(L, luaL_checkstring(L, 1)), lua_toutf16(luaL_checkstring(L, 2))))
+    return luaL_win32_error(L, GetLastError(), "unable to set system environment variable");
+#else
+  if (setenv(luaL_checkstring(L, 1), luaL_checkstring(L, 2), 1))
+    return luaL_error(L, "unable to set system environment variable: %s", strerror(errno));
+#endif
+  return 0;
+}
+
+
 static const luaL_Reg system_lib[] = {
   { "ls",        lpm_ls    },    // Returns an array of files.
   { "stat",      lpm_stat  },    // Returns info about a single file.
@@ -1893,6 +1904,7 @@ static const luaL_Reg system_lib[] = {
   { "pwd",       lpm_pwd },      // Gets existing directory. Only use for --post actions.
   { "flock",     lpm_flock },    // Locks a file.
   { "time",      lpm_time },     // Get high-precision system time.
+  { "setenv",    lpm_setenv },   // Sets a system environment variable.
   { NULL,        NULL }
 };
 
