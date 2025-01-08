@@ -1873,7 +1873,7 @@ static int lpm_time(lua_State* L) {
 
 static int lpm_setenv(lua_State* L) {
 #ifdef _WIN32
-  if (!SetEnvironmentVariableW(lua_toutf16(L, luaL_checkstring(L, 1)), lua_toutf16(luaL_checkstring(L, 2))))
+  if (!SetEnvironmentVariableW(lua_toutf16(L, luaL_checkstring(L, 1)), lua_toutf16(L, luaL_checkstring(L, 2))))
     return luaL_win32_error(L, GetLastError(), "unable to set system environment variable");
 #else
   if (setenv(luaL_checkstring(L, 1), luaL_checkstring(L, 2), 1))
