@@ -2335,7 +2335,7 @@ function lpm.setup()
       table.insert(repositories, Repository.url(url):add(AUTO_PULL_REMOTES))
     end
   else
-    repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:parse_manifest() return repo end)
+    repositories = common.map(settings.repositories or {}, function(url) local repo = Repository.url(url) repo:fetch_if_not_present():parse_manifest() return repo end)
   end
   lite_xls = {}
   for i, lite_xl in ipairs(settings.lite_xls or {}) do
