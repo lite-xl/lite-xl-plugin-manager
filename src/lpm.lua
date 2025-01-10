@@ -2002,7 +2002,7 @@ function lpm.lite_xl_run(...)
       system_bottle:invalidate_cache()
       repositories[1].explicit = true
     elseif v:find("^%d+") or v == "system" or v == "primary" then
-      assert(version == "system", "cannot specify multiple versions")
+      assert(version == "primary", "cannot specify multiple versions")
       version, version_idx = v, i
     elseif i == 1 then
       bottle = lpm.get_bottle(v)
