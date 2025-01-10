@@ -898,7 +898,7 @@ static int mkdirp(lua_State* L, char* path, int len) {
 // Assumes sizeof(dst) >= sizeof(src)
 static const char* strip_to_tar(char* dst, const char* src) {
   int len = strlen(src);
-  if (strstr(src, ".tar") && (strstr(src, ".gz") || strstr(src, ".xz"))) {
+  if (strstr(src, ".tar") || strstr(src, ".gz") || strstr(src, ".xz")) {
     strncpy(dst, src, imin(len - 3, PATH_MAX));
     len -= 3;
   } else if (strstr(src, ".tgz") || strstr(src, ".txz")) {
