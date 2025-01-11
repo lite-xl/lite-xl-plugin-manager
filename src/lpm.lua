@@ -452,15 +452,15 @@ function common.mkdirp(path)
     if i >= extant_root and target ~= "" and not target:find("^[A-Z]:$") and not system.stat(target) then system.mkdir(target) end
   end
 end
-function common.copy(src, dst, hidden)
+function common.copy(src, dst, hidden, symlink)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
   if not hidden and common.basename(src):find("^%.") then return end
-  if dst_stat and dst_stat.type == "dir" then return common.copy(src, dst .. PATHSEP .. common.basename(src), hidden) end
+  if dst_stat and dst_stat.type == "dir" then return common.copy(src, dst .. PATHSEP .. common.basename(src), hidden, symlink) end
   if src_stat.type == "dir" then
     common.mkdirp(dst)
-    for i, file in ipairs(system.ls(src)) do common.copy(src .. PATHSEP .. file, dst .. PATHSEP .. file, hidden) end
-  else
+    for i, file in ipairs(system.ls(src)) do common.copy(src .. PATHSEP .. file, dst .. PATHSEP .. file, hidden, symlink) end
+  elseif not symlink then
     local src_io, err1 = io.open(src, "rb")
     if err1 then error("can't open for reading " .. src .. ": " .. err1) end
     local dst_io, err2 = io.open(dst, "wb")
@@ -473,6 +473,8 @@ function common.copy(src, dst, hidden)
     dst_io:close()
     src_io:close()
     system.chmod(dst, src_stat.mode)
+  else
+    system.symlink(src, dst)
   end
 end
 function common.rename(src, dst)
@@ -915,18 +917,17 @@ function Addon:install(bottle, installing)
       local path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       common.get(self.url, { target = path, checksum = self.checksum, callback = write_progress_bar })
       if VERBOSE then log.action("Downloaded file " .. self.url .. " to " .. path) end
-    else -- local addon that has a local pathx
+    else -- local addon that has a local path
       local temporary_path = temporary_install_path .. (self.organization == 'complex' and self.path and system.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
       if self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" then common.mkdirp(temporary_install_path) end
       if self.path then
         local path = install_path .. (self.organization == 'complex' and self.path and common.stat(self.local_path).type ~= "dir" and (PATHSEP .. "init.lua") or "")
         if SYMLINK then
           if VERBOSE then log.action("Symlinking " .. self.local_path .. " to " .. path .. ".") end
-          system.symlink(self.local_path, temporary_path)
         else
           if VERBOSE then log.action("Copying " .. self.local_path .. " to " .. path .. ".") end
-          common.copy(self.local_path, temporary_path)
         end
+        common.copy(self.local_path, temporary_path, false, SYMLINK)
       end
     end
 
