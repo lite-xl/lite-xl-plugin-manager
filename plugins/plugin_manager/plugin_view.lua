@@ -87,7 +87,9 @@ function PluginView:on_mouse_pressed(button, mx, my, clicks)
   local lh = style.font:get_height() + style.padding.y
   local x = self:get_content_offset() + style.padding.x
 
-  if my > self.position.y and my <= self.position.y + lh then
+  local column_headers_y = self.position.y + (self.filter_text and lh or 0)
+
+  if my > column_headers_y and my <= column_headers_y + lh then
     for i, _ in ipairs(self.plugin_table_columns) do
       if mx > x and mx <= x + self.widths[i] then
         if i == self.sort.column then self.sort.asc = not self.sort.asc else self.sort.asc = true end
