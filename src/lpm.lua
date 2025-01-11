@@ -585,6 +585,7 @@ function log.warning(message)
     io.stderr:flush()
   end
 end
+local function assert_warning(condition, message) if not condition then log.warning(message) end end
 function log.fatal_warning(message)
   if not FORCE then error(message .. "; use --force to override") else log.warning(message) end
 end
@@ -1306,9 +1307,11 @@ function Repository:fetch()
   return self
 end
 
-function Repository:add(pull_remotes)
+function Repository:add(pull_remotes, force_update)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
+  local call_update = force_update and system.stat(self.local_path)
   local manifest, remotes = self:fetch_if_not_present():parse_manifest()
+  if call_update then self:update() end
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do
       if not common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
@@ -1343,6 +1346,7 @@ function Repository:update(pull_remotes)
       end
     end
   end
+  return self
 end
 
 
@@ -1939,7 +1943,7 @@ function lpm.retrieve_addons(lite_xl, arguments, filters)
     if arguments[i] == "--" then break end
     local str = arguments[i]
     if is_argument_repo(str) and not str:find("@") then
-      table.insert(repositories, 1, Repository.url(str):add(AUTO_PULL_REMOTES))
+      table.insert(repositories, 1, Repository.url(str):add(AUTO_PULL_REMOTES, EPHEMERAL and str:find("^http")))
       system_bottle:invalidate_cache()
       repositories[1].explicit = true
     else
@@ -1996,11 +2000,7 @@ function lpm.lite_xl_run(...)
   local version, version_idx = "primary", 1
   local arguments = { }
   for i,v in ipairs({ ... }) do
-    if i == 1 and is_argument_repo(v) and not v:find("@") then
-      table.insert(repositories, 1, Repository.url(v):add(AUTO_PULL_REMOTES))
-      system_bottle:invalidate_cache()
-      repositories[1].explicit = true
-    elseif v:find("^%d+") or v == "system" or v == "primary" then
+    if v:find("^%d+") or v == "system" or v == "primary" then
       assert(version == "primary", "cannot specify multiple versions")
       version, version_idx = v, i
     elseif i == 1 then
@@ -2167,21 +2167,13 @@ end
 
 function lpm.unstub(type, ...)
   local addons = {}
-  for i, identifier in ipairs({ ... }) do
-    if not identifier then error('unrecognized identifier ' .. identifier) end
-    if is_argument_repo(identifier) then
-      table.insert(repositories, 1, Repository.url(identifier):add(AUTO_PULL_REMOTES))
-      system_bottle:invalidate_cache()
-    else
-      local potential_addons = { system_bottle:get_addon(identifier, nil, { mod_version = system_bottle.lite_xl.mod_version }) }
-      addons = common.grep(potential_addons, function(e) return e:is_stub() end)
-      if #addons == 0 and #potential_addons == 0 then error("can't find " .. (type or "addon") .. " " .. identifier .. " mod-version: " .. (system_bottle.lite_xl.mod_version or 'any')) end
-      if #addons == 0 then
-        log.warning((potential_addons[1].type or "addon") .. " " .. identifier .. " already unstubbed")
-      end
-    end
+  local arguments = { ... }
+  for i, potential_addon in ipairs(lpm.retrieve_addons(primary_lite_xl, arguments)) do
+    local stubbed_addons = common.grep(potential_addon, function(e) return e:is_stub() end)
+    assert_warning(#stubbed_addons > 0, (potential_addon[1].type or "addon") .. " " .. potential_addon[1].id .. " already unstubbed")
+    common.each(stubbed_addons, function(e) e:unstub() end)
+    addons = common.concat(addons, stubbed_addons)
   end
-  common.each(addons, function(e) e:unstub() end)
   print_addon_info(nil, addons)
 end
 
