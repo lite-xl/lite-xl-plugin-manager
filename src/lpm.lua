@@ -1962,7 +1962,7 @@ function lpm.retrieve_addons(lite_xl, arguments, filters)
           uniq[addon.id] = addon
           found_one = true
         end
-        if i > 1 and uniq[addon.id] and uniq[addon.id] ~= addon and addon.repository and addon.repository.explicit then
+        if i > 1 and uniq[addon.id] and uniq[addon.id] ~= addon and addon.repository and addon.repository.explicit and compare_version(addon.version, uniq[addon.id].version) < 0 then
           log.warning("your explicitly specified repository " .. addon.repository:url() .. " has a version of " .. addon.id .. " lower than that in " .. uniq[addon.id].repository:url() .. " (" .. addon.version .. " vs. " .. uniq[addon.id].version ..
             "; in order to use the one in your specified repo, please specify " .. addon.id .. ":" .. addon.version)
         end
@@ -2877,6 +2877,7 @@ not commonly used publically.
       error("unknown flag " .. v)
     end
   end
+
 
   -- Small utility functions that don't play into the larger app; are used for testing
   -- or for handy scripts.
