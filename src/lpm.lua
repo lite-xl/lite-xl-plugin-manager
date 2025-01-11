@@ -1770,7 +1770,6 @@ end
 local DEFAULT_REPOS
 function lpm.repo_init(repos)
   DEFAULT_REPOS = { Repository.url(DEFAULT_REPO_URL) }
-  common.mkdirp(CACHEDIR)
   if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
     for i, repository in ipairs(repos or DEFAULT_REPOS) do
       table.insert(repositories, repository:add(true))
@@ -2748,7 +2747,7 @@ not commonly used publically.
   USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
   AUTO_PULL_REMOTES = ARGS["remotes"]
-  CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or USERDIR .. PATHSEP .. "lpm"
+  CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or (HOME .. PATHSEP .. ".cache" .. PATHSEP .. "lpm")
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
   if ARGS["trace"] then system.trace(true) end
 
@@ -2959,6 +2958,7 @@ not commonly used publically.
   end
 
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
+  if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
   if engage_locks(function()
     lpm.setup()
   end, error_handler, lock_warning) then return end
