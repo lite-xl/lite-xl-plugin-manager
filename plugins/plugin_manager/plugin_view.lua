@@ -34,8 +34,8 @@ function PluginView:new()
   self.selected_plugin = nil
   self.selected_plugin_idx = nil
   self.initialized = false
-  self.offset_y = 1
   self.plugin_manager = require "plugins.plugin_manager"
+  self.sort = { asc = true, column = 1 }
   self.progress_callback = function(progress)
     self.progress = progress
     core.redraw = true
@@ -82,24 +82,46 @@ function RootView.on_view_mouse_pressed(button, x, y, clicks)
 end
 
 
+function PluginView:on_mouse_pressed(button, mx, my, clicks)
+  if PluginView.super.on_mouse_pressed(self, button, mx, my, clicks) then return true end
+  local lh = style.font:get_height() + style.padding.y
+  local x = self:get_content_offset() + style.padding.x
+
+  if my > self.position.y and my <= self.position.y + lh then
+    for i, _ in ipairs(self.plugin_table_columns) do
+      if mx > x and mx <= x + self.widths[i] then
+        if i == self.sort.column then self.sort.asc = not self.sort.asc else self.sort.asc = true end
+        self.sort.column = i
+        self:refresh(true)
+        return true
+      end
+      x = x + self.widths[i] + style.padding.x
+    end
+  end
+  return false
+end
+
+
 function PluginView:on_mouse_moved(x, y, dx, dy)
   PluginView.super.on_mouse_moved(self, x, y, dx, dy)
   if self.initialized then
     local th = style.font:get_height()
     local lh = th + style.padding.y
-    local offset = math.floor((y - self.position.y + self.scroll.y) / lh)
-    self.hovered_plugin = offset > 0 and self:get_plugins()[offset]
+    local offset = math.floor((y - self.position.y - (self.filter_text and self.filter_text ~= "" and lh or 0) + self.scroll.y) / lh)
+    self.hovered_plugin = offset > 0 and self:get_sorted_plugins()[offset]
     self.hovered_plugin_idx = offset > 0 and offset
   end
 end
 
 
-function PluginView:refresh()
+function PluginView:refresh(no_refetch, on_complete)
+  if self.loading then return end
   self.loading = true
-  return self.plugin_manager:refresh({ progress = self.progress_callback }):done(function()
+  local function complete()
     self.loading = false
     self.initialized = true
     self.widths = {}
+    self.sorted_plugins = {}
     for i,v in ipairs(self.plugin_table_columns) do
       table.insert(self.widths, style.font:get_width(v))
     end
@@ -108,14 +130,25 @@ function PluginView:refresh()
       for j = 1, #self.widths do
         self.widths[j] = math.max(style.font:get_width(t[j] or ""), self.widths[j])
       end
+      if not self.filter_text or self.filter_text == "" or string.ulower(t[1]):ufind(self.filter_text, 1, true) then
+        table.insert(self.sorted_plugins, plugin)
+        self.sorted_plugins[plugin] = t
+      end
     end
+    table.sort(self.sorted_plugins, function(a, b)
+      local va, vb = string.ulower(self.sorted_plugins[a][self.sort.column] or ""), string.ulower(self.sorted_plugins[b][self.sort.column] or "")
+      if self.sort.asc then return va < vb else return va > vb end
+    end)
     local max = 0
     if self.widths then
       for i, v in ipairs(self.widths) do max = max + v end
     end
     self.max_width = max + style.padding.x * #self.widths
+    self.selected_plugin, self.selected_plugin_idx, self.hovered_plugin, self.hovered_plugin_idx = nil, nil, nil, nil
     core.redraw = true
-  end)
+    if on_complete then on_complete() end
+  end
+  return no_refetch and complete() or self.plugin_manager:refresh({ progress = self.progress_callback }):done(complete)
 end
 
 
@@ -124,11 +157,20 @@ function PluginView:get_plugins()
 end
 
 
+function PluginView:get_sorted_plugins()
+  return self.sorted_plugins or {}
+end
+
+
+function PluginView:get_table_content_offset()
+  return ((self.filter_text and self.filter_text ~= "") and 2 or 1) * (style.font:get_height() + style.padding.y)
+end
+
+
 function PluginView:get_scrollable_size()
   if not self.initialized then return math.huge end
   local th = style.font:get_height() + style.padding.y
-  local plugins = self:get_plugins()
-  return th * #self:get_plugins()
+  return (th * #self:get_sorted_plugins()) + self:get_table_content_offset()
 end
 
 
@@ -166,18 +208,27 @@ function PluginView:draw()
     return self:draw_loading_screen(self.progress and self.progress.label, self.progress and self.progress.percent)
   end
 
-
-  local ox, oy = self:get_content_offset()
-  oy = oy + lh * self.offset_y
-
-  local x, y = ox + style.padding.x, oy
-  for i, v in ipairs(self.plugin_table_columns) do
-    common.draw_text(style.font, style.accent, v, "left", x, self.position.y, self.widths[i], lh)
-    x = x + self.widths[i] + style.padding.x
+  local header_x, header_y = self.position.x + style.padding.x, self.position.y
+  local sorted_plugins = self:get_sorted_plugins()
+  if self.filter_text and self.filter_text ~= "" then
+    local total = #self:get_plugins()
+    local msg = string.format('Showing %d out of %d plugin%s matching the criteria: %q', #sorted_plugins, total, total > 1 and "s" or "", self.filter_text)
+    common.draw_text(style.font, style.text, msg, "left", header_x, header_y, self.size.x, lh)
+    header_y = header_y + lh
   end
 
-  core.push_clip_rect(self.position.x, self.position.y + lh * self.offset_y, self.size.x, self.size.y)
-  for i, plugin in ipairs(self:get_plugins()) do
+  for i, v in ipairs(self.plugin_table_columns) do
+    if i == self.sort.column then
+      renderer.draw_rect(header_x, header_y + (self.sort.asc and lh - 1 or 0), self.widths[i], 1, style.caret)
+    end
+    common.draw_text(style.font, style.accent, v, "left", header_x, header_y, self.widths[i], lh)
+    header_x = header_x + self.widths[i] + style.padding.x
+  end
+
+  local ox, oy = self:get_content_offset()
+  oy = oy + self:get_table_content_offset()
+  core.push_clip_rect(self.position.x, self.position.y + self:get_table_content_offset(), self.size.x, self.size.y)
+  for i, plugin in ipairs(sorted_plugins) do
     local x, y = ox, oy
     if y + lh >= self.position.y and y <= self.position.y + self.size.y then
       if plugin == self.selected_plugin then
@@ -186,7 +237,7 @@ function PluginView:draw()
         renderer.draw_rect(x, y, self.max_width or self.size.x, lh, style.line_highlight)
       end
       x = x + style.padding.x
-      for j, v in ipairs({ get_plugin_text(plugin) }) do
+      for j, v in ipairs(sorted_plugins[plugin]) do
         local color = (plugin.status == "installed" or plugin.status == "bundled" or plugin.status == "orphan") and style.good or
           (plugin.status == "core" and style.warn or
           (plugin.status == "special" and style.modified or style.text)
@@ -248,22 +299,26 @@ function PluginView:upgrade()
   end)
 end
 
+local function scroll_to_index(idx)
+  local lh = style.font:get_height() + style.padding.y
+  plugin_view.scroll.to.y = math.max(idx * lh - plugin_view.size.y / 2, 0)
+end
+
 command.add(PluginView, {
   ["plugin-manager:select"] = function(x, y)
     plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx
   end,
   ["plugin-manager:select-prev"] = function()
-    local plugins = plugin_view:get_plugins()
-    if plugin_view.selected_plugin_idx > 1 then plugin_view.selected_plugin_idx = plugin_view.selected_plugin_idx - 1 end
+    local plugins = plugin_view:get_sorted_plugins()
+    plugin_view.selected_plugin_idx = common.clamp((plugin_view.selected_plugin_idx or 0) - 1, 1, #plugins)
     plugin_view.selected_plugin = plugins[plugin_view.selected_plugin_idx]
+    scroll_to_index(plugin_view.selected_plugin_idx)
   end,
   ["plugin-manager:select-next"] = function()
-    local plugins = plugin_view:get_plugins()
-    if plugin_view.selected_plugin_idx < #plugins then plugin_view.selected_plugin_idx = plugin_view.selected_plugin_idx + 1 end
+    local plugins = plugin_view:get_sorted_plugins()
+    plugin_view.selected_plugin_idx = common.clamp((plugin_view.selected_plugin_idx or 0) + 1, 1, #plugins)
     plugin_view.selected_plugin = plugins[plugin_view.selected_plugin_idx]
-  end,
-  ["plugin-manager:select"] = function(x, y)
-    plugin_view.selected_plugin, plugin_view.selected_plugin_idx = plugin_view.hovered_plugin, plugin_view.hovered_plugin_idx
+    scroll_to_index(plugin_view.selected_plugin_idx)
   end,
   ["plugin-manager:find"] = function()
     local plugin_names = {}
@@ -274,19 +329,39 @@ command.add(PluginView, {
     table.sort(plugin_names)
     core.command_view:enter("Find Plugin", {
       submit = function(value)
-        for i,v in ipairs(plugin_names) do
-          if v == value then
-            plugin_view.selected_plugin_idx = i
-            plugin_view.selected_plugin = plugin_view:get_plugins()[i]
-            local lh = style.font:get_height() + style.padding.y
-            plugin_view.scroll.to.y = math.max(i * lh - plugin_view.size.y / 2, 0)
+        plugin_view.filter_text = nil
+        plugin_view:refresh(true, function()
+          local plugins = plugin_view:get_sorted_plugins()
+          for i,v in ipairs(plugins) do
+            if v.id == value then
+              plugin_view.selected_plugin_idx = i
+              plugin_view.selected_plugin = v
+              return scroll_to_index(plugin_view.selected_plugin_idx)
+            end
           end
-        end
+        end)
       end,
       suggest = function(value)
         return common.fuzzy_match(plugin_names, value)
       end
     })
+  end,
+  ["plugin-manager:filter"] = function()
+    local function on_filter(value)
+      plugin_view.filter_text = value
+      plugin_view:refresh(true)
+      return {}
+    end
+    core.command_view:enter("Filter Plugins", {
+      submit = on_filter,
+      suggest = on_filter,
+      text = plugin_view.filter_text or "",
+      select_text = true
+    })
+  end,
+  ["plugin-manager:clear-filter"] = function()
+    plugin_view.filter_text = nil
+    plugin_view:refresh(true)
   end,
   ["plugin-manager:scroll-page-up"] = function()
     plugin_view.scroll.to.y = math.max(plugin_view.scroll.y - plugin_view.size.y, 0)
@@ -375,11 +450,12 @@ keymap.add {
   ["home"]        = "plugin-manager:scroll-page-top",
   ["end"]         = "plugin-manager:scroll-page-bottom",
   ["lclick"]      = "plugin-manager:select",
-  ["ctrl+f"]      = "plugin-manager:find",
+  ["ctrl+f"]      = "plugin-manager:filter",
   ["ctrl+r"]      = "plugin-manager:refresh-all",
   ["ctrl+u"]      = "plugin-manager:upgrade-all",
   ["2lclick"]     = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
-  ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" }
+  ["return"]      = { "plugin-manager:install-selected", "plugin-manager:uninstall-selected" },
+  ["escape"]      = "plugin-manager:clear-filter",
 }
 
 
