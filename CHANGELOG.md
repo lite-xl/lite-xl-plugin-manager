@@ -1,3 +1,21 @@
+# 1.4.0
+
+* Added in ability for `plugin_manager` to sort and filter plugins easily. (Thank you "Big T" @takase1121!)
+* Added in ability to detect when lpm is being run not from a console on Windows, and added a pause mechanism.
+* Support symbolic links in windows.
+* Added in internal hashing mechanism, as libgit no longer provides, and mbedtls doesn't either.
+* Added in significant amount of new swtiches to modify what's included in an lpm build, full list in `build.sh`.
+* Allowed for unzipping of `.gz` when not `.tar.gz`.
+* Fixed errors when handling chunked transfer encoding.
+* Changed way that we construct bottles, so that we don't do as much copying. Will still copy executables in the case where it would not function if we symlinked.
+* Properly symlink folders when `--symlink` specified; we symlink folder contents, not the folder itself, so we no longer pollute source folders.
+* Added in the ability to create named bottles.
+* Changed behaviour of `switch` to simply deal with `lpm` defaults, rather than changing anything about the system itself.
+* Added the distinction of a `primary` bottle (i.e. the one we've switched to), and the `system` bottle (i.e. the one that has a userdir at `~/.config/lite-xl` and is on the path).
+* Changed default location of `CACHEDIR` from `USERDIR/lpm` to `~/.cache/lpm`. Which means that across many different user directories, we will keep a proper cache.
+* Changed the way we run bottles; we now specify `LITE_USERDIR` as an environment variable, rather than creating a `user` directory. 
+
+
 # 1.3.1
 
 * Fixed a bug relating to repository fetching.
