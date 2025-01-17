@@ -1671,6 +1671,7 @@ static int lpm_extract(lua_State* L) {
       lua_pushnil(L);
       lua_newtable(L);
     } else {
+      // We leave this table on teh stack, because buffer functions can add unknowable amounts of stuff until luaL_pushresult is used.
       lua_rawgeti(L, LUA_REGISTRYINDEX, context->lua_buffer);
       size_t len = lua_rawlen(L, -1);
       luaL_Buffer b;
@@ -1683,7 +1684,6 @@ static int lpm_extract(lua_State* L) {
         lua_pop(L, 1);
         luaL_addlstring(&b, str, str_len);
       }
-      lua_pop(L, 1);
       luaL_pushresult(&b);
       lua_newtable(L);
     }
