@@ -509,11 +509,11 @@ function common.args(arguments, options)
   for k,v in pairs(arguments) do if math.type(k) ~= "integer" then args[k] = v end end
   while i <= #arguments do
     local s,e, option, value = arguments[i]:find("%-%-([^=]+)=?(.*)")
-    local option_name = s and option:gsub("^no%-", "")
+    local option_name = s and (options[option] and option or option:gsub("^no%-", ""))
     if options[option_name] then
       local flag_type = options[option_name]
       if flag_type == "flag" then
-        args[option] = not option:find("^no-") and true or false
+        args[option] = (option_name == option or not option:find("^no-")) and true or false
       elseif flag_type == "string" or flag_type == "number" or flag_type == "array" then
         if not value or value == "" then
           if i == #arguments then error("option " .. option .. " requires a " .. flag_type) end
@@ -2584,7 +2584,7 @@ Flags have the following effects:
                            for the system lite-xl.
   --binary=path            Sets the lite-xl binary path for the system lite-xl.
   --verbose                Spits out more information, including intermediate
-                           steps to install and whatnot.
+                            steps to install and whatnot.
   --quiet                  Outputs nothing but explicit responses.
   --mod-version=version    Sets the mod version of lite-xl to install addons.
                            Can be set to "any", which will retrieve the latest
