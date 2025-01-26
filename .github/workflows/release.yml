@@ -52,6 +52,6 @@ jobs:
         env: { DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}" }
         run: |
           if [[ -n "$DISCORD_WEBHOOK" ]] && [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
-            perl -e 'use JSON qw(encode_json from_json); $/ = undef; print encode_json({ content => "## Lite XL Plugin Manager $ENV{VERSION} has been released!\nhttps://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/v$ENV{VERSION}\n@release:lpm\n### Changes in $ENV{VERSION}:\n" . <> })' < NOTES.md |
+            perl -e 'use JSON qw(encode_json from_json); $/ = undef; print encode_json({ content => "## Lite XL Plugin Manager $ENV{VERSION} has been released!\nhttps://github.com/lite-xl/lite-xl-plugin-manager/releases/tag/v$ENV{VERSION}\n### Changes in $ENV{VERSION}:\n" . <> })' < NOTES.md |
               curl -H 'Content-Type:application/json' $DISCORD_WEBHOOK -X POST -d "$(</dev/stdin)"
           fi
