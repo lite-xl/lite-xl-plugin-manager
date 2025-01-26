@@ -2062,13 +2062,31 @@ int main(int argc, char* argv[]) {
       lua_toutf8(L, selfpath);
     else
       lua_pushnil(L);
-  #else
-    char selfpath[MAX_PATH] = {0};
-    int length = readlink("/proc/self/exe", selfpath, MAX_PATH);
+  #elsif __linux__ || __serenity__
+    char selfpath[PATH_MAX] = {0};
+    int length = readlink("/proc/self/exe", selfpath, PATH_MAX);
     if (length > 0)
       lua_pushlstring(L, selfpath, length);
     else
       lua_pushnil(L);
+  #elif __APPLE__
+    char selfpath[PATH_MAX] = {0};
+    /* use realpath to resolve a symlink if the process was launched from one.
+    ** This happens when Homebrew installs a cack and creates a symlink in
+    ** /usr/loca/bin for launching the executable from the command line. */
+    unsigned size = PATH_MAX;
+    char exepath[size];
+    _NSGetExecutablePath(exepath, &size);
+    realpath(exepath, selfpath);
+    lua_pushstring(L, selfpath);
+  #elif __FreeBSD__
+    char selfpath[PATH_MAX] = {0};
+    size_t len = PATH_MAX;
+    const int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    sysctl(mib, 4, selfpath, &len, NULL, 0);
+    lua_pushlstring(L, selfpath, &len);
+  #else
+    lua_pushnil(L);
   #endif
   lua_setglobal(L, "EXEFILE");
 
