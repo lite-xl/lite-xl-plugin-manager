@@ -2062,7 +2062,7 @@ int main(int argc, char* argv[]) {
       lua_toutf8(L, selfpath);
     else
       lua_pushnil(L);
-  #elsif __linux__ || __serenity__
+  #elif __linux__ || __serenity__
     char selfpath[PATH_MAX] = {0};
     int length = readlink("/proc/self/exe", selfpath, PATH_MAX);
     if (length > 0)
