@@ -92,22 +92,17 @@
       "files": [
         {
           "arch": "x86_64-linux",
-          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-x86_64-linux-portable.tar.gz",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0-preview/lite-xl-v3.0-preview-x86_64-linux-portable.tar.gz",
           "checksum": "SKIP"
         },
         {
           "arch": "x86_64-windows",
-          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-x86_64-windows-portable.zip",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0-preview/lite-xl-v3.0-preview-x86_64-windows-portable.zip",
           "checksum": "SKIP"
         },
         {
-          "arch": "x86_64-darwin",
-          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-universal-darwin-portable.tar.gz",
-          "checksum": "SKIP"
-        },
-        {
-          "arch": "aarch64-darwin",
-          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0/lite-xl-v3.0-universal-darwin-portable.tar.gz",
+          "arch": ["x86_64-darwin", "aarch64-darwin"],
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0-preview/lite-xl-v3.0-preview-universal-darwin-portable.tar.gz",
           "checksum": "SKIP"
         }
       ]
