@@ -608,7 +608,7 @@ local function prompt(message)
     end
     if ASSUME_YES then return true end
     local response = io.stdin:read("*line")
-    if (not response:find("%S") or response:lower() == "y" or response:lower() == "n") then
+    if (response == "" or response:lower() == "y" or response:lower() == "n") then
       return not response:find("%S") or response:find("^%s*[yY]%s*$")
     end
   end
