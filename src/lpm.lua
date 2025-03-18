@@ -541,7 +541,7 @@ global({
   EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or "",
   SHOULD_COLOR = ((PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")) or false
 })
-global({ "HOME", "USERDIR", "CACHEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL", "MASK", "settings", "repositories", "lite_xls", "system_bottle", "primary_lite_xl", "progress_bar_label", "write_progress_bar" })
+global({ "HOME", "USERDIR", "CACHEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "UPDATE", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL", "MASK", "settings", "repositories", "lite_xls", "system_bottle", "primary_lite_xl", "progress_bar_label", "write_progress_bar" })
 global({ Addon = {}, Repository = {}, LiteXL = {}, Bottle = {}, lpm = {}, log = {} })
 
 -- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
@@ -599,15 +599,19 @@ function log.progress_action(message)
   end
 end
 local function prompt(message)
-  system.tcflush(0)
-  if not ASSUME_YES or not JSON then
-    io.stderr:write(colorize(message .. " [Y/n]: ", "cyan"))
-    if ASSUME_YES then io.stderr:write("Y\n") end
-    io.stderr:flush()
+  while true do
+    system.tcflush(0)
+    if not ASSUME_YES or not JSON then
+      io.stderr:write(colorize(message .. " [Y/n]: ", "cyan"))
+      if ASSUME_YES then io.stderr:write("Y\n") end
+      io.stderr:flush()
+    end
+    if ASSUME_YES then return true end
+    local response = io.stdin:read("*line")
+    if (not response:find("%S") or response:lower() == "y" or response:lower() == "n") then
+      return not response:find("%S") or response:find("^%s*[yY]%s*$")
+    end
   end
-  if ASSUME_YES then return true end
-  local response = io.stdin:read("*line")
-  return not response:find("%S") or response:find("^%s*[yY]%s*$")
 end
 
 
@@ -1310,9 +1314,10 @@ end
 
 function Repository:add(pull_remotes, force_update)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
-  local call_update = force_update and system.stat(self.local_path)
-  local manifest, remotes = self:fetch_if_not_present():parse_manifest()
+  local call_update = (force_update or UPDATE) and system.stat(self.local_path)
+  self:fetch_if_not_present()
   if call_update then self:update() end
+  local manifest, remotes = self:parse_manifest()
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
     for i, remote in ipairs(remotes) do
       if not common.first(repositories, function(repo) return repo.remote == remote.remote and repo.branch == remote.branch and repo.commit == remote.commit end) then
@@ -1326,7 +1331,7 @@ end
 
 
 function Repository:update(pull_remotes)
-  local manifest, remotes = self:parse_manifest()
+  local manifest, remotes
   if self.branch and (not self:url():find("^http") or not NO_NETWORK) then
     log.progress_action("Updating " .. self:url() .. "...")
     local status, err = pcall(system.fetch, self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
@@ -1337,6 +1342,8 @@ function Repository:update(pull_remotes)
     end
     common.reset(self.local_path, self.branch, "hard")
     self.manifest = nil
+    manifest, remotes = self:parse_manifest()
+  else
     manifest, remotes = self:parse_manifest()
   end
   if pull_remotes then -- any remotes we don't have in our listing, call add, and add into the list
@@ -1461,7 +1468,7 @@ function Bottle.new(metadata)
         if not system.stat(self.local_path) then break elseif i == 1000 then error("can't create epehemeral bottle") end
       end
     else
-      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "auto" .. self.hash
+      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "auto" .. PATHSEP .. self.hash
     end
   end
   if self.name and self:is_constructed() then -- if we exist, and we have a name, find out what lxl version we are
@@ -2011,6 +2018,12 @@ function lpm.lite_xl_run(...)
       table.insert(arguments, v)
     end
   end
+  if is_argument_repo(arguments[1]) and not arguments[1]:find("@") then
+    table.insert(repositories, 1, Repository.url(arguments[1]):add(AUTO_PULL_REMOTES, EPHEMERAL and arguments[1]:find("^http")))
+    system_bottle:invalidate_cache()
+    repositories[1].explicit = true
+    table.remove(arguments, 1)
+  end
   local lite_xl = (bottle and bottle.lite_xl) or lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)
   local addons, i = lpm.retrieve_installable_addons(lite_xl, arguments)
   bottle = bottle or Bottle.new({ lite_xl = lite_xl, addons = addons, config = CONFIG })
@@ -2473,7 +2486,7 @@ xpcall(function()
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
     repository = "string", ephemeral = "flag", mask = "array", raw = "string", plugin = "array", ["no-network"] = "flag",
-    ["no-git"] = "flag",
+    ["no-git"] = "flag", update = "flag",
     -- filtration flags
     author = "array", tag = "array", stub = "array", dependency = "array", status = "array",
     type = "array", name = "array"
@@ -2629,6 +2642,8 @@ Flags have the following effects:
                            for customizing lpm for various tasks. Can be
                            specified as a remote URL. By default, will always
                            load all the plugins specified in $HOME/.config/lpm/plugins.
+  --update                 Forces an update of all repositories involved in the command
+                           you're running.
 
 The following flags are useful when listing addons, or generating the addon
 table. Putting a ! infront of the string will invert the filter. Multiple
@@ -2725,6 +2740,7 @@ not commonly used publically.
   CONFIG = ARGS["config"]
   SYMLINK = ARGS["symlink"]
   PROGRESS = ARGS["progress"]
+  UPDATE = ARGS["update"]
   REINSTALL = ARGS["reinstall"]
   NO_COLOR = ARGS["no-color"]
   if not NO_NETWORK then NO_NETWORK = ARGS["no-network"] end
