@@ -65,9 +65,9 @@ if [[ "$@" == *"-DLPM_STATIC"* ]]; then
   ./lua.exe -e 'io.open("src/lpm.lua.c", "wb"):write("unsigned char lpm_luac[] = \""..string.dump(load(io.lines("src/lpm.lua","L"), "=lpm.lua")):gsub(".",function(c) return string.format("\\x%02X",string.byte(c)) end).."\";unsigned int lpm_luac_len = sizeof(lpm_luac)-1;")'
 fi
 
-[[ $OSTYPE != 'msys'* && $CC != *'mingw'* && $CC != "emcc" ]]                && COMPILE_FLAGS="$COMPILE_FLAGS -DLUA_USE_LINUX" && LINK_FLAGS="$LINK_FLAGS -ldl"
-[[ $OSTYPE == 'msys'* || $CC == *'mingw'* ]]                                 && LINK_FLAGS="$LINK_FLAGS -lbcrypt -lz -lole32 -lcrypt32 -lrpcrt4 -lsecur32"
-[[ $OSTYPE == 'msys'* || $CC == *'mingw'* && "$@" != *"-DLPM_NO_NETWORK"* ]] && LINK_FLAGS="$LINK_FLAGS -lws2_32 -lwinhttp"
+[[ $OSTYPE != 'msys'* && $OSTYPE != 'cygwin'* && $CC != *'mingw'* && $CC != "emcc" ]]                && COMPILE_FLAGS="$COMPILE_FLAGS -DLUA_USE_LINUX" && LINK_FLAGS="$LINK_FLAGS -ldl"
+[[ $OSTYPE == 'msys'* || $OSTYPE == 'cygwin'* || $CC == *'mingw'* ]]                                 && LINK_FLAGS="$LINK_FLAGS -lbcrypt -lz -lole32 -lcrypt32 -lrpcrt4 -lsecur32"
+[[ $OSTYPE == 'msys'* || $OSTYPE == 'cygwin'* || $CC == *'mingw'* && "$@" != *"-DLPM_NO_NETWORK"* ]] && LINK_FLAGS="$LINK_FLAGS -lws2_32 -lwinhttp"
 [[ $OSTYPE == *'darwin'* ]]                                                  && LINK_FLAGS="$LINK_FLAGS -liconv -framework Foundation"
 [[ $OSTYPE == *'darwin'* ]] && "$@" != *"-DLPM_NO_NETWORK"*                  && LINK_FLAGS="$LINK_FLAGS -framework Security"
 
