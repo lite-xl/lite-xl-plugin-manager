@@ -16,6 +16,7 @@ local binary_extension = (PLATFORM == "Windows" and ".exe" or (PLATFORM == "Andr
 config.plugins.plugin_manager = common.merge({
   lpm_binary_name = "lpm." .. ARCH .. binary_extension,
   lpm_binary_path = nil,
+  show_libraries = false,
   -- Restarts the plugin manager on changes.
   restart_on_change = true,
   -- Path to a local copy of all repositories.
@@ -156,7 +157,12 @@ end
 
 function PluginManager:refresh(options)
   local prom = Promise.new()
-  run({ "list" }, options):done(function(addons)
+  local cmd = { "list" }
+  if not config.plugins.plugin_manager.show_libraries then
+    table.insert(cmd, "--type")
+    table.insert(cmd, "!library")
+  end
+  run(cmd, options):done(function(addons)
     self.addons = json.decode(addons)["addons"]
     table.sort(self.addons, function(a,b) return a.id < b.id end)
     self.valid_addons = {}
