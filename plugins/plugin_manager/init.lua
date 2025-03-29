@@ -20,7 +20,7 @@ config.plugins.plugin_manager = common.merge({
   -- Restarts the plugin manager on changes.
   restart_on_change = true,
   -- Path to a local copy of all repositories.
-  cachdir = USERDIR  .. PATHSEP .. "lpm",
+  cachdir = nil,
   -- Path to the folder that holds user-specified plugins.
   userdir = USERDIR,
   -- Path to ssl certificate directory or bunde. Nil will auto-detect.
