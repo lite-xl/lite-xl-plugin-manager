@@ -455,8 +455,8 @@ if config.plugins.plugin_manager.addons then
     end
   end
   local plugins = system.list_dir(USERDIR .. PATHSEP .. "plugins")
-  run({ "apply", table.unpack(addons), }, { userdir = target_plugin_directory, cachedir =  USERDIR .. PATHSEP .. "lpm" }):done(function(status)
-    if json.decode(status)["changed"] then command.perform("core:restart") end
+  run({ "apply", table.unpack(addons), }, { userdir = target_plugin_directory }):done(function(status)
+    if json.decode(status)["changed"] then command.perform("core:restart") end 
   end)
   lpm_load_plugins()
   local old_configs = {}
