@@ -15,6 +15,9 @@ By default in releases, `lpm` will automatically consume the `manifest.json`
 in the `latest` branch of this repository, which corresponds to the most
 recent versioned release.
 
+As of Lite XL version 3, `lpm`, along with the `plugin_manager` and `welcome`
+plugins will be bundled with all official releases.
+
 Conforms to [SCPS3](https://github.com/adamharrison/straightforward-c-project-standard#SCPS3).
 
 ## Status
@@ -26,7 +29,24 @@ Conforms to [SCPS3](https://github.com/adamharrison/straightforward-c-project-st
 For details about the `manifest.json` files that `lpm` consumes,
 [see here](SPEC.md).
 
-## Quickstart
+## Installing
+
+### Windows
+
+On Windows, the best way to start, especially if you're used to a visual interface is to simply pull
+`lpm`, and use it to install `plugin_manager`, which will give you a graphical plugin manager inside
+Lite XL that can be accessed with the `Plugin Manager: Show` command (`ctrl+shift+p`).
+
+To get started, open a PowerShell terminal, and run the following:
+
+```
+Invoke-WebRequest -Uri "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe" -OutFile "lpm.exe"
+lpm.exe install plugin_manager --assume-yes
+```
+
+This should install `lpm` and install the GUI. If you already had Lite XL open, please restart it (`ctrl+alt+r`).
+
+### Linux + Mac
 
 The fastest way to get started with lpm is to simply pull a release.
 
