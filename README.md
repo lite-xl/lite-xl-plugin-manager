@@ -42,6 +42,7 @@ To get started, open a PowerShell terminal, and run the following:
 ```
 Invoke-WebRequest -Uri "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe" -OutFile "lpm.exe"
 lpm.exe install plugin_manager --assume-yes
+Remove-Item lpm.exe
 ```
 
 This should install `lpm` and install the GUI. If you already had Lite XL open, please restart it (`ctrl+alt+r`).
