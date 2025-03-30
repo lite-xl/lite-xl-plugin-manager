@@ -39,7 +39,7 @@ Lite XL that can be accessed with the `Plugin Manager: Show` command (`ctrl+shif
 
 To get started, open a PowerShell terminal, and run the following:
 
-```
+```powershell
 Invoke-WebRequest -Uri "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe" -OutFile "lpm.exe"
 lpm.exe install plugin_manager --assume-yes
 Remove-Item lpm.exe
@@ -51,14 +51,14 @@ This should install `lpm` and install the GUI. If you already had Lite XL open, 
 
 The fastest way to get started with lpm is to simply pull a release.
 
-```
+```sh
 wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm && chmod +x lpm
 ```
 
 If you want to get the GUI version installed with lite-xl, you can tell `lpm` to install `plugin_manager`, which will allow
 you to access `Plugin Manager: Show` in the command palette in `lite-xl`.
 
-```
+```sh
 ./lpm install plugin_manager --assume-yes
 ```
 
@@ -67,7 +67,7 @@ you to access `Plugin Manager: Show` in the command palette in `lite-xl`.
 If you have a C compiler, and `git`, and want to compile from scratch,
 you can do:
 
-```
+```sh
 git clone https://github.com/lite-xl/lite-xl-plugin-manager.git \
   --shallow-submodules --recurse-submodules && cd lite-xl-plugin-manager &&\
   ./build.sh -DLPM_STATIC && ./lpm
@@ -76,13 +76,13 @@ git clone https://github.com/lite-xl/lite-xl-plugin-manager.git \
 If you want to build it quickly, and have the right modules installed, you can
 do:
 
-```
+```sh
 ./build.sh -lgit2 -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -lz -DLPM_STATIC
 ```
 
 OR
 
-```
+```sh
 gcc src/lpm.c lib/microtar/src/microtar.c -Ilib/microtar/src -lz -lgit2 \
   -lzip -llua -lm -lmbedtls -lmbedx509 -lmbedcrypto -o lpm
 ```
