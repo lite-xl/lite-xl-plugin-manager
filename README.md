@@ -41,7 +41,7 @@ To get started, open a PowerShell terminal, and run the following:
 
 ```powershell
 Invoke-WebRequest -Uri "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-windows.exe" -OutFile "lpm.exe"
-lpm.exe install plugin_manager --assume-yes
+.\lpm.exe install plugin_manager --assume-yes
 Remove-Item lpm.exe
 ```
 
