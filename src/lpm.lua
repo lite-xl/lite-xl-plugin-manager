@@ -1695,26 +1695,32 @@ function Bottle:installed_addons()
   return common.grep(self:all_addons(), function(p) return p:is_installed(self) end)
 end
 
+-- ["deprecated", "language"] is things which are deprecated, OR a language.
+-- ["deprecated,language"] are things which are deprecated, AND a langauge.
 local function filter_match(field, filter)
   if not filter then return true end
   if not field then return false end
   local filters = type(filter) == "table" and filter or { filter }
   local fields = type(field) == "table" and field or { field }
-  local matches = false
-  for i,v in ipairs(filters) do
-    local inverted = v:find("^!")
-    local actual_filter = inverted and v:sub(2) or v
-    for k, field in ipairs(fields) do
-      matches = field:find("^" .. actual_filter .. "$")
-      if not inverted and matches then return true end
-      if inverted and matches then return false end
+  for i, filter in ipairs(filters) do
+    local and_filters = { common.split(',', filter) }
+    local match_count = 0
+    for i,v in ipairs(and_filters) do
+      local inverted = v:find("^!")
+      local actual_filter = inverted and v:sub(2) or v
+      for k, field in ipairs(fields) do
+        local matches = field:find("^" .. actual_filter .. "$")
+        if (not inverted and matches) or (inverted and not matches) then 
+          match_count = match_count + 1 
+          break
+        end
+      end
     end
-    if inverted then
-      if matches then return false end
-      matches = true
+    if match_count == #and_filters then
+      return true
     end
   end
-  return matches
+  return false
 end
 
 local function addon_matches_filter(addon, filters)
