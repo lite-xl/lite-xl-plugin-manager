@@ -217,16 +217,20 @@ static const char* lua_toutf8(lua_State* L, LPCWSTR str) {
   return NULL;
 }
 
+static const void luaL_win32_push_error(lua_State* L, DWORD error_id) {
+  wchar_t message_buffer[2048];
+  size_t size = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                               NULL, error_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), message_buffer, 2048, NULL);
+  lua_toutf8(L, message_buffer); 
+}
+
 static const int luaL_win32_error(lua_State* L, DWORD error_id, const char* message, ...) {
   va_list va;
   va_start(va, message);
   lua_pushvfstring(L, message, va);
   va_end(va);
-  wchar_t message_buffer[2048];
-  size_t size = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                               NULL, error_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), message_buffer, 2048, NULL);
   lua_pushliteral(L, ": ");
-  lua_toutf8(L, message_buffer);
+  luaL_win32_push_error(L, error_id);
   lua_concat(L, 3);
   return lua_error(L);
 }
@@ -570,7 +574,30 @@ static int lpm_stat(lua_State *L) {
   lua_pushstring(L, abs_path); lua_setfield(L, -2, "abs_path");
   lua_pushvalue(L, 1); lua_setfield(L, -2, "path");
 
-#if __linux__
+#if _WIN32
+  WIN32_FILE_ATTRIBUTE_DATA data;
+  err = err || GetFileAttributesExW(wpath, GetFileExInfoStandard, &data) == 0;
+  if (!err && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+    HANDLE file = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file != INVALID_HANDLE_VALUE) {
+      wchar_t linkpath[MAX_PATH];
+      if (GetFinalPathNameByHandleW(file, linkpath, sizeof(linkpath), FILE_NAME_NORMALIZED) < 0) {
+        lua_pushnil(L);
+        err = -1;
+      } else {
+        lua_toutf8(L, linkpath);
+        CloseHandle(file);
+      }
+    }
+  } else
+    lua_pushnil(L);
+  lua_setfield(L, -2, "symlink");
+  if (err) {
+    lua_pushnil(L); 
+    luaL_win32_push_error(L, GetLastError());
+    return 2;
+  }
+#else
   if (S_ISLNK(s.st_mode)) {
     char buffer[PATH_MAX];
     ssize_t len = readlink(path, buffer, sizeof(buffer));

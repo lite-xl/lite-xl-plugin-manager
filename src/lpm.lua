@@ -542,7 +542,7 @@ global({
   SHOULD_COLOR = ((PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")) or false
 })
 global({ 
-  "HOME", "USERDIR", "CACHEDIR", "CONFIGDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "UPDATE", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",
+  "HOME", "USERDIR", "CACHEDIR", "CONFIGDIR", "BOTTLEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "UPDATE", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",
   "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL",
   "MASK", "settings", "repositories", "lite_xls", "system_bottle", "primary_lite_xl", "progress_bar_label", "write_progress_bar" 
 })
@@ -1465,14 +1465,14 @@ function Bottle.new(metadata)
       return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version 
     end)) .. (metadata.config or "") .. (EPHEMERAL and "E" or "")))
     if self.name then
-      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "named" .. PATHSEP .. self.name
+      self.local_path = BOTTLEDIR .. PATHSEP .. "named" .. PATHSEP .. self.name
     elseif EPHEMERAL then
       for i = 1, 1000 do
-        self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "auto" .. PATHSEP .. self.hash .. "-" .. i
+        self.local_path = BOTTLEDIR .. PATHSEP .. "auto" .. PATHSEP .. self.hash .. "-" .. i
         if not system.stat(self.local_path) then break elseif i == 1000 then error("can't create epehemeral bottle") end
       end
     else
-      self.local_path = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "auto" .. PATHSEP .. self.hash
+      self.local_path = BOTTLEDIR .. PATHSEP .. "auto" .. PATHSEP .. self.hash
     end
   end
   if self.name and self:is_constructed() then -- if we exist, and we have a name, find out what lxl version we are
@@ -2303,7 +2303,7 @@ function lpm.bottle_run(name, ...)
 end
 
 function lpm.bottle_list(name, ...)
-  local named_folder = CACHEDIR .. PATHSEP .. "bottles" .. PATHSEP .. "named"
+  local named_folder = BOTTLEDIR .. PATHSEP .. "named"
   local bottles = common.map(system.stat(named_folder) and system.ls(named_folder) or {}, function(e) return Bottle.new({ name = e }) end)
   local result = { ["bottles"] = { } }
   local max_version = 0
@@ -2331,12 +2331,22 @@ function lpm.bottle_list(name, ...)
 end
 
 function lpm.bottle_purge()
-  common.rmrf(CACHEDIR .. PATHSEP .. "bottles")
+  common.rmrf(BOTTLEDIR)
+  log.action("Purged " .. BOTTLEDIR .. ".", "green")
+end
+
+function lpm.cache_purge()
+  for i, dir in ipairs({ TMPDIR, CACHEDIR }) do
+    common.rmrf(dir)
+    log.action("Purged " .. dir .. ".", "green")
+  end
 end
 
 function lpm.purge()
-  log.action("Purged " .. CACHEDIR .. ".", "green")
-  common.rmrf(CACHEDIR)
+  for i, dir in ipairs({ BOTTLEDIR, CONFIGDIR, TMPDIR, CACHEDIR }) do
+    common.rmrf(dir)
+    log.action("Purged " .. dir .. ".", "green")
+  end
 end
 
 -- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
@@ -2445,6 +2455,7 @@ function lpm.command(ARGS)
   elseif ARGS[2] == "bottle" and ARGS[3] == "run" then return lpm.bottle_run(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "list" then return lpm.bottle_list(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm.bottle_purge(common.slice(ARGS, 4))
+  elseif ARGS[2] == "cache" and ARGS[3] == "purge" then return lpm.cache_purge(common.slice(ARGS, 4))
   elseif ARGS[2] == "run" then return lpm.lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm.lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "purge" then lpm.purge()
@@ -2512,7 +2523,7 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--ssl-certs=directory/file] [--force] [--arch=]] .. DEFAULT_ARCH .. [[]
   [--assume-yes] [--no-install-optional] [--verbose] [--mod-version=3]
   [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
-  [--no-color] [--table=...] [--plugin=file/url]
+  [--no-color] [--table=...] [--plugin=file/url] [--tmpdir=directory] [--configdir=directory]
 
 LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
 
@@ -2770,6 +2781,7 @@ not commonly used publically.
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or (HOME .. PATHSEP .. ".cache" .. PATHSEP .. "lpm")
   CONFIGDIR = common.normalize_path(ARGS["configdir"]) or os.getenv("LPM_CONFIG") or (HOME .. PATHSEP .. ".config" .. PATHSEP .. "lpm")
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
+  BOTTLEDIR = CONFIGDIR .. PATHSEP .. "bottles"
   if ARGS["trace"] then system.trace(true) end
 
   MASK = {}
