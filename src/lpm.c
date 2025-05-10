@@ -687,8 +687,13 @@ static int lpm_trace(lua_State* L) {
   static void git_init() {
     if (!git_initialized) {
       git_libgit2_init();
-      if (git_cert_type)
+      if (git_cert_type) {
+        if (print_trace) {
+          fprintf(stderr, "[libgit2] Setting SSL certificate locations to %s.\n", git_cert_path);
+          fflush(stderr);
+        }
         git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, git_cert_type == 2 ? git_cert_path : NULL, git_cert_type == 1 ? git_cert_path : NULL);
+      }
       git_libgit2_opts(GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_SYSTEM, ".");
       git_libgit2_opts(GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_GLOBAL, ".");
       git_libgit2_opts(GIT_OPT_SET_SEARCH_PATH, GIT_CONFIG_LEVEL_XDG, ".");
@@ -1335,8 +1340,13 @@ static int lpm_extract(lua_State* L) {
       const char* path = luaL_checkstring(L, 2);
       if (strcmp(type, "dir") == 0) {
         git_cert_type = 1;
-        if (git_initialized)
+        if (git_initialized) {
+          if (print_trace) {
+            fprintf(stderr, "[libgit2] Setting SSL certificate locations to %s.\n", path);
+            fflush(stderr);
+          }
           git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, NULL, path);
+        }
         strncpy(git_cert_path, path, MAX_PATH);
         if (print_trace) {
           fprintf(stderr, "[ssl] SSL directory set to %s.\n", git_cert_path);
@@ -1389,8 +1399,13 @@ static int lpm_extract(lua_State* L) {
           #endif
         }
         git_cert_type = 2;
-        if (git_initialized)
+        if (git_initialized) {
+          if (print_trace) {
+            fprintf(stderr, "[libgit2] Setting SSL certificate locations to %s.\n", path);
+            fflush(stderr);
+          }
           git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, path, NULL);
+        }
         strncpy(git_cert_path, path, MAX_PATH);
         if (print_trace) {
           fprintf(stderr, "[ssl] SSL file set to %s.\n", git_cert_path);
@@ -1404,10 +1419,6 @@ static int lpm_extract(lua_State* L) {
           fflush(stderr);
         }
         mbedtls_ssl_conf_ca_chain(&ssl_config, &x509_certificate, NULL);
-        if (print_trace) {
-          fprintf(stderr, "[ssl] SSL file set to %s.\n", path);
-          fflush(stderr);
-        }
       }
     }
     return 0;

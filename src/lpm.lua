@@ -2872,6 +2872,7 @@ not commonly used publically.
       if PLATFORM == "windows" then
         common.mkdirp(TMPDIR)
         system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
+        if ARGS["trace"] and VERBOSE then io.stderr:write(common.read(TMPDIR .. PATHSEP .. "certs.crt")) end
       else
         local has_certs = false
         for i, path in ipairs(paths) do
