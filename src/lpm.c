@@ -1379,7 +1379,7 @@ static int lpm_extract(lua_State* L) {
                 if (!pCertContext)
                   break;
                 BYTE keyUsage[2];
-                if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING && (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && (keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))) {
+                if ((pCertContext->dwCertEncodingType & (X509_ASN_ENCODING | PKCS_7_ASN_ENCODING)) && (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && (keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))) {
                   if (CertVerifyTimeValidity(NULL, pCertContext->pCertInfo) == 0) {
                     DWORD size = 0;
                     CryptBinaryToStringA(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
