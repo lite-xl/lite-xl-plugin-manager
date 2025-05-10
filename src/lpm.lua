@@ -541,7 +541,11 @@ global({
   EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or "",
   SHOULD_COLOR = ((PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")) or false
 })
-global({ "HOME", "USERDIR", "CACHEDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "UPDATE", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL", "MASK", "settings", "repositories", "lite_xls", "system_bottle", "primary_lite_xl", "progress_bar_label", "write_progress_bar" })
+global({ 
+  "HOME", "USERDIR", "CACHEDIR", "CONFIGDIR", "JSON", "TABLE", "HEADER", "RAW", "VERBOSE", "FILTRATION", "UPDATE", "MOD_VERSION", "QUIET", "FORCE", "REINSTALL", "CONFIG",
+  "NO_COLOR", "AUTO_PULL_REMOTES", "ARCH", "ASSUME_YES", "NO_INSTALL_OPTIONAL", "TMPDIR", "DATADIR", "BINARY", "POST", "PROGRESS", "SYMLINK", "REPOSITORY", "EPHEMERAL",
+  "MASK", "settings", "repositories", "lite_xls", "system_bottle", "primary_lite_xl", "progress_bar_label", "write_progress_bar" 
+})
 global({ Addon = {}, Repository = {}, LiteXL = {}, Bottle = {}, lpm = {}, log = {} })
 
 -- in the cases where we don't have a manifest, assume generalized structure, take addons folder, trawl through it, build manifest that way
@@ -2486,8 +2490,8 @@ end
 xpcall(function()
   rawset(_G, "ARGS", ARGV)
   ARGS = common.args(ARGS, {
-    json = "flag", userdir = "string", cachedir = "string", version = "flag", verbose = "flag",
-    quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag",
+    json = "flag", userdir = "string", cachedir = "string", configdir = "string", version = "flag", verbose = "flag",
+    quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag", tmpdir = "string",
     ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
@@ -2598,6 +2602,7 @@ Flags have the following effects:
   --userdir=directory      Sets the lite-xl userdir manually.
                            If omitted, uses the normal lite-xl logic.
   --cachedir=directory     Sets the directory to store all repositories.
+  --configdir=directory    Sets the directory where we store lpm configuration data.
   --tmpdir=directory       During install, sets the staging area.
   --datadir=directory      Sets the data directory where core addons are located
                            for the system lite-xl.
@@ -2763,6 +2768,7 @@ not commonly used publically.
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
   AUTO_PULL_REMOTES = ARGS["remotes"]
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or (HOME .. PATHSEP .. ".cache" .. PATHSEP .. "lpm")
+  CONFIGDIR = common.normalize_path(ARGS["configdir"]) or os.getenv("LPM_CONFIG") or (HOME .. PATHSEP .. ".config" .. PATHSEP .. "lpm")
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
   if ARGS["trace"] then system.trace(true) end
 
@@ -2975,6 +2981,7 @@ not commonly used publically.
 
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
+  if not system.stat(CONFIGDIR) then common.mkdirp(CONFIGDIR) end
   if engage_locks(function()
     lpm.setup()
   end, error_handler, lock_warning) then return end

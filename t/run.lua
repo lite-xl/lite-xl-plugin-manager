@@ -131,7 +131,7 @@ local tests = {
 
 local last_command_result, last_command
 lpm = function(cmd)
-  last_command = arg[0] .. " --quiet --json --assume-yes --mod-version=3 --userdir=" .. userdir .. " " .. cmd
+  last_command = string.format("%s --quiet --json --assume-yes --mod-version=3 --userdir=%s --tmpdir=%s --cachedir=%s --configdir=%s %s", arg[0], userdir, tmpdir, tmpdir, tmpdir, cmd);
   local pipe = io.popen(last_command, "r")
   local result = pipe:read("*all")
   last_command_result = result ~= "" and json.decode(result) or nil
