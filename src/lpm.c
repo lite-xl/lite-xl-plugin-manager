@@ -1378,12 +1378,41 @@ static int lpm_extract(lua_State* L) {
                 break;
               BYTE keyUsage[2];
               if (pCertContext->dwCertEncodingType & X509_ASN_ENCODING && (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && (keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))) {
-                DWORD size = 0;
-                CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
-                char* buffer = malloc(size);
-                CryptBinaryToString(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
-                fwrite(buffer, sizeof(char), size, file);
-                free(buffer);
+                if (CertVerifyTimeValidity(NULL, pCertContext->pCertInfo) == 0) {
+                  DWORD size = 0;
+                  CryptBinaryToStringA(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
+                  char* buffer = malloc(size);
+                  CryptBinaryToStringA(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
+                  // Windows will sometimes stack on null terminators at the end... like... erroneously.
+                  // I know it says here size includes a null temrinator: https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-cryptbinarytostringa
+                  // But honestly, if I do -1, it strips of line feeds. So I have to for loop back and compute the size without the terminators.
+                  // It looks like a certificate is being encoded in base64 with two equals signs at the end for padding, and windows isn't expecting this, so it returns
+                  // a length that is two characters longer than the end of string.
+                  // Here's the offending certificate, at least in my Wine implementation:
+                  /* 
+                  -----BEGIN CERTIFICATE-----^M
+                  MIICnTCCAiSgAwIBAgIMCL2Fl2yZJ6SAaEc7MAoGCCqGSM49BAMDMIGRMQswCQYD^M
+                  VQQGEwJVUzERMA8GA1UECBMISWxsaW5vaXMxEDAOBgNVBAcTB0NoaWNhZ28xITAf^M
+                  BgNVBAoTGFRydXN0d2F2ZSBIb2xkaW5ncywgSW5jLjE6MDgGA1UEAxMxVHJ1c3R3^M
+                  YXZlIEdsb2JhbCBFQ0MgUDM4NCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTAeFw0x^M
+                  NzA4MjMxOTM2NDNaFw00MjA4MjMxOTM2NDNaMIGRMQswCQYDVQQGEwJVUzERMA8G^M
+                  A1UECBMISWxsaW5vaXMxEDAOBgNVBAcTB0NoaWNhZ28xITAfBgNVBAoTGFRydXN0^M
+                  d2F2ZSBIb2xkaW5ncywgSW5jLjE6MDgGA1UEAxMxVHJ1c3R3YXZlIEdsb2JhbCBF^M
+                  Q0MgUDM4NCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTB2MBAGByqGSM49AgEGBSuB^M
+                  BAAiA2IABGvaDXU1CDFHBa5FmVXxERMuSvgQMSOjfoPTfygIOiYaOs+Xgh+AtycJ^M
+                  j9GOMMQKmw6sWASr9zZ9lCOkmwqKi6vr/TklZvFe/oyujUF5nQlgziip04pt89ZF^M
+                  1PKYhDhloKNDMEEwDwYDVR0TAQH/BAUwAwEB/zAPBgNVHQ8BAf8EBQMDBwYAMB0G^M
+                  A1UdDgQWBBRVqYSJ0sEyvRjLbKYHTsjnnb6CkDAKBggqhkjOPQQDAwNnADBkAjA3^M
+                  AZKXRRJ+oPM+rRk6ct30UJMDEr5E0k9BpIycnR+j9sKS50gU/k6bpZFXrsY3crsC^M
+                  MGclCrEMXu6pY5Jv5ZAL/mYiykf9ijH3g/56vxC+GCsej/YpHpRZ744hN8tRmKVuSw==^M
+                  -----END CERTIFICATE-----^M
+                  ^@D
+                  */
+                  // What the actual fuck.
+                  for (; buffer[size - 1] == '\0' || buffer[size -2] == '\0' || buffer[size - 3] == '\0' && size > 3; --size);
+                  fwrite(buffer, sizeof(char), size, file);
+                  free(buffer);
+                }
               }
             }
             fclose(file);
@@ -1531,6 +1560,7 @@ static int lpm_extract(lua_State* L) {
         if (offset < sizeof(context->buffer) - error_len - 2)
           strcat(context->buffer, context->is_ssl ? mbed_buffer : strerror(error_code));
       }
+      strcpy(context->error, context->buffer);
     }
     return error_code;
   }
@@ -1558,7 +1588,7 @@ static int lpm_extract(lua_State* L) {
             if (is_main_thread)
               break;
             return lua_yieldk(L, 0, ctx, lpm_getk);
-          } 
+          }
           if (
             lpm_get_error(context, status, "can't handshake") ||
             lpm_get_error(context, mbedtls_ssl_get_verify_result(&context->ssl), "can't verify result")
@@ -1746,7 +1776,7 @@ static int lpm_extract(lua_State* L) {
       fclose(context->file);
     else
       luaL_unref(L, LUA_REGISTRYINDEX, context->lua_buffer);
-    if (context->error_code)
+    if (context->error_code) 
       return luaL_error(L, "%s", context->error);
     return 2;
   }

@@ -49,7 +49,7 @@ if [[ "$@" != *"-DLPM_NO_NETWORK"* && "$@" != *"-lmbedtls"* && "$@" != *"-lmbedc
 fi
 if [[ "$@" != *"-DLPM_NO_GIT"* && "$@" != *"-lgit2"* ]]; then
   [[ "$@" != *"-DLPM_NO_NETWORK"* ]] && USE_HTTPS="mbedTLS" || USE_HTTPS="OFF"
-  [ ! -e "lib/libgit2/build" ] && { cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=$USE_HTTPS && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  [ ! -e "lib/libgit2/build" ] && { cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DCMAKE_C_STANDARD=99 -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=$USE_HTTPS && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="-lgit2 $LINK_FLAGS"
 fi
 if [[ "$@" != *"-lzip"* ]]; then
