@@ -1409,7 +1409,7 @@ static int lpm_extract(lua_State* L) {
                   ^@D
                   */
                   // What the actual fuck.
-                  for (; buffer[size - 1] == '\0' || buffer[size -2] == '\0' || buffer[size - 3] == '\0' && size > 3; --size);
+                  for (; size > 3 && buffer[size - 1] == '\0' || buffer[size -2] == '\0' || buffer[size - 3] == '\0'; --size);
                   fwrite(buffer, sizeof(char), size, file);
                   free(buffer);
                 }
