@@ -2039,7 +2039,7 @@ function lpm.lite_xl_run(...)
       table.insert(arguments, v)
     end
   end
-  if is_argument_repo(arguments[1]) and not arguments[1]:find("@") then
+  if arguments[1] and is_argument_repo(arguments[1]) and not arguments[1]:find("@") then
     table.insert(repositories, 1, Repository.url(arguments[1]):add(AUTO_PULL_REMOTES, EPHEMERAL and arguments[1]:find("^http")))
     system_bottle:invalidate_cache()
     repositories[1].explicit = true
