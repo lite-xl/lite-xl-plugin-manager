@@ -1388,21 +1388,22 @@ static int lpm_extract(lua_State* L) {
                 DWORD reqSize;
                 int found = 0;
                 if (CertGetEnhancedKeyUsage(pCertContext, 0, NULL, &reqSize)) {
-                  CERT_ENHKEY_USAGE* enhkey_usage = malloc(reqSize);
-                  if(CertGetEnhancedKeyUsage(pCertContext, 0, enhkey_usage, &reqSize)) {
-                    if(!enhkey_usage->cUsageIdentifier) {
+                  CERT_ENHKEY_USAGE* enhkeyUsage = malloc(reqSize);
+                  if(CertGetEnhancedKeyUsage(pCertContext, 0, enhkeyUsage, &reqSize)) {
+                    if(!enhkeyUsage->cUsageIdentifier) {
                       if((HRESULT)GetLastError() == CRYPT_E_NOT_FOUND)
                         found = 1;
                     } else {
-                      for(int i = 0; i < enhkey_usage->cUsageIdentifier; ++i) {
+                      for(int i = 0; i < enhkeyUsage->cUsageIdentifier; ++i) {
                         if(!strcmp("1.3.6.1.5.5.7.3.1" /* OID server auth */,
-                                  enhkey_usage->rgpszUsageIdentifier[i])) {
+                                  enhkeyUsage->rgpszUsageIdentifier[i])) {
                           found = 1;
                           break;
                         }
                       }
                     }
                   }
+                  free(enhkeyUsage);
                 }
                 if (!found)
                   continue;
