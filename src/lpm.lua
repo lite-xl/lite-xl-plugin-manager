@@ -1261,6 +1261,17 @@ function Repository:fetch_if_not_present()
   return self:fetch()
 end
 
+local function retry_fetch(...)
+  local status, err = pcall(system.fetch, ...)
+  -- In the case where we get an "incomplete pack header" error, we want
+  -- to retry, at least once, as this is a transient server-side error, I think.
+  if not status and err and err:find("incomplete pack header") then
+    status, errr = pcall(system.fetch, ...)
+  end
+  if not status then error(err, 0) end
+  return err
+end
+
 -- useds to fetch things from a generic place
 function Repository:fetch()
   if self:is_local() then return self end
@@ -1273,7 +1284,7 @@ function Repository:fetch()
       common.mkdirp(temporary_path)
       log.progress_action("Fetching " .. self.remote .. "...")
       system.init(temporary_path, self.remote)
-      self.branch = system.fetch(temporary_path, write_progress_bar)
+      self.branch = retry_fetch(temporary_path, write_progress_bar)
       if not self.branch then error("Can't find remote branch for " .. self.remote) end
       self.branch = self.branch:gsub("^refs/heads/", "")
       path = self.repo_path .. PATHSEP .. self.branch
@@ -1290,17 +1301,10 @@ function Repository:fetch()
       end
       if not exists or self.branch then
         log.progress_action("Fetching " .. self.remote .. ":" .. (self.commit or self.branch) .. "...")
-        local status, err = pcall(system.fetch, temporary_path or path, write_progress_bar, self.commit or ("+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch))
-        if not status and err:find("incomplete pack header") then
-          status, err = pcall(system.fetch, temporary_path or path, write_progress_bar, self.commit or ("+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch))
-        end
+        local status, err = pcall(retry_fetch, temporary_path or path, write_progress_bar, self.commit or ("+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch))
         if not status and err:find("cannot fetch a specific object") then
-          status, err = pcall(system.fetch, temporary_path or path, write_progress_bar, nil, true)
-          if not status and err:find("incomplete pack header") then
-            status, err = pcall(system.fetch, temporary_path or path, write_progress_bar, nil, true)
-          end
-        end
-        if not status then
+          retry_fetch(temporary_path or path, write_progress_bar, nil, true)
+        elseif not status then
           error(err, 0)
         end
         common.reset(temporary_path or path, self.commit or self.branch, "hard")
@@ -1345,9 +1349,9 @@ function Repository:update(pull_remotes)
   local manifest, remotes
   if self.branch and (not self:url():find("^http") or not NO_NETWORK) then
     log.progress_action("Updating " .. self:url() .. "...")
-    local status, err = pcall(system.fetch, self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
+    local status, err = pcall(retry_fetch, self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
     if not status then -- see https://github.com/lite-xl/lite-xl-plugin-manager/issues/85
-      if not err:find("object not found %- no match for id") and not err:find("incomplete pack header") then error(err, 0) end
+      if not err:find("object not found %- no match for id") then error(err, 0) end
       common.rmrf(self.local_path)
       return self:fetch()
     end
