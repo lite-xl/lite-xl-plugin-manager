@@ -2514,7 +2514,7 @@ xpcall(function()
   ARGS = common.args(ARGS, {
     json = "flag", userdir = "string", cachedir = "string", configdir = "string", version = "flag", verbose = "flag",
     quiet = "flag", version = "flag", ["mod-version"] = "string", remotes = "flag", help = "flag", tmpdir = "string",
-    ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag",
+    ["ssl-certs"] = "string", force = "flag", arch = "array", ["assume-yes"] = "flag", bottledir = "string",
     ["no-install-optional"] = "flag", datadir = "string", binary = "string", trace = "flag", progress = "flag",
     symlink = "flag", reinstall = "flag", ["no-color"] = "flag", config = "string", table = "string", header = "string",
     repository = "string", ephemeral = "flag", mask = "array", raw = "string", plugin = "array", ["no-network"] = "flag",
@@ -2628,6 +2628,7 @@ Flags have the following effects:
   --tmpdir=directory       During install, sets the staging area.
   --datadir=directory      Sets the data directory where core addons are located
                            for the system lite-xl.
+  --bottledir=directory    Sets the directory where bottles are stored.
   --binary=path            Sets the lite-xl binary path for the system lite-xl.
   --verbose                Spits out more information, including intermediate
                             steps to install and whatnot.
@@ -2785,14 +2786,14 @@ not commonly used publically.
   ASSUME_YES = ARGS["assume-yes"] or FORCE
   MOD_VERSION = ARGS["mod-version"] or os.getenv("LPM_MODVERSION")
   assert(not MOD_VERSION or MOD_VERSION == "any" or MOD_VERSION:find("^%d+%.?%d*%.?%d*$"), "--mod-version must be either 'any' or a version number.")
+  AUTO_PULL_REMOTES = ARGS["remotes"]
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
   USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
     or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
-  AUTO_PULL_REMOTES = ARGS["remotes"]
-  CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or (HOME .. PATHSEP .. ".cache" .. PATHSEP .. "lpm")
-  CONFIGDIR = common.normalize_path(ARGS["configdir"]) or os.getenv("LPM_CONFIG") or (HOME .. PATHSEP .. ".config" .. PATHSEP .. "lpm")
-  TMPDIR = common.normalize_path(ARGS["tmpdir"]) or CACHEDIR .. PATHSEP .. "tmp"
-  BOTTLEDIR = CONFIGDIR .. PATHSEP .. "bottles"
+  CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or ((os.getenv("XDG_CACHE_HOME") or (HOME .. PATHSEP .. ".cache")) .. PATHSEP .. "lpm")
+  CONFIGDIR = common.normalize_path(ARGS["configdir"]) or os.getenv("LPM_CONFIG") or ((os.getenv("XDG_CONFIG_HOME") or (HOME .. PATHSEP .. ".config")) .. PATHSEP .. "lpm")
+  TMPDIR = common.normalize_path(ARGS["tmpdir"]) or os.getenv("LPM_TMPDIR") or (CACHEDIR .. PATHSEP .. "tmp")
+  BOTTLEDIR = common.normalize_path(ARGS["bottledir"]) or os.getenv("LPM_BOTTLEDIR") or ((os.getenv("XDG_STATE_HOME") or (HOME .. PATHSEP .. ".local" .. PATHSEP  .. "state")) .. PATHSEP .. "lpm" .. PATHSEP .. "bottles")
   if ARGS["trace"] then system.trace(true) end
 
   MASK = {}
