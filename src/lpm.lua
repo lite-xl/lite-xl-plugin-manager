@@ -1976,6 +1976,10 @@ local function is_argument_repo(arg)
   return arg:find("^http") or arg:find("[\\/]") or arg == "."
 end
 
+local function is_lite_xl_bundle(arg)
+  return arg:find("^http") or (arg:find("%.tar%.gz$") and arg:find("%.zip$"))
+end
+
 function lpm.retrieve_addons(lite_xl, arguments, filters)
   local addons = {}
   local i = 1
@@ -2043,6 +2047,9 @@ function lpm.lite_xl_run(...)
     if v:find("^%d+") or v == "system" or v == "primary" then
       assert(version == "primary", "cannot specify multiple versions")
       version, version_idx = v, i
+    elseif i == 1 and is_lite_xl_bundle(v) then
+      table.insert(lite_xls, LiteXL.new(nil, { version = "transient", mod_version = MOD_VERSION or LATEST_MOD_VERSION, files = { { arch = ARCH, checksum = "SKIP", url = v } } }))
+      version = "transient"
     elseif i == 1 then
       bottle = lpm.get_bottle(v)
       if not bottle then table.insert(arguments, v) end
