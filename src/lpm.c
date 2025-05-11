@@ -1379,43 +1379,66 @@ static int lpm_extract(lua_State* L) {
                 if (!pCertContext)
                   break;
                 BYTE keyUsage[2];
-                if ((pCertContext->dwCertEncodingType & (X509_ASN_ENCODING | PKCS_7_ASN_ENCODING)) && (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && (keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))) {
-                  if (CertVerifyTimeValidity(NULL, pCertContext->pCertInfo) == 0) {
-                    DWORD size = 0;
-                    CryptBinaryToStringA(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
-                    char* buffer = malloc(size);
-                    CryptBinaryToStringA(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
-                    // Windows will sometimes stack on null terminators at the end... like... erroneously.
-                    // I know it says here size includes a null temrinator: https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-cryptbinarytostringa
-                    // But honestly, if I do -1, it strips of line feeds. So I have to for loop back and compute the size without the terminators.
-                    // It looks like a certificate is being encoded in base64 with two equals signs at the end for padding, and windows isn't expecting this, so it returns
-                    // a length that is two characters longer than the end of string.
-                    // Here's the offending certificate, at least in my Wine implementation:
-                    /* 
-                    -----BEGIN CERTIFICATE-----^M
-                    MIICnTCCAiSgAwIBAgIMCL2Fl2yZJ6SAaEc7MAoGCCqGSM49BAMDMIGRMQswCQYD^M
-                    VQQGEwJVUzERMA8GA1UECBMISWxsaW5vaXMxEDAOBgNVBAcTB0NoaWNhZ28xITAf^M
-                    BgNVBAoTGFRydXN0d2F2ZSBIb2xkaW5ncywgSW5jLjE6MDgGA1UEAxMxVHJ1c3R3^M
-                    YXZlIEdsb2JhbCBFQ0MgUDM4NCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTAeFw0x^M
-                    NzA4MjMxOTM2NDNaFw00MjA4MjMxOTM2NDNaMIGRMQswCQYDVQQGEwJVUzERMA8G^M
-                    A1UECBMISWxsaW5vaXMxEDAOBgNVBAcTB0NoaWNhZ28xITAfBgNVBAoTGFRydXN0^M
-                    d2F2ZSBIb2xkaW5ncywgSW5jLjE6MDgGA1UEAxMxVHJ1c3R3YXZlIEdsb2JhbCBF^M
-                    Q0MgUDM4NCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTB2MBAGByqGSM49AgEGBSuB^M
-                    BAAiA2IABGvaDXU1CDFHBa5FmVXxERMuSvgQMSOjfoPTfygIOiYaOs+Xgh+AtycJ^M
-                    j9GOMMQKmw6sWASr9zZ9lCOkmwqKi6vr/TklZvFe/oyujUF5nQlgziip04pt89ZF^M
-                    1PKYhDhloKNDMEEwDwYDVR0TAQH/BAUwAwEB/zAPBgNVHQ8BAf8EBQMDBwYAMB0G^M
-                    A1UdDgQWBBRVqYSJ0sEyvRjLbKYHTsjnnb6CkDAKBggqhkjOPQQDAwNnADBkAjA3^M
-                    AZKXRRJ+oPM+rRk6ct30UJMDEr5E0k9BpIycnR+j9sKS50gU/k6bpZFXrsY3crsC^M
-                    MGclCrEMXu6pY5Jv5ZAL/mYiykf9ijH3g/56vxC+GCsej/YpHpRZ744hN8tRmKVuSw==^M
-                    -----END CERTIFICATE-----^M
-                    ^@D
-                    */
-                    // What the actual fuck.
-                    for (; size > 3 && buffer[size - 1] == '\0' || buffer[size -2] == '\0' || buffer[size - 3] == '\0'; --size);
-                    fwrite(buffer, sizeof(char), size, file);
-                    free(buffer);
+                if (CertVerifyTimeValidity(NULL, pCertContext->pCertInfo) != 0)
+                  continue;
+                if (CertGetIntendedKeyUsage(pCertContext->dwCertEncodingType, pCertContext->pCertInfo, keyUsage, sizeof(keyUsage)) && !(keyUsage[0] & CERT_KEY_CERT_SIGN_KEY_USAGE))
+                  continue;
+
+                // This bit pulled directly from curl.
+                DWORD reqSize;
+                int found = 0;
+                if (CertGetEnhancedKeyUsage(pCertContext, 0, NULL, &reqSize)) {
+                  CERT_ENHKEY_USAGE* enhkey_usage = malloc(reqSize);
+                  if(CertGetEnhancedKeyUsage(pCertContext, 0, enhkey_usage, &reqSize)) {
+                    if(!enhkey_usage->cUsageIdentifier) {
+                      if((HRESULT)GetLastError() == CRYPT_E_NOT_FOUND)
+                        found = 1;
+                    } else {
+                      for(int i = 0; i < enhkey_usage->cUsageIdentifier; ++i) {
+                        if(!strcmp("1.3.6.1.5.5.7.3.1" /* OID server auth */,
+                                  enhkey_usage->rgpszUsageIdentifier[i])) {
+                          found = 1;
+                          break;
+                        }
+                      }
+                    }
                   }
                 }
+                if (!found)
+                  continue;
+                DWORD size = 0;
+                CryptBinaryToStringA(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &size);
+                char* buffer = malloc(size);
+                CryptBinaryToStringA(pCertContext->pbCertEncoded, pCertContext->cbCertEncoded, CRYPT_STRING_BASE64HEADER, buffer, &size);
+                // Windows will sometimes stack on null terminators at the end... like... erroneously.
+                // I know it says here size includes a null temrinator: https://learn.microsoft.com/en-us/windows/win32/api/wincrypt/nf-wincrypt-cryptbinarytostringa
+                // But honestly, if I do -1, it strips of line feeds. So I have to for loop back and compute the size without the terminators.
+                // It looks like a certificate is being encoded in base64 with two equals signs at the end for padding, and windows isn't expecting this, so it returns
+                // a length that is two characters longer than the end of string.
+                // Here's the offending certificate, at least in my Wine implementation:
+                /* 
+                -----BEGIN CERTIFICATE-----^M
+                MIICnTCCAiSgAwIBAgIMCL2Fl2yZJ6SAaEc7MAoGCCqGSM49BAMDMIGRMQswCQYD^M
+                VQQGEwJVUzERMA8GA1UECBMISWxsaW5vaXMxEDAOBgNVBAcTB0NoaWNhZ28xITAf^M
+                BgNVBAoTGFRydXN0d2F2ZSBIb2xkaW5ncywgSW5jLjE6MDgGA1UEAxMxVHJ1c3R3^M
+                YXZlIEdsb2JhbCBFQ0MgUDM4NCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTAeFw0x^M
+                NzA4MjMxOTM2NDNaFw00MjA4MjMxOTM2NDNaMIGRMQswCQYDVQQGEwJVUzERMA8G^M
+                A1UECBMISWxsaW5vaXMxEDAOBgNVBAcTB0NoaWNhZ28xITAfBgNVBAoTGFRydXN0^M
+                d2F2ZSBIb2xkaW5ncywgSW5jLjE6MDgGA1UEAxMxVHJ1c3R3YXZlIEdsb2JhbCBF^M
+                Q0MgUDM4NCBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTB2MBAGByqGSM49AgEGBSuB^M
+                BAAiA2IABGvaDXU1CDFHBa5FmVXxERMuSvgQMSOjfoPTfygIOiYaOs+Xgh+AtycJ^M
+                j9GOMMQKmw6sWASr9zZ9lCOkmwqKi6vr/TklZvFe/oyujUF5nQlgziip04pt89ZF^M
+                1PKYhDhloKNDMEEwDwYDVR0TAQH/BAUwAwEB/zAPBgNVHQ8BAf8EBQMDBwYAMB0G^M
+                A1UdDgQWBBRVqYSJ0sEyvRjLbKYHTsjnnb6CkDAKBggqhkjOPQQDAwNnADBkAjA3^M
+                AZKXRRJ+oPM+rRk6ct30UJMDEr5E0k9BpIycnR+j9sKS50gU/k6bpZFXrsY3crsC^M
+                MGclCrEMXu6pY5Jv5ZAL/mYiykf9ijH3g/56vxC+GCsej/YpHpRZ744hN8tRmKVuSw==^M
+                -----END CERTIFICATE-----^M
+                ^@D
+                */
+                // What the actual fuck.
+                for (; size > 3 && buffer[size - 1] == '\0' || buffer[size -2] == '\0' || buffer[size - 3] == '\0'; --size);
+                fwrite(buffer, sizeof(char), size, file);
+                free(buffer);
               }
               CertCloseStore(hSystemStore, 0);
             }
