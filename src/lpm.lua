@@ -1347,7 +1347,7 @@ function Repository:update(pull_remotes)
     log.progress_action("Updating " .. self:url() .. "...")
     local status, err = pcall(system.fetch, self.local_path, write_progress_bar, "+refs/heads/" .. self.branch  .. ":refs/remotes/origin/" .. self.branch)
     if not status then -- see https://github.com/lite-xl/lite-xl-plugin-manager/issues/85
-      if not err:find("object not found %- no match for id") then error(err, 0) end
+      if not err:find("object not found %- no match for id") and not err:find("incomplete pack header") then error(err, 0) end
       common.rmrf(self.local_path)
       return self:fetch()
     end
