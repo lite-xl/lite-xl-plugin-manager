@@ -1404,6 +1404,7 @@ end
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
 function LiteXL:is_primary() return primary_lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
+function LiteXL:is_manifest() return self.repository end
 function LiteXL:is_compatible(addon) return not addon.mod_version or MOD_VERSION == "any" or compatible_modversion(self.mod_version, addon.mod_version) end
 function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
 
@@ -1428,7 +1429,8 @@ function LiteXL:install()
       common.reset(self.local_path, self.commit or self.branch)
     end
     for i,file in ipairs(self.files or {}) do
-      if file.arch and common.grep(ARCH, function(e) return e == file.arch end)[1] then
+      local file_arch = file.arch and (type(file.arch) == 'table' and file.arch or { file.arch })
+      if file_arch and common.grep(ARCH, function(e) return common.grep(file_arch, function(a) return a == e end)[1] end)[1] then
         if not file.checksum then error("requires a checksum") end
         local basename = common.basename(file.url)
         local archive = assert(basename:find("%.zip$") or basename:find("%.tar%.gz$"), "lite-xl files must be archives")
@@ -1790,7 +1792,7 @@ local function get_repository(url)
 end
 
 function lpm.settings_save()
-  common.write(CACHEDIR .. PATHSEP .. "settings.json", json.encode(settings))
+  common.write(CONFIGDIR .. PATHSEP .. "settings.json", json.encode(settings))
 end
 
 
@@ -1803,7 +1805,7 @@ end
 local DEFAULT_REPOS
 function lpm.repo_init(repos)
   DEFAULT_REPOS = { Repository.url(DEFAULT_REPO_URL) }
-  if not system.stat(CACHEDIR .. PATHSEP .. "settings.json") then
+  if not system.stat(CONFIGDIR .. PATHSEP .. "settings.json") then
     for i, repository in ipairs(repos or DEFAULT_REPOS) do
       table.insert(repositories, repository:add(true))
     end
@@ -1859,8 +1861,8 @@ function lpm.get_lite_xl(version)
 end
 
 function lpm.lite_xl_save()
-  settings.lite_xls = common.map(common.grep(lite_xls, function(l) return l:is_local() and not l:is_system() end), function(l) 
-    return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path, primary = primary_lite_xl == l } 
+  settings.lite_xls = common.map(common.grep(lite_xls, function(l) return (l:is_local() or not l:is_manifest()) and not l:is_system() end), function(l) 
+    return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path, primary = primary_lite_xl == l, files = l.files } 
   end)
   lpm.settings_save()
 end
@@ -1869,16 +1871,20 @@ function lpm.lite_xl_add(version, path)
   if not version then error("requires a version") end
   if not version:find("^%d") then error("versions must begin numerically (i.e. 2.1.1-debug)") end
   if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " lite-xl already exists") end
-  local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
-  local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
-  local binary_stat = assert(system.stat(binary_path), "can't find binary path " .. binary_path)
-  local data_stat = assert(system.stat(data_path), "can't find data path " .. data_path)
-  local path_stat = assert(system.stat(path:gsub(PATHSEP .. "$", "")), "can't find lite-xl path " .. path)
-  local mod_version = MOD_VERSION
-  if mod_version == "any" or not mod_version then
-    mod_version = common.read(data_path .. PATHSEP .. "core" .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
+  if path:find("^http") then
+    table.insert(lite_xls, LiteXL.new(nil, { version = version, mod_version = MOD_VERSION or LATEST_MOD_VERSION, files = { { arch = ARCH, url = path, checksum = "SKIP" } } }))
+  else
+    local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
+    local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
+    local binary_stat = assert(system.stat(binary_path), "can't find binary path " .. binary_path)
+    local data_stat = assert(system.stat(data_path), "can't find data path " .. data_path)
+    local path_stat = assert(system.stat(path:gsub(PATHSEP .. "$", "")), "can't find lite-xl path " .. path)
+    local mod_version = MOD_VERSION
+    if mod_version == "any" or not mod_version then
+      mod_version = common.read(data_path .. PATHSEP .. "core" .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
+    end
+    table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = mod_version or LATEST_MOD_VERSION }))
   end
-  table.insert(lite_xls, LiteXL.new(nil, { version = version, binary_path = { [ARCH[1]] = binary_stat.abs_path }, datadir_path = data_stat.abs_path, path = path_stat.abs_path, mod_version = mod_version or LATEST_MOD_VERSION }))
   lpm.lite_xl_save()
 end
 
@@ -1918,7 +1924,8 @@ function lpm.lite_xl_list()
       status = (lite_xl:is_installed() or lite_xl:is_system()) and (lite_xl:is_local() and "local" or "installed") or "available",
       local_path = lite_xl:is_installed() and lite_xl.local_path or nil,
       datadir_path = lite_xl:is_installed() and lite_xl.datadir_path or nil,
-      binary_path = lite_xl:is_installed() and lite_xl.binary_path or nil
+      binary_path = lite_xl:is_installed() and lite_xl.binary_path or nil,
+      files = lite_xl.files
     })
     max_version = math.max(max_version, #lite_xl.version)
   end
@@ -1955,7 +1962,11 @@ function lpm.lite_xl_list()
       print(string.format("%" .. max_version .. "s | %10s | %s", "Version", "Status", "Location"))
       print(string.format("%" .. max_version .."s | %10s | %s", "-------", "---------", "---------------------------"))
       for i, lite_xl in ipairs(result["lite-xls"]) do
-        print(string.format("%" .. max_version .. "s | %10s | %s", (common.first(lite_xl.tags, function(t) return t == "primary" end) and "* " or "") .. lite_xl.version, lite_xl.status, (lite_xl.is_installed and lite_xl.local_path or lite_xl.repository)))
+        print(string.format("%" .. max_version .. "s | %10s | %s", 
+          (common.first(lite_xl.tags, function(t) return t == "primary" end) and "* " or "") .. lite_xl.version, 
+          lite_xl.status, 
+          (lite_xl.is_installed and lite_xl.local_path or lite_xl.repository))
+        )
       end
     end
   end
@@ -2365,7 +2376,7 @@ function lpm.setup()
   settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
   lpm.repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
   repositories, lite_xls = {}, {}
-  if system.stat(CACHEDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CACHEDIR .. PATHSEP .. "settings.json")) end
+  if system.stat(CONFIGDIR .. PATHSEP .. "settings.json") then settings = json.decode(common.read(CONFIGDIR .. PATHSEP .. "settings.json")) end
   if REPOSITORY then
     for i, url in ipairs(type(REPOSITORY) == "table" and REPOSITORY or { REPOSITORY }) do
       table.insert(repositories, Repository.url(url):add(AUTO_PULL_REMOTES))
@@ -2375,7 +2386,7 @@ function lpm.setup()
   end
   lite_xls = {}
   for i, lite_xl in ipairs(settings.lite_xls or {}) do
-    table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, path = lite_xl.path, tags = { "local" } }))
+    table.insert(lite_xls, LiteXL.new(nil, { version = lite_xl.version, mod_version = lite_xl.mod_version, binary_path = lite_xl.binary_path, datadir_path = lite_xl.datadir_path, files = lite_xl.files, path = lite_xl.path, tags = { "local" } }))
     if lite_xl.primary then 
       primary_lite_xl = lite_xls[#lite_xls] 
       table.insert(primary_lite_xl.tags, "primary")
@@ -3071,6 +3082,7 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
   if not system.stat(USERDIR) then common.mkdirp(USERDIR) end
   if not system.stat(CACHEDIR) then common.mkdirp(CACHEDIR) end
   if not system.stat(CONFIGDIR) then common.mkdirp(CONFIGDIR) end
+  
   if engage_locks(function()
     lpm.setup()
   end, error_handler, lock_warning) then return end

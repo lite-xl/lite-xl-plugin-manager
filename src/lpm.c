@@ -579,15 +579,13 @@ static int lpm_stat(lua_State *L) {
   err = err || GetFileAttributesExW(wpath, GetFileExInfoStandard, &data) == 0;
   if (!err && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
     HANDLE file = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file != INVALID_HANDLE_VALUE) {
-      wchar_t linkpath[MAX_PATH];
-      if (GetFinalPathNameByHandleW(file, linkpath, sizeof(linkpath), FILE_NAME_NORMALIZED) < 0) {
-        lua_pushnil(L);
-        err = -1;
-      } else {
-        lua_toutf8(L, linkpath);
-        CloseHandle(file);
-      }
+    wchar_t linkpath[MAX_PATH];
+    if (file != INVALID_HANDLE_VALUE && GetFinalPathNameByHandleW(file, linkpath, sizeof(linkpath), FILE_NAME_NORMALIZED) == 0) {
+      lua_toutf8(L, linkpath);
+      CloseHandle(file);
+    } else {
+      lua_pushnil(L);
+      err = -1;
     }
   } else
     lua_pushnil(L);
