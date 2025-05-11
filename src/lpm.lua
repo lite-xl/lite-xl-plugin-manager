@@ -2857,54 +2857,11 @@ not commonly used publically.
     else
       common.mkdirp(CACHEDIR)
       local cert_path = CACHEDIR .. PATHSEP .. "certs.crt"
-      if not ssl_certs or ssl_certs == "system" then
-        local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
-          "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
-          "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
-          "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
-          "/etc/pki/tls/cacert.pem",                           -- OpenELEC
-          "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
-          "/etc/ssl/cert.pem",                                 -- Alpine Linux (and Mac OSX)
-          "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
-          "/system/etc/security/cacerts",                      -- Android
-          "/usr/local/share/certs",                            -- FreeBSD
-          "/etc/pki/tls/certs",                                -- Fedora/RHEL
-          "/etc/openssl/certs",                                -- NetBSD
-          "/var/ssl/certs",                                    -- AIX
-        }
-        if PLATFORM == "windows" then
-          system.certs("system", cert_path)
-          -- windows is so fucking awful
-          -- we check to see if we support the main site that lpm is hoted on, github.com.
-          -- if we *cannot* access this site due to ssl error, we switch to mozilla.
-          local status, err = pcall(common.get, "https://github.com")
-          if not status and err and err:lower():find("verification failed") then
-            log.warning("Cannot access github.com with your system certificate bundle (i.e. windows is trash). Defaulting to mozilla.")
-            ssl_certs = "mozilla"
-          end
-          if ARGS["trace"] and VERBOSE then io.stderr:write(common.read(cert_path)) end
-        else
-          local has_certs = false
-          for i, path in ipairs(paths) do
-            local stat = system.stat(path)
-            if stat then
-              has_certs = true
-              system.certs(stat.type, path)
-              break
-            end
-          end
-          if not has_certs then 
-            log.warning("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs; defaulting to pulling from curl's mozilla cacert.pem") 
-            ssl_certs = "mozilla"
-          end
-        end
-      end
-      if ssl_certs == "mozilla" then
-        -- The Let's Encrypt Root certificate we use to download the
-        -- mozilla bundle from curl. Shouldn't happen often, but
-        -- unless this certificate is revoked, we should be good until
-        -- 2035.
-        local lets_encrypt_root_certificate = [[-----BEGIN CERTIFICATE-----
+      -- The Let's Encrypt Root certificate we use to download the
+      -- mozilla bundle from curl. Shouldn't happen often, but
+      -- unless this certificate is revoked, we should be good until
+      -- 2035.
+      local lets_encrypt_root_certificate = [[-----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
 TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
 cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
@@ -2935,11 +2892,58 @@ oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
 mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----]]
-        local stat = system.stat(cert_path)
+      local stat = system.stat(cert_path)
         -- Every 30 days, we should grab a new bundle.
-        local contents = stat and stat.modified > (os.time() - 30*86400) and common.read(cert_path) or ""
-        if not contents:find(lets_encrypt_root_certificate, 1, true) or #contents < 10000 then 
-          common.write(cert_path, contents .. lets_encrypt_root_certificate)
+      local cert_contents = stat and stat.modified > (os.time() - 30*86400) and common.read(cert_path) or ""
+      if not ssl_certs then
+        ssl_certs = cert_contents:find(lets_encrypt_root_certificate, 1, true) and "mozilla" or "system"
+      end
+      if ssl_certs == "system" then
+        local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
+          "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
+          "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
+          "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
+          "/etc/pki/tls/cacert.pem",                           -- OpenELEC
+          "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
+          "/etc/ssl/cert.pem",                                 -- Alpine Linux (and Mac OSX)
+          "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
+          "/system/etc/security/cacerts",                      -- Android
+          "/usr/local/share/certs",                            -- FreeBSD
+          "/etc/pki/tls/certs",                                -- Fedora/RHEL
+          "/etc/openssl/certs",                                -- NetBSD
+          "/var/ssl/certs",                                    -- AIX
+        }
+        if PLATFORM == "windows" then
+          system.certs("system", cert_path)
+          -- windows is so fucking awful
+          -- we check to see if we support the main site that lpm is hoted on, github.com.
+          -- if we *cannot* access this site due to ssl error, we switch to mozilla.
+          local status, err = pcall(common.get, "https://github.com")
+          if not status and err and err:lower():find("verification failed") then
+            log.warning("Cannot access github.com with your system certificate bundle (i.e. windows is trash). Defaulting to pulling from https://curl.se/ca/cacert.pem.")
+            ssl_certs = "mozilla"
+            cert_contents = common.read(cert_path)
+          end
+          if ARGS["trace"] and VERBOSE then io.stderr:write(cert_contents) end
+        else
+          local has_certs = false
+          for i, path in ipairs(paths) do
+            local stat = system.stat(path)
+            if stat then
+              has_certs = true
+              system.certs(stat.type, path)
+              break
+            end
+          end
+          if not has_certs then 
+            log.warning("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs; defaulting to pulling from https://curl.se/ca/cacert.pem") 
+            ssl_certs = "mozilla"
+          end
+        end
+      end
+      if ssl_certs == "mozilla" then
+        if not cert_contents:find(lets_encrypt_root_certificate, 1, true) or #cert_contents < 10000 then 
+          common.write(cert_path, cert_contents .. lets_encrypt_root_certificate)
           system.certs("file", cert_path)
           common.write(cert_path, lets_encrypt_root_certificate .. "\n" .. common.get("https://curl.se/ca/cacert.pem"))
         end
