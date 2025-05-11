@@ -2788,8 +2788,7 @@ not commonly used publically.
   assert(not MOD_VERSION or MOD_VERSION == "any" or MOD_VERSION:find("^%d+%.?%d*%.?%d*$"), "--mod-version must be either 'any' or a version number.")
   AUTO_PULL_REMOTES = ARGS["remotes"]
   HOME = (os.getenv("USERPROFILE") or os.getenv("HOME")):gsub(PATHSEP .. "$", "")
-  USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or (os.getenv("XDG_CONFIG_HOME") and os.getenv("XDG_CONFIG_HOME") .. PATHSEP .. "lite-xl")
-    or (HOME and (HOME .. PATHSEP .. '.config' .. PATHSEP .. 'lite-xl'))
+  USERDIR = common.normalize_path(ARGS["userdir"]) or os.getenv("LITE_USERDIR") or os.getenv("LPM_USERDIR") or ((os.getenv("XDG_CONFIG_HOME") or (HOME .. PATHSEP .. '.config')) .. PATHSEP .. "lite-xl")
   CACHEDIR = common.normalize_path(ARGS["cachedir"]) or os.getenv("LPM_CACHE") or ((os.getenv("XDG_CACHE_HOME") or (HOME .. PATHSEP .. ".cache")) .. PATHSEP .. "lpm")
   CONFIGDIR = common.normalize_path(ARGS["configdir"]) or os.getenv("LPM_CONFIG") or ((os.getenv("XDG_CONFIG_HOME") or (HOME .. PATHSEP .. ".config")) .. PATHSEP .. "lpm")
   TMPDIR = common.normalize_path(ARGS["tmpdir"]) or os.getenv("LPM_TMPDIR") or (CACHEDIR .. PATHSEP .. "tmp")
