@@ -1398,7 +1398,7 @@ end
 
 function LiteXL:get_binary_path(arch)
   if self.binary_path and self.binary_path[arch or DEFAULT_ARCH] then return self.binary_path[arch or DEFAULT_ARCH] end
-  return self.local_path .. PATHSEP .. "lite-xl"
+  return self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION
 end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
@@ -1445,14 +1445,14 @@ function LiteXL:install()
           -- we want to move these into the primary directory, then delete the archive and the directory
           common.rename(self.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "dir")
           common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
-          common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "lite-xl")
+          common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
           common.rmrf(self.local_path .. PATHSEP .. "dir")
           common.rmrf(path)
         end
       end
     end
   end
-  if not system.stat(self.local_path .. PATHSEP .. "lite-xl") then error("can't find executable for lite-xl " .. self.version) end
+  if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) then error("can't find executable for lite-xl " .. self.version) end
 end
 
 function LiteXL:uninstall()
@@ -2700,6 +2700,7 @@ Flags have the following effects:
 The following flags are useful when listing addons, or generating the addon
 table. Putting a ! infront of the string will invert the filter. Multiple
 filters of the same type can be specified to create an OR relationship.
+Multiple values can be separated by commas to create an AND relationship.
 
   --author=author          Only display addons by the specified author.
   --tag=tag                Only display addons with the specified tag.
