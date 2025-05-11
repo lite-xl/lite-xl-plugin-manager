@@ -2893,7 +2893,10 @@ not commonly used publically.
               break
             end
           end
-          if not has_certs then error("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs") end
+          if not has_certs then 
+            log.warning("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs; defaulting to pulling from curl's mozilla cacert.pem") 
+            ssl_certs = "mozilla"
+          end
         end
       end
       if ssl_certs == "mozilla" then
