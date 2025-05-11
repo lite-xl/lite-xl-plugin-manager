@@ -1266,7 +1266,7 @@ local function retry_fetch(...)
   -- In the case where we get an "incomplete pack header" error, we want
   -- to retry, at least once, as this is a transient server-side error, I think.
   if not status and err and err:find("incomplete pack header") then
-    status, errr = pcall(system.fetch, ...)
+    status, err = pcall(system.fetch, ...)
   end
   if not status then error(err, 0) end
   return err
