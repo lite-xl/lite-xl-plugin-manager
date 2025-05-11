@@ -2846,7 +2846,7 @@ not commonly used publically.
   if ARGS[2] == "purge" then return lpm.purge() end
   local ssl_certs = ARGS["ssl-certs"] or os.getenv("LPM_CERTS") or os.getenv("SSL_CERT_DIR") or os.getenv("SSL_CERT_FILE")
   if not NO_NETWORK then
-    if ssl_certs and ssl_certs ~= "system" then
+    if ssl_certs and ssl_certs ~= "system" and ssl_certs ~= "mozilla" then
       if ssl_certs == "noverify" then
         system.certs("noverify")
       else
@@ -2855,35 +2855,91 @@ not commonly used publically.
         system.certs(stat.type, ssl_certs)
       end
     else
-      local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
-        "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
-        "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
-        "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
-        "/etc/pki/tls/cacert.pem",                           -- OpenELEC
-        "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
-        "/etc/ssl/cert.pem",                                 -- Alpine Linux (and Mac OSX)
-        "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
-        "/system/etc/security/cacerts",                      -- Android
-        "/usr/local/share/certs",                            -- FreeBSD
-        "/etc/pki/tls/certs",                                -- Fedora/RHEL
-        "/etc/openssl/certs",                                -- NetBSD
-        "/var/ssl/certs",                                    -- AIX
-      }
-      if PLATFORM == "windows" then
-        common.mkdirp(TMPDIR)
-        system.certs("system", TMPDIR .. PATHSEP .. "certs.crt")
-        if ARGS["trace"] and VERBOSE then io.stderr:write(common.read(TMPDIR .. PATHSEP .. "certs.crt")) end
-      else
-        local has_certs = false
-        for i, path in ipairs(paths) do
-          local stat = system.stat(path)
-          if stat then
-            has_certs = true
-            system.certs(stat.type, path)
-            break
+      common.mkdirp(CACHEDIR)
+      local cert_path = CACHEDIR .. PATHSEP .. "certs.crt"
+      if not ssl_certs or ssl_certs == "system" then
+        local paths = { -- https://serverfault.com/questions/62496/ssl-certificate-location-on-unix-linux#comment1155804_62500
+          "/etc/ssl/certs/ca-certificates.crt",                -- Debian/Ubuntu/Gentoo etc.
+          "/etc/pki/tls/certs/ca-bundle.crt",                  -- Fedora/RHEL 6
+          "/etc/ssl/ca-bundle.pem",                            -- OpenSUSE
+          "/etc/pki/tls/cacert.pem",                           -- OpenELEC
+          "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", -- CentOS/RHEL 7
+          "/etc/ssl/cert.pem",                                 -- Alpine Linux (and Mac OSX)
+          "/etc/ssl/certs",                                    -- SLES10/SLES11, https://golang.org/issue/12139
+          "/system/etc/security/cacerts",                      -- Android
+          "/usr/local/share/certs",                            -- FreeBSD
+          "/etc/pki/tls/certs",                                -- Fedora/RHEL
+          "/etc/openssl/certs",                                -- NetBSD
+          "/var/ssl/certs",                                    -- AIX
+        }
+        if PLATFORM == "windows" then
+          system.certs("system", cert_path)
+          -- windows is so fucking awful
+          -- we check to see if we support the main site that lpm is hoted on, github.com.
+          -- if we *cannot* access this site due to ssl error, we switch to mozilla.
+          local status, err = pcall(common.get, "https://github.com")
+          if not status and err and err:lower():find("verification failed") then
+            log.warning("Cannot access github.com with your system certificate bundle (i.e. windows is trash). Defaulting to mozilla.")
+            ssl_certs = "mozilla"
           end
+          if ARGS["trace"] and VERBOSE then io.stderr:write(common.read(cert_path)) end
+        else
+          local has_certs = false
+          for i, path in ipairs(paths) do
+            local stat = system.stat(path)
+            if stat then
+              has_certs = true
+              system.certs(stat.type, path)
+              break
+            end
+          end
+          if not has_certs then error("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs") end
         end
-        if not has_certs then error("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs") end
+      end
+      if ssl_certs == "mozilla" then
+        -- The Let's Encrypt Root certificate we use to download the
+        -- mozilla bundle from curl. Shouldn't happen often, but
+        -- unless this certificate is revoked, we should be good until
+        -- 2035.
+        local lets_encrypt_root_certificate = [[-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----]]
+        local contents = system.stat(cert_path) and common.read(cert_path) or ""
+        if not contents:find(lets_encrypt_root_certificate, 1, true) or #contents < 10000 then 
+          common.write(cert_path, contents .. lets_encrypt_root_certificate)
+          system.certs("file", cert_path)
+          common.write(cert_path, lets_encrypt_root_certificate .. "\n" .. common.get("https://curl.se/ca/cacert.pem"))
+        end
+        system.certs("file", cert_path)
+        if ARGS["trace"] and VERBOSE then io.stderr:write(common.read(cert_path)) end
       end
     end
   end
