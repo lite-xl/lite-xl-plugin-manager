@@ -2935,7 +2935,9 @@ oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
 mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----]]
-        local contents = system.stat(cert_path) and common.read(cert_path) or ""
+        local stat = system.stat(cert_path)
+        -- Every 30 days, we should grab a new bundle.
+        local contents = stat and stat.modified > (os.time() - 30*86400) and common.read(cert_path) or ""
         if not contents:find(lets_encrypt_root_certificate, 1, true) or #contents < 10000 then 
           common.write(cert_path, contents .. lets_encrypt_root_certificate)
           system.certs("file", cert_path)
