@@ -452,6 +452,21 @@ function common.mkdirp(path)
     if i >= extant_root and target ~= "" and not target:find("^[A-Z]:$") and not system.stat(target) then system.mkdir(target) end
   end
 end
+local DID_WARN_SYMLINK = false
+
+function common.symlink(src, dst)
+  local status, result = pcall(system.symlink, src, dst)
+  if status then return result end
+  if PLATFORM == "windows" then
+    if not DID_WARN_SYMLINK then
+      log.warning("Error creating symlink at " .. dst .. ", falling back to copying: " .. result)
+      DID_WARN_SYMLINK = true
+    end
+    return common.copy(src, dst, true)
+  end
+  error(result)
+end
+
 function common.copy(src, dst, hidden, symlink)
   local src_stat, dst_stat = system.stat(src), system.stat(dst)
   if not src_stat then error("can't find " .. src) end
@@ -474,7 +489,7 @@ function common.copy(src, dst, hidden, symlink)
     src_io:close()
     system.chmod(dst, src_stat.mode)
   else
-    system.symlink(src, dst)
+    common.symlink(src, dst)
   end
 end
 function common.rename(src, dst)
@@ -959,10 +974,10 @@ function Addon:install(bottle, installing)
               common.mkdirp(common.dirname(temporary_path))
               if SYMLINK and self.repository:is_local() and system.stat(local_path) then
                 log.action("Symlinking " .. local_path .. " to " .. target_path .. ".")
-                system.symlink(local_path, temporary_path)
+                common.symlink(local_path, temporary_path)
               elseif SYMLINK and self.repository:is_local() and system.stat(stripped_local_path) then
                 log.action("Symlinking " .. stripped_local_path .. " to " .. target_path .. ".")
-                system.symlink(stripped_local_path, temporary_path)
+                common.symlink(stripped_local_path, temporary_path)
               else
                 common.get(file.url, { target = temporary_path, checksum = file.checksum, callback = write_progress_bar })
                 local basename = common.basename(target_path)
@@ -1422,7 +1437,7 @@ function LiteXL:install()
     system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
     common.copy(datadir, self.local_path .. PATHSEP .. "data")
   elseif self.path and not self.repository then -- local repository
-    system.symlink(self:get_binary_path(), self.local_path .. PATHSEP .. "lite_xl")
+    common.symlink(self:get_binary_path(), self.local_path .. PATHSEP .. "lite_xl")
   else
     if self.remote then
       system.init(self.local_path, self.remote)
@@ -1531,7 +1546,7 @@ function Bottle:construct()
     lite_xl = lite_xl or primary_lite_xl
     hardcopy = true
   end
-  local construct = hardcopy and common.copy or system.symlink
+  local construct = hardcopy and common.copy or common.symlink
   if lite_xl then -- if no lite_xl, we're assuming that we're using the system version with a LITE_PREFIX environment variable. 
     construct(lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
     if hardcopy then
