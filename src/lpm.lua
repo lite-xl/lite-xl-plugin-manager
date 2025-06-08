@@ -1429,6 +1429,9 @@ function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
   if self:is_installed() then log.warning("lite-xl " .. self.version .. " already installed") return end
+  local local_path = self.local_path
+  self.local_path = TMPDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.version
+  common.rmrf(self.local_path)
   common.mkdirp(self.local_path)
   if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
     local executable, datadir = common.path("lite-xl" .. EXECUTABLE_EXTENSION)
@@ -1447,7 +1450,7 @@ function LiteXL:install()
       system.init(self.local_path, self.remote)
       common.reset(self.local_path, self.commit or self.branch)
     end
-    for i,file in ipairs(self.files or {}) do
+    for i,file in ipairs(self.files or {}) do 
       local file_arch = file.arch and (type(file.arch) == 'table' and file.arch or { file.arch })
       if file_arch and common.grep(ARCH, function(e) return common.grep(file_arch, function(a) return a == e end)[1] end)[1] then
         if not file.checksum then error("requires a checksum") end
@@ -1471,7 +1474,9 @@ function LiteXL:install()
       end
     end
   end
-  if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) then error("can't find executable for lite-xl " .. self.version) end
+  if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) then error("can't find executable for lite-xl " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
+  common.rename(self.local_path, local_path)
+  self.local_path = local_path
 end
 
 function LiteXL:uninstall()

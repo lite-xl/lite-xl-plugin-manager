@@ -32,11 +32,14 @@ cmake --version >/dev/null 2>/dev/null || { echo "Please ensure that you have cm
 
 # Build supporting libraries, libz, liblzma, libmbedtls, libmbedcrypto, libgit2, libzip, libmicrotar, liblua
 [[ " $@" != *" -g"* ]] && CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release" || CMAKE_DEFUALT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Debug"
+if [[ " $@" != *" -O"* ]]; then
+  [[ " $@" != *" -g"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -O3" || COMPILE_FLAGS="$COMPILE_FLAGS -O0"
+fi
 CMAKE_DEFAULT_FLAGS=" $CMAKE_DEFAULT_FLAGS -DCMAKE_PREFIX_PATH=`pwd`/lib/prefix -DCMAKE_INSTALL_PREFIX=`pwd`/lib/prefix -DBUILD_SHARED_LIBS=OFF"
 mkdir -p lib/prefix/include lib/prefix/lib
 if [[ "$@" != *"-lz"* ]]; then
   [ ! -e "lib/zlib" ] && echo "Make sure you've cloned submodules. (git submodule update --init --depth=1)" && exit -1
-  [[ ! -e "lib/zlib/build" ]] && { cd lib/zlib && mkdir build && cd build && $CC $COMPILE_FLAGS -O3 -D_LARGEFILE64_SOURCE -I.. ../*.c -c && $AR rc libz.a *.o && cp libz.a ../../prefix/lib && cp ../*.h ../../prefix/include && cd ../../../ || exit -1; }
+  [[ ! -e "lib/zlib/build" ]] && { cd lib/zlib && mkdir build && cd build && $CC $COMPILE_FLAGS -D_LARGEFILE64_SOURCE -I.. ../*.c -c && $AR rc libz.a *.o && cp libz.a ../../prefix/lib && cp ../*.h ../../prefix/include && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -lz"
 fi
 if [[ "$@" != *"-llzma"* ]]; then
@@ -49,7 +52,7 @@ if [[ "$@" != *"-DLPM_NO_NETWORK"* && "$@" != *"-lmbedtls"* && "$@" != *"-lmbedc
 fi
 if [[ "$@" != *"-DLPM_NO_GIT"* && "$@" != *"-lgit2"* ]]; then
   [[ "$@" != *"-DLPM_NO_NETWORK"* ]] && USE_HTTPS="mbedTLS" || USE_HTTPS="OFF"
-  [ ! -e "lib/libgit2/build" ] && { cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DCMAKE_C_STANDARD=99 -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=$USE_HTTPS && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  [ ! -e "lib/libgit2/build" ] && { cd lib/libgit2 && mkdir build && cd build && cmake .. -G "Unix Makefiles" $GIT2_CONFIGURE $CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=MinSizeRel -DCMAKE_C_STANDARD=99 -DBUILD_TESTS=OFF -DBUILD_CLI=OFF -DBUILD_SHARED_LIBS=OFF -DREGEX_BACKEND=builtin -DUSE_SSH=OFF -DUSE_HTTPS=$USE_HTTPS && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="-lgit2 $LINK_FLAGS"
 fi
 if [[ "$@" != *"-lzip"* ]]; then
@@ -71,5 +74,5 @@ fi
 [[ $OSTYPE == *'darwin'* ]]                                                  && LINK_FLAGS="$LINK_FLAGS -liconv -framework Foundation"
 [[ $OSTYPE == *'darwin'* ]] && "$@" != *"-DLPM_NO_NETWORK"*                  && LINK_FLAGS="$LINK_FLAGS -framework Security"
 
-[[ " $@" != *" -g"* && " $@" != *" -O"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -O3" && LINK_FLAGS="$LINK_FLAGS -s -flto"
+[[ " $@" != *" -g"* && " $@" != *" -O"* ]] && LINK_FLAGS="$LINK_FLAGS -s -flto"
 $CC $COMPILE_FLAGS $SRCS $@ -o $BIN $LINK_FLAGS
