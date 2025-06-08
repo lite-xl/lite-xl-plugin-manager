@@ -1614,6 +1614,7 @@ function Bottle:run(args)
   args = args or {}
   local path = common.exists(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) or (self.lite_xl or primary_lite_xl):get_binary_path()
   if not system.stat(path) then error("cannot find bottle executable " .. path) end
+  if PLATFORM == "windows" and path:find(" ") then path = '"' .. path:gsub('"+', function(s) return s..s end) .. '"' end
   local line = path .. (#args > 0 and " " or "") .. table.concat(common.map(args, function(arg)
     if PLATFORM == "windows" then
       -- windows uses " for quotes and needs doubling quotes for escaping them
