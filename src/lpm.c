@@ -578,15 +578,17 @@ static int lpm_stat(lua_State *L) {
   WIN32_FILE_ATTRIBUTE_DATA data;
   err = err || GetFileAttributesExW(wpath, GetFileExInfoStandard, &data) == 0;
   if (!err && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
-    HANDLE file = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    wchar_t linkpath[MAX_PATH];
-    if (file != INVALID_HANDLE_VALUE && GetFinalPathNameByHandleW(file, linkpath, sizeof(linkpath), FILE_NAME_NORMALIZED) == 0) {
+    HANDLE file = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    wchar_t linkpath[MAX_PATH]={0};
+    if (file != INVALID_HANDLE_VALUE && GetFinalPathNameByHandleW(file, linkpath, sizeof(linkpath)/sizeof(wchar_t), FILE_NAME_NORMALIZED) > 0) {
+      // this returns paths like \\?\C:\ for reasons that are completely beyond me. What the actual fuck.
       lua_toutf8(L, linkpath);
+      lua_pushstring(L, lua_tostring(L, -1) + 4);
+      lua_replace(L, -2);
+    } else
+      lua_pushboolean(L, 1);
+    if (file != INVALID_HANDLE_VALUE)
       CloseHandle(file);
-    } else {
-      lua_pushnil(L);
-      err = -1;
-    }
   } else
     lua_pushnil(L);
   lua_setfield(L, -2, "symlink");
