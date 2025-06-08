@@ -1848,9 +1848,8 @@ static int lpm_extract(lua_State* L) {
     int proxy_port = context->port;
     if (lua_type(L, 7) == LUA_TSTRING)
       proxy_hostname = luaL_checkstring(L, 7);
-    if (lua_gettop(L) >= 8)
+    if (lua_type(L, 8) == LUA_TSTRING || lua_type(L, 8) == LUA_TNUMBER)
       proxy_port = lua_tointeger(L, 8);
-    
     if (strcmp(protocol, "https") == 0) {
       const char port[12];
       snprintf(port, sizeof(port), "%d", proxy_port);
