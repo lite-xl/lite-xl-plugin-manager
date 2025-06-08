@@ -752,6 +752,8 @@ static int lpm_trace(lua_State* L) {
     int threaded;
     int callback_function;
     git_transfer_progress progress;
+    git_proxy_options proxy_options;
+    char proxy_url[512];
     int progress_update;
     int complete;
     int error_code;
@@ -820,7 +822,7 @@ static int lpm_trace(lua_State* L) {
     char* strings[] = { context->refspec };
     git_strarray array = { strings, 1 };
 
-    error = git_remote_connect(remote, GIT_DIRECTION_FETCH, &fetch_opts.callbacks, NULL, NULL) ||
+    error = git_remote_connect(remote, GIT_DIRECTION_FETCH, &fetch_opts.callbacks, &context->proxy_options, NULL) ||
       git_remote_download(remote, context->refspec[0] ? &array : NULL, &fetch_opts) ||
       git_remote_update_tips(remote, &fetch_opts.callbacks, fetch_opts.update_fetchhead, fetch_opts.download_tags, NULL);
     if (!error && !context->error_code) {
@@ -879,6 +881,17 @@ static int lpm_trace(lua_State* L) {
     context->repository = luaL_checkgitrepo(L, 1);
     const char* refspec = args >= 3 ? luaL_optstring(L, 3, NULL) : NULL;
     context->depth = args >= 4 && lua_toboolean(L, 4) ? GIT_FETCH_DEPTH_FULL : 1;
+    if (args >= 5 && lua_isstring(L, 5)) {
+      git_proxy_options_init(&context->proxy_options, GIT_PROXY_OPTIONS_VERSION);
+      strncpy(context->proxy_url, lua_tostring(L, 5), sizeof(context->proxy_url));
+      context->proxy_options.type = GIT_PROXY_SPECIFIED;
+      context->proxy_options.credentials = NULL;
+      context->proxy_options.certificate_check = NULL;
+      context->proxy_options.url = context->proxy_url;
+    } else {
+      git_proxy_options_init(&context->proxy_options, GIT_PROXY_OPTIONS_VERSION);
+      context->proxy_options.type = GIT_PROXY_NONE;
+    }
     context->L = L;
     context->threaded = !lua_is_main_thread(L);
     if (refspec)
@@ -1835,8 +1848,8 @@ static int lpm_extract(lua_State* L) {
     int proxy_port = context->port;
     if (lua_type(L, 7) == LUA_TSTRING)
       proxy_hostname = luaL_checkstring(L, 7);
-    if (lua_type(L, 8) == LUA_TNUMBER)
-      proxy_port = luaL_checkinteger(L, 8);
+    if (lua_gettop(L) >= 8)
+      proxy_port = lua_tointeger(L, 8);
     
     if (strcmp(protocol, "https") == 0) {
       const char port[12];

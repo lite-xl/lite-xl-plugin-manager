@@ -1,9 +1,9 @@
 local lpm
 local function assert_exists(path) if not io.open(path, "rb")  then error("assertion failed: file " .. path .. " does not exist", 2) end end
 local function assert_not_exists(path) if io.open(path, "rb") then error("assertion failed: file " .. path .. " exists", 2) end end
-local tmpdir = os.getenv("TMPDIR") or "/tmp"
+local tmpdir = (os.getenv("TMPDIR") or "/tmp") .. "/lpmtest"
 local fast = os.getenv("FAST")
-local userdir = tmpdir .. "/lpmtest"
+local userdir = tmpdir .. "/lpmtest/user"
 setmetatable(_G, { __index = function(t, k) if not rawget(t, k) then error("cannot get undefined global variable: " .. k, 2) end end, __newindex = function(t, k) error("cannot set global variable: " .. k, 2) end  })
 
 
@@ -150,14 +150,14 @@ local function run_tests(tests, arg)
   end
   table.sort(names)
   local max_name = 0
-  os.execute("rm -rf " .. tmpdir .. "/lpmtest && mkdir -p " .. tmpdir .. "/lpmtest");
+  os.execute("rm -rf " .. tmpdir .. " && mkdir -p " .. tmpdir .. " " .. userdir);
   for i,k in ipairs(names) do max_name = math.max(max_name, #k) end
   for i,k in ipairs(names) do
     local v = tests[k]
     if fast then
-      os.execute("rm -rf " .. tmpdir .. "/lpmtest/plugins && mkdir -p " .. tmpdir .. "/lpmtest");
+      os.execute("rm -rf " .. tmpdir .. "/plugins && mkdir -p " .. tmpdir);
     else
-      os.execute("rm -rf " .. tmpdir .. "/lpmtest && mkdir -p " .. tmpdir .. "/lpmtest");
+      os.execute("rm -rf " .. tmpdir .. " && mkdir -p " .. tmpdir);
     end
     io.stdout:write(string.format("test %-" .. (max_name + 1) .. "s: ", k))
     local failed = false

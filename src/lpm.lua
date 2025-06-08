@@ -1281,12 +1281,12 @@ function Repository:fetch_if_not_present()
   return self:fetch()
 end
 
-local function retry_fetch(...)
-  local status, err = pcall(system.fetch, ...)
+local function retry_fetch(path, progress, ref, depth)
+  local status, err = pcall(system.fetch, path, progress, ref, depth, os.getenv("HTTPS_PROXY"))
   -- In the case where we get an "incomplete pack header" error, we want
   -- to retry, at least once, as this is a transient server-side error, I think.
   if not status and err and err:find("incomplete pack header") then
-    status, err = pcall(system.fetch, ...)
+    status, err = pcall(system.fetch, path, progress, ref, depth, http_proxy_host, http_proxy_port)
   end
   if not status then error(err, 0) end
   return err
