@@ -652,8 +652,9 @@ function common.get(source, options)
   if not port or port == "" then port = protocol == "https" and 443 or 80 end
   if not rest or rest == "" then rest = "/" end
   local res, headers
+  local proxy_host, proxy_port = (os.getenv(protocol:upper() .. "_PROXY") or ""):gsub("^https?://", ""):match("^([^:]+):?(.*)$")
   if checksum == "SKIP" and not target then
-    res, headers = system.get(protocol, hostname, port, rest, target, callback)
+    res, headers = system.get(protocol, hostname, port, rest, target, callback, proxy_host, proxy_port)
     if headers.location then return common.get(headers.location, common.merge(options, { })) end
     return res
   end
@@ -663,7 +664,7 @@ function common.get(source, options)
   if checksum ~= "SKIP" and system.stat(cache_path) and system.hash(cache_path, "file") ~= checksum then common.rmrf(cache_path) end
   local res
   if not system.stat(cache_path) then
-    res, headers = system.get(protocol, hostname, port, rest, cache_path .. ".part", callback)
+    res, headers = system.get(protocol, hostname, port, rest, cache_path .. ".part", callback, proxy_host, proxy_port)
     if headers.location then return common.get(headers.location, common.merge(options, {  })) end
     if checksum ~= "SKIP" and system.hash(cache_path .. ".part", "file") ~= checksum then
       common.rmrf(cache_path .. ".part")
@@ -2991,7 +2992,7 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
             end
           end
           if not has_certs then 
-            log.warning("can't autodetect your system's SSL ceritficates; please specify specify a certificate bundle or certificate directory with --ssl-certs; defaulting to pulling from https://curl.se/ca/cacert.pem") 
+            log.warning("can't autodetect your system's SSL certificates; please specify specify a certificate bundle or certificate directory with --ssl-certs; defaulting to pulling from https://curl.se/ca/cacert.pem") 
             ssl_certs = "mozilla"
           end
         end

@@ -1541,6 +1541,7 @@ static int lpm_extract(lua_State* L) {
     int error_code;
     char error[256];
     char hostname[256];
+    unsigned int port;
     char rest[2048];
     int callback_function;
 
@@ -1624,7 +1625,7 @@ static int lpm_extract(lua_State* L) {
           context->state = STATE_SEND;
         }
         case STATE_SEND: {
-          context->buffer_length = snprintf(context->buffer, sizeof(context->buffer), "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", context->rest, context->hostname);
+          context->buffer_length = snprintf(context->buffer, sizeof(context->buffer), "GET %s HTTP/1.1\r\nHost: %s:%d\r\nConnection: close\r\n\r\n", context->rest, context->hostname, context->port);
           int length = lpm_socket_write(context, context->buffer_length);
           if (length < context->buffer_length && lpm_get_error(context, length, "can't write to socket"))
             goto cleanup;
@@ -1815,6 +1816,7 @@ static int lpm_extract(lua_State* L) {
 
     const char* protocol = luaL_checkstring(L, 1);
     strncpy(context->hostname, luaL_checkstring(L, 2), sizeof(context->hostname));
+    context->port = luaL_checkinteger(L, 3);
     strncpy(context->rest, luaL_checkstring(L, 4), sizeof(context->rest));
     const char* path = luaL_optstring(L, 5, NULL);
     if (path) {
@@ -1829,9 +1831,16 @@ static int lpm_extract(lua_State* L) {
       context->callback_function = luaL_ref(L, LUA_REGISTRYINDEX);
     }
     context->state = STATE_CONNECT;
-
+    const char* proxy_hostname = context->hostname;
+    int proxy_port = context->port;
+    if (lua_type(L, 7) == LUA_TSTRING)
+      proxy_hostname = luaL_checkstring(L, 7);
+    if (lua_type(L, 8) == LUA_TNUMBER)
+      proxy_port = luaL_checkinteger(L, 8);
+    
     if (strcmp(protocol, "https") == 0) {
-      const char* port = lua_tostring(L, 3);
+      const char port[12];
+      snprintf(port, sizeof(port), "%d", proxy_port);
       // https://gist.github.com/Barakat/675c041fd94435b270a25b5881987a30
       mbedtls_ssl_init(&context->ssl);
       mbedtls_net_init(&context->net);
@@ -1842,8 +1851,8 @@ static int lpm_extract(lua_State* L) {
       mbedtls_ssl_set_bio(&context->ssl, &context->net, mbedtls_net_send, mbedtls_net_recv, NULL);
       if (
         lpm_get_error(context, mbedtls_ssl_setup(&context->ssl, &ssl_config), "can't set up ssl") ||
-        lpm_get_error(context, mbedtls_net_connect(&context->net, context->hostname, port, MBEDTLS_NET_PROTO_TCP), "can't set hostname") ||
-        lpm_get_error(context, mbedtls_ssl_set_hostname(&context->ssl, context->hostname), "can't set hostname")
+        lpm_get_error(context, mbedtls_net_connect(&context->net, proxy_hostname, port, MBEDTLS_NET_PROTO_TCP), "can't connect to %s:%d", proxy_hostname, proxy_port) ||
+        lpm_get_error(context, mbedtls_ssl_set_hostname(&context->ssl, context->hostname), "can't set hostname to %s", context->hostname)
       ) {
         mbedtls_ssl_free(&context->ssl);
         mbedtls_net_free(&context->net);
@@ -1852,11 +1861,10 @@ static int lpm_extract(lua_State* L) {
       context->is_ssl = 1;
       context->state = STATE_HANDSHAKE;
     } else {
-      int port = luaL_checkinteger(L, 3);
-      struct hostent *host = gethostbyname(context->hostname);
+      struct hostent *host = gethostbyname(proxy_hostname);
       struct sockaddr_in dest_addr = {0};
       if (!host)
-        return luaL_error(L, "can't resolve hostname %s", context->hostname);
+        return luaL_error(L, "can't resolve hostname %s", proxy_hostname);
       context->s = socket(AF_INET, SOCK_STREAM, 0);
       if (threaded) {
         #if _WIN32
@@ -1867,12 +1875,12 @@ static int lpm_extract(lua_State* L) {
         #endif
       }
       dest_addr.sin_family = AF_INET;
-      dest_addr.sin_port = htons(port);
+      dest_addr.sin_port = htons(proxy_port);
       dest_addr.sin_addr.s_addr = *(long*)(host->h_addr);
       const char* ip = inet_ntoa(dest_addr.sin_addr);
       if (connect(context->s, (struct sockaddr *) &dest_addr, sizeof(struct sockaddr)) == -1 ) {
         close(context->s);
-        return luaL_error(L, "can't connect to host %s [%s] on port %d", context->hostname, ip, port);
+        return luaL_error(L, "can't connect to host %s [%s] on port %d", proxy_hostname, ip, proxy_port);
       }
       context->state = STATE_SEND;
     }
