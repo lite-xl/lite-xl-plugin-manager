@@ -46,10 +46,10 @@ jobs:
       - name: Setup (Linux cross-compilation)
         if: ${{ matrix.config.platform == 'linux' && ! matrix.config.native }}
         run: |
-          wget -q https://musl.cc/${{ matrix.config.arch }}-linux-musl-cross.tgz
-          tar -zxvf ${{ matrix.config.arch }}-linux-musl-cross.tgz
-          echo CC=$(pwd)/${{ matrix.config.arch }}-linux-musl-cross/bin/${{ matrix.config.arch }}-linux-musl-cc >> $GITHUB_ENV
-          echo AR=$(pwd)/${{ matrix.config.arch }}-linux-musl-cross/bin/${{ matrix.config.arch }}-linux-musl-ar >> $GITHUB_ENV
+          wget -q https://github.com/cross-tools/musl-cross/releases/download/20250520/${{ matrix.config.arch }}-unknown-linux-musl.tar.xz
+          unxz ${{ matrix.config.arch }}-unknown-linux-musl.tar.xz && tar -xvf *.tar
+          echo CC=$(pwd)/${{ matrix.config.arch }}-unknown-linux-musl/bin/${{ matrix.config.arch }}-unknown-linux-musl-cc >> $GITHUB_ENV
+          echo AR=$(pwd)/${{ matrix.config.arch }}-unknown-linux-musl/bin/${{ matrix.config.arch }}-unknown-linux-musl-ar >> $GITHUB_ENV
 
       - name: Setup (Windows)
         if: ${{ matrix.config.platform == 'windows' }}
