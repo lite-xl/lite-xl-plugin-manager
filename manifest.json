@@ -81,7 +81,33 @@
       "version": "1.0",
       "description": "JSON support plugin, provides encoding/decoding.",
       "type": "library",
-      "path": "libraries/json.lua"
+      "path": "libraries/json.lua",
+      "files": [
+        {
+          "arch": "x86_64-linux",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.31/cjson.x86_64-linux.so",
+          "checksum": "3ca4e00d00bc0f799a95af796588df6b9d8a214ce418f069c20d0d900c2c291d",
+          "optional": true
+        },
+        {
+          "arch": "x86_64-windows",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.31/cjson.x86_64-windows.dll",
+          "checksum": "3f3d4b576d499e6fe994452431374ca250e468138d46e09417ca1bce1d9643d1",
+          "optional": true
+        },
+        {
+          "arch": "x86_64-darwin",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.31/cjson.x86_64-darwin.so",
+          "checksum": "e2ad93bc3eda313aa9b78ba75e56389435971010a5e876a8ad6cb5b62cb98013",
+          "optional": true
+        },
+        {
+          "arch": "aarch64-darwin",
+          "url": "https://github.com/adamharrison/lite-xl-cjson/releases/download/v0.31/cjson.aarch64-darwin.so",
+          "checksum": "b72d89c4fa5188d4ced520551676071900472a7345cbf4ab82e0b5a9eced9c56",
+          "optional": true
+        }
+      ]
     }
   ],
   "lite-xls": [
