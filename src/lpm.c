@@ -1851,7 +1851,7 @@ static int lpm_extract(lua_State* L) {
     if (lua_type(L, 8) == LUA_TSTRING || lua_type(L, 8) == LUA_TNUMBER)
       proxy_port = lua_tointeger(L, 8);
     if (strcmp(protocol, "https") == 0) {
-      const char port[12];
+      char port[12];
       snprintf(port, sizeof(port), "%d", proxy_port);
       // https://gist.github.com/Barakat/675c041fd94435b270a25b5881987a30
       mbedtls_ssl_init(&context->ssl);
