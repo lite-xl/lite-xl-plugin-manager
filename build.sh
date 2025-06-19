@@ -14,11 +14,11 @@
 # -DLPM_NO_GIT               Compiles without libgit2 support.
 # -DLPM_NO_NETWORK           Compiles without network support.
 # -DLPM_NO_THREADS           Compiles without threading support.
-# -DLPM_NO_REMOTE_EXECUTABLE Compiles without the ability to download remote executables.
+# -DLPM_NO_REMOTE_EXECUTABLE Compiles without the ability to download remote executables. 
 # -DLPM_STATIC               Compiles lpm.lua into the binary executable.
 # -DLPM_ARCH_TUPLE           Specifies the arch tuple for this build.
 # -DLPM_DEFAULT_REPOSITORY   Specifies the default repository to download on init.
-# -DLPM_DEFAULT_RELEASE      Specifies the default release for lpm for `self-upgrade`.
+# -DLPM_DEFAULT_RELEASE      Specifies the default release for lpm for `self-upgrade`. If set to an empty string, will disable the ability to self-upgrade. This should be done for lpm builds for system package managers.
 # -DLPM_VERSION              Specifies the lpm version.
 # -DLPM_ARCH_PROCESSOR       Manually specifies the processor archiecture.
 # -DLPM_ARCH_PLATFORM        Manually specifies the operating system.
