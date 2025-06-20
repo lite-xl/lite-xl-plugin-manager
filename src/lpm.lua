@@ -1349,7 +1349,7 @@ end
 
 function Repository:add(pull_remotes, force_update)
   -- If neither specified then pull onto `master`, and check the main branch name, and move if necessary.
-  local call_update = (force_update or UPDATE) and system.stat(self.local_path)
+  local call_update = (force_update or UPDATE) and (self.local_path and system.stat(self.local_path))
   self:fetch_if_not_present()
   if call_update then self:update() end
   local manifest, remotes = self:parse_manifest()
