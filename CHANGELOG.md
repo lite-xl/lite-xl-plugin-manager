@@ -1,3 +1,17 @@
+# 1.4.1
+
+* Cached a certificate inside LPM to securely pull the mozilla certiciate bundle from curl, incase actual SSL bundles are totally fucked.
+* Allows fetching of things on non-standard ports.
+* Properly handles symlinks when on Windows.
+* Allows you to specify directories for `--bottledir` and `--configdir`
+* Allows you to pass `--update` to update any required repositories on any command.
+* Allows you to specifically purge your cache only with `cache purge`, rather than all settings with just `purge`.
+* Allows you to specify a repository as the first argument to `run` to allow you to select pre-fab lite-xls from alternate repositories without having to add them first.
+* Smarter filter matching for `list`.
+* Autoamtically retry when we get an `invalid pack header` error from remote git servers.
+* Beginnings of `HTTPS_PROXY` support.
+* 
+
 # 1.4.0
 
 * Added in ability for `plugin_manager` to sort and filter plugins easily. (Thank you "Big T" @takase1121!)
