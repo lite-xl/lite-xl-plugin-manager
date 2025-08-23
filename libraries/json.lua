@@ -24,6 +24,10 @@
 --
 
 local json = { _version = "0.1.2" }
+local status, cjson = pcall(require, "libraries.cjson")
+if status then
+  return cjson
+end
 
 -------------------------------------------------------------------------------
 -- Encode
