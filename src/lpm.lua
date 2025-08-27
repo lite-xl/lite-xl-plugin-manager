@@ -1751,12 +1751,16 @@ local function filter_match(field, filter)
     for i,v in ipairs(and_filters) do
       local inverted = v:find("^!")
       local actual_filter = inverted and v:sub(2) or v
-      for k, field in ipairs(fields) do
-        local matches = field:find("^" .. actual_filter .. "$")
-        if (not inverted and matches) or (inverted and not matches) then 
-          match_count = match_count + 1 
-          break
+      if #fields > 0 then
+        for k, field in ipairs(fields) do
+          local matches = field:find("^" .. actual_filter .. "$")
+          if (not inverted and matches) or (inverted and not matches) then 
+            match_count = match_count + 1 
+            break
+          end
         end
+      elseif inverted then
+        match_count = match_count + 1
       end
     end
     if match_count == #and_filters then

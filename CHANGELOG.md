@@ -2,7 +2,7 @@
 
 * Cached a certificate inside LPM to securely pull the mozilla certiciate bundle from curl, incase actual SSL bundles are totally fucked.
 * Allows fetching of things on non-standard ports.
-* Properly handles symlinks when on Windows.
+* Improved handling of symlinks when on Windows.
 * Allows you to specify directories for `--bottledir` and `--configdir`
 * Allows you to pass `--update` to update any required repositories on any command.
 * Allows you to specifically purge your cache only with `cache purge`, rather than all settings with just `purge`.
@@ -10,7 +10,6 @@
 * Smarter filter matching for `list`.
 * Autoamtically retry when we get an `invalid pack header` error from remote git servers.
 * Beginnings of `HTTPS_PROXY` support.
-* 
 
 # 1.4.0
 
