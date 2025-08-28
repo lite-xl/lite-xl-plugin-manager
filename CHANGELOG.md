@@ -1,3 +1,7 @@
+# 1.4.2
+
+* Fixed a small, but important bug relating to tag negation filters.
+
 # 1.4.1
 
 * Cached a certificate inside LPM to securely pull the mozilla certiciate bundle from curl, incase actual SSL bundles are totally fucked.
