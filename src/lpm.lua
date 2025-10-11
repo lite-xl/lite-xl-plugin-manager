@@ -1806,7 +1806,7 @@ function Bottle:get_addon(id, version, filter)
     end
   end
   return table.unpack(common.sort(common.uniq(candidates), function (a,b)
-    return (a.replaces == id and b.replaces ~= id) or (a.version > b.version) or (not a:is_stub() and b:is_stub())
+    return (a.replaces == id and b.replaces ~= id) or ((a.id < b.id) and (a.version > b.version) and (not a:is_stub() and b:is_stub()))
   end))
 end
 
