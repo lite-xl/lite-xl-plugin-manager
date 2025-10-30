@@ -52,7 +52,7 @@ This should install `lpm` and install the GUI. If you already had Lite XL open, 
 The fastest way to get started with lpm is to simply pull a release.
 
 ```sh
-wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm && chmod +x lpm
+wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.`uname -m | sed 's/arm64/aarch64/'`-`uname | tr '[:upper:]' '[:lower:]'` -O lpm && chmod +x lpm
 ```
 
 If you want to get the GUI version installed with lite-xl, you can tell `lpm` to install `plugin_manager`, which will allow

@@ -87,7 +87,7 @@ jobs:
 
       - name: Build
         run: |
-          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -static -O3
+          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -static -O3 -ffunction-sections -fdata-sections -Wl,--gc-sections
 
       - name: Run Tests
         if: ${{ matrix.config.native }}
