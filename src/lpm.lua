@@ -1445,8 +1445,9 @@ function LiteXL:install()
     system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
     common.copy(datadir, self.local_path .. PATHSEP .. "data")
   elseif self.path and not self.repository then -- local repository
-    common.symlink(self:get_binary_path(), self.local_path .. PATHSEP .. "lite_xl")
+    common.symlink(self:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl")
   else
+    common.rmrf(local_path)
     if self.remote then
       system.init(self.local_path, self.remote)
       common.reset(self.local_path, self.commit or self.branch)
@@ -1476,7 +1477,6 @@ function LiteXL:install()
     end
   end
   if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) then error("can't find executable for lite-xl " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
-  common.rmrf(local_path)
   common.rename(self.local_path, local_path)
   self.local_path = local_path
 end
