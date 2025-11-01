@@ -1429,7 +1429,7 @@ function LiteXL:is_compatible(addon) return not addon.mod_version or MOD_VERSION
 function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
 
 function LiteXL:install()
-  if self:is_installed() then log.warning("lite-xl " .. self.version .. " already installed") return end
+  if self:is_installed() and not REINSTALL then log.warning("lite-xl " .. self.version .. " already installed") return end
   local local_path = self.local_path
   self.local_path = TMPDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.version
   common.rmrf(self.local_path)
@@ -1476,6 +1476,7 @@ function LiteXL:install()
     end
   end
   if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) then error("can't find executable for lite-xl " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
+  common.rmrf(local_path)
   common.rename(self.local_path, local_path)
   self.local_path = local_path
 end
@@ -1544,7 +1545,7 @@ function Bottle:construct()
   self.local_path = TMPDIR .. PATHSEP .. "bottles" .. PATHSEP .. (self.name or self.hash)
   common.rmrf(self.local_path)
 
-  if self.lite_xl and not self.lite_xl:is_installed() then self.lite_xl:install() end
+  if self.lite_xl and (not self.lite_xl:is_installed() or REINSTALL) then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or ""))
 
@@ -1563,6 +1564,7 @@ function Bottle:construct()
       system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, 448) -- chmod to rwx-------\
     end
     construct(lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
+    if VERBOSE then log.action(string.format("Constructing bottle from %s, %s", lite_xl:get_binary_path(), lite_xl.datadir_path)) end
   end
   local installing = {}
   for i,addon in ipairs(self.addons) do
