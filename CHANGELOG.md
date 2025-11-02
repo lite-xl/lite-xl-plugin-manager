@@ -1,3 +1,9 @@
+# 1.4.3
+
+* Ensured that `--reinstall` works also with lite-xls.
+* Fixed android binary compiles.
+* Improved addon version resolution.
+
 # 1.4.2
 
 * Fixed a small, but important bug relating to tag negation filters.
