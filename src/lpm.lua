@@ -1547,7 +1547,7 @@ function Bottle:construct()
 
   if self.lite_xl and (not self.lite_xl:is_installed() or REINSTALL) then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
-  common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or ""))
+  common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", self.config == "system" and common.read(USERDIR .. PATHSEP .. "init.lua") or (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or "")))
 
 
   local hardcopy = SYMLINK == false
@@ -1606,7 +1606,7 @@ function Bottle:apply(addons, config)
     end
   end
   if config then
-    common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'default' and (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "")) or config)
+    common.write((self.is_system and USERDIR or self.local_path) .. PATHSEP .. "init.lua", config == 'system' and common.read(USERDIR .. PATHSEP .. "init.lua") or (config == 'default' and (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "")) or config))
     changes = true
   end
   return changes
