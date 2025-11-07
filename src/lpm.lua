@@ -1496,22 +1496,25 @@ function Bottle.new(metadata)
     lite_xl = metadata.lite_xl,
     addons = metadata.addons,
     config = metadata.config,
-    is_system = metadata.is_system
+    is_system = metadata.is_system,
+    local_path = metadata.local_path
   }, Bottle)
   if not metadata.is_system then
     if self.addons then table.sort(self.addons, function(a, b) return (a.id .. ":" .. a.version) < (b.id .. ":" .. b.version) end) end
     self.hash = system.hash(self.name or (((self.lite_xl and self.lite_xl.version or "")) .. " " .. common.join(" ", common.map(self.addons, function(p) 
       return (p.repository and p.repository:url() or "") .. ":" .. p.id .. ":" .. p.version 
     end)) .. (metadata.config or "") .. (EPHEMERAL and "E" or "")))
-    if self.name then
-      self.local_path = BOTTLEDIR .. PATHSEP .. "named" .. PATHSEP .. self.name
-    elseif EPHEMERAL then
-      for i = 1, 1000 do
-        self.local_path = BOTTLEDIR .. PATHSEP .. "auto" .. PATHSEP .. self.hash .. "-" .. i
-        if not system.stat(self.local_path) then break elseif i == 1000 then error("can't create epehemeral bottle") end
+    if not self.local_path then
+      if self.name then
+        self.local_path = BOTTLEDIR .. PATHSEP .. "named" .. PATHSEP .. self.name
+      elseif EPHEMERAL then
+        for i = 1, 1000 do
+          self.local_path = BOTTLEDIR .. PATHSEP .. "auto" .. PATHSEP .. self.hash .. "-" .. i
+          if not system.stat(self.local_path) then break elseif i == 1000 then error("can't create epehemeral bottle") end
+        end
+      else
+        self.local_path = BOTTLEDIR .. PATHSEP .. "auto" .. PATHSEP .. self.hash
       end
-    else
-      self.local_path = BOTTLEDIR .. PATHSEP .. "auto" .. PATHSEP .. self.hash
     end
   end
   if self.name and self:is_constructed() then -- if we exist, and we have a name, find out what lxl version we are
@@ -1537,7 +1540,7 @@ local config = require "core.config"
 local style = require "core.style"
 ]]
 
-function Bottle:construct()
+function Bottle:construct(hardcopy)
   if self.is_system then error("system bottle cannot be constructed") end
   if self:is_constructed() and not REINSTALL then error("bottle " .. (self.name or self.hash) .. " already constructed") end
   -- swap out the local path for a temporary path while we construct the bottle to make things atomic
@@ -1549,8 +1552,9 @@ function Bottle:construct()
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", self.config == "system" and common.read(USERDIR .. PATHSEP .. "init.lua") or (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or "")))
 
-
-  local hardcopy = SYMLINK == false
+  if hardcopy == nil then
+    hardcopy = SYMLINK == false
+  end
   local lite_xl = self.lite_xl
   if SYMLINK ~= false and common.exists((lite_xl or primary_lite_xl).local_path .. PATHSEP .. "user") then
     log.warning("your " .. (lite_xl and "specified" or "primary") .. " lite-xl has a user folder next to it. creating a hard copy of lite-xl for this bottle")
@@ -2355,6 +2359,18 @@ function lpm.bottle_add(name, version, ...)
   Bottle.new({ lite_xl = version and lite_xl, name = name, addons = addons, config = CONFIG }):construct()
 end
 
+function lpm.bottle_dump(name, version, ...)
+  local arguments = { ... }
+  if not version:find("^%d+") and version ~= "system" and version ~= "primary" then 
+    table.insert(arguments, 1, version)
+    version = nil
+  end
+  local lite_xl = lpm.get_lite_xl(version or "primary") or error("can't find lite-xl version " .. (version or "primary"))
+  local addons, i = lpm.retrieve_installable_addons(lite_xl, arguments)
+  if #arguments >= i then error("invalid use of --") end
+  Bottle.new({ lite_xl = version and lite_xl, name = name, addons = addons, config = CONFIG, local_path = name }):construct(true)
+end
+
 function lpm.bottle_rm(name)
   Bottle.new({ name = name }):destruct()
 end
@@ -2515,8 +2531,10 @@ function lpm.command(ARGS)
   elseif ARGS[2] == "bottle" and ARGS[3] == "rm" then return lpm.bottle_rm(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "run" then return lpm.bottle_run(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "list" then return lpm.bottle_list(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "bottle" and ARGS[3] == "dump" then return lpm.bottle_dump(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "purge" then return lpm.bottle_purge(common.slice(ARGS, 4))
   elseif ARGS[2] == "cache" and ARGS[3] == "purge" then return lpm.cache_purge(common.slice(ARGS, 4))
+  elseif ARGS[2] == "dump" then return lpm.bottle_dump(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "run" then return lpm.lite_xl_run(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "switch" then return lpm.lite_xl_switch(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "purge" then lpm.purge()
