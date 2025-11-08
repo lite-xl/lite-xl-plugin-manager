@@ -2592,7 +2592,7 @@ xpcall(function()
     type = "array", name = "array"
   })
   if ARGS["version"] then
-    io.stdout:write(VERSION .. "\n")
+    io.stdout:write(ARGS.json and json.encode({ version = VERSION }) or (VERSION .. "\n"))
     return 0
   end
   if ARGS["help"] or #ARGS == 1 or ARGS[2] == "help" then
