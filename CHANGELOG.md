@@ -1,3 +1,9 @@
+# 1.4.4
+
+* Ensured the JSON is output for `--version` if `--json` is specified.
+* Added in the ability to specify that bottles should use the system user config with `--config=system`.
+* Added in `dump`, the ability to dump a bottle to the designated folder to allow for quick and easy building and distribution of bottles.
+
 # 1.4.3
 
 * Ensured that `--reinstall` works also with lite-xls.
