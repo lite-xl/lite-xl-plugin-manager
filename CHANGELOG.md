@@ -1,3 +1,8 @@
+# 1.4.5
+
+* Removed outdated simplified build from manifest.
+* Improved handling of multi-arch builds.
+
 # 1.4.4
 
 * Ensured the JSON is output for `--version` if `--json` is specified.
