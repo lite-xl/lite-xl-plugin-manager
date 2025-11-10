@@ -395,6 +395,11 @@ function common.write(path, contents) local f, err = io.open(path, "wb") if not 
 function common.read(path) local f, err = io.open(path, "rb") if not f then error("can't read from " .. path .. ": " .. err) end local str = f:read("*all") f:close() return str end
 function common.uniq(l) local t = {} local k = {} for i,v in ipairs(l) do if not k[v] then table.insert(t, v) k[v] = true end end return t end
 function common.delete(h, d) local t = {} for k,v in pairs(h) do if k ~= d then t[k] = v end end return t end
+function common.intersection(a,b)
+  if type(a) ~= 'table' then a = { a } end
+  if type(b) ~= 'table' then b = { b } end
+  return common.grep(a, function(ae) return #common.grep(b, function(be) return be == ae end) > 0 end)
+end
 function common.canonical_order(hash) local t = {} for k,v in pairs(hash) do table.insert(t, k) end table.sort(t) return t end
 function common.split(splitter, str)
   local o = 1
@@ -553,6 +558,10 @@ function common.args(arguments, options)
     i = i + 1
   end
   return args
+end
+
+local function get_executable_extension(arch)
+  return arch:find("windows") and ".exe" or ""
 end
 
 global({
@@ -1409,7 +1418,9 @@ function LiteXL.new(repository, metadata)
     tags = {},
     files = {}
   }, metadata), LiteXL)
-  self.hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version .. common.join("", common.map(self.files, function(f) return f.checksum end)))
+  self.hash = system.hash((repository and repository:url() or "") .. "-" .. metadata.version .. common.join("", common.map(common.grep(self.files, function(f) 
+    return #common.intersection(f.arch, ARCH) > 0
+  end), function(f) return f.url .. f.checksum end)))
   self.local_path = self:is_local() and self.path or (CACHEDIR .. PATHSEP .. "lite_xls" .. PATHSEP .. self.version .. PATHSEP .. self.hash)
   self.binary_path = self.binary_path or { }
   self.datadir_path = self.datadir_path or (self.local_path .. PATHSEP .. "data")
@@ -1417,8 +1428,8 @@ function LiteXL.new(repository, metadata)
 end
 
 function LiteXL:get_binary_path(arch)
-  if self.binary_path and self.binary_path[arch or DEFAULT_ARCH] then return self.binary_path[arch or DEFAULT_ARCH] end
-  return self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION
+  if self.binary_path and self.binary_path[arch or ARCH] then return self.binary_path[arch or ARCH] end
+  return self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension((arch or ARCH)[1])
 end
 
 function LiteXL:is_system() return system_bottle and system_bottle.lite_xl == self end
@@ -1426,16 +1437,16 @@ function LiteXL:is_primary() return primary_lite_xl == self end
 function LiteXL:is_local() return not self.repository and self.path end
 function LiteXL:is_manifest() return self.repository end
 function LiteXL:is_compatible(addon) return not addon.mod_version or MOD_VERSION == "any" or compatible_modversion(self.mod_version, addon.mod_version) end
-function LiteXL:is_installed() return system.stat(self.local_path) ~= nil end
+function LiteXL:is_installed(arch) return system.stat(self.local_path) ~= nil and self:get_binary_path(arch) end
 
-function LiteXL:install()
-  if self:is_installed() and not REINSTALL then log.warning("lite-xl " .. self.version .. " already installed") return end
+function LiteXL:install(arch)
+  if self:is_installed(arch) and not REINSTALL then log.warning("lite-xl " .. self.version .. " already installed") return end
   local local_path = self.local_path
   self.local_path = TMPDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.version
   common.rmrf(self.local_path)
   common.mkdirp(self.local_path)
   if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
-    local executable, datadir = common.path("lite-xl" .. EXECUTABLE_EXTENSION)
+    local executable, datadir = common.path("lite-xl" .. get_executable_extension(ARCH[1]))
     if not executable then error("can't find system lite-xl executable") end
     local stat = system.stat(executable)
     executable = stat.symlink and stat.symlink or executable
@@ -1469,14 +1480,14 @@ function LiteXL:install()
           -- we want to move these into the primary directory, then delete the archive and the directory
           common.rename(self.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "dir")
           common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
-          common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
+          common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "lite-xl" .. get_executable_extension(file_arch[1]), self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(file_arch[1]))
           common.rmrf(self.local_path .. PATHSEP .. "dir")
           common.rmrf(path)
         end
       end
     end
   end
-  if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) then error("can't find executable for lite-xl " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
+  if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1])) then error("can't find executable for lite-xl " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
   common.rename(self.local_path, local_path)
   self.local_path = local_path
 end
@@ -1518,7 +1529,7 @@ function Bottle.new(metadata)
     end
   end
   if self.name and self:is_constructed() then -- if we exist, and we have a name, find out what lxl version we are
-    local path = self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION
+    local path = self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1])
     local s = system.stat(path)
     if s and s.symlink then
       self.lite_xl = s and common.first(lite_xls, function(l) return l:get_binary_path() == s.symlink end)
@@ -1563,9 +1574,9 @@ function Bottle:construct(hardcopy)
   end
   local construct = hardcopy and common.copy or common.symlink
   if lite_xl then -- if no lite_xl, we're assuming that we're using the system version with a LITE_PREFIX environment variable. 
-    construct(lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION)
+    construct(lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1]))
     if hardcopy then
-      system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION, 448) -- chmod to rwx-------\
+      system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1]), 448) -- chmod to rwx-------\
     end
     construct(lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
     if VERBOSE then log.action(string.format("Constructing bottle from %s, %s", lite_xl:get_binary_path(), lite_xl.datadir_path)) end
@@ -1624,7 +1635,7 @@ end
 
 function Bottle:run(args)
   args = args or {}
-  local path = common.exists(self.local_path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION) or (self.lite_xl or primary_lite_xl):get_binary_path()
+  local path = common.exists(self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1])) or (self.lite_xl or primary_lite_xl):get_binary_path()
   if not system.stat(path) then error("cannot find bottle executable " .. path) end
   if PLATFORM == "windows" and path:find(" ") then path = '"' .. path:gsub('"+', function(s) return s..s end) .. '"' end
   local line = path .. (#args > 0 and " " or "") .. table.concat(common.map(args, function(arg)
@@ -1910,7 +1921,7 @@ function lpm.lite_xl_add(version, path)
   if path:find("^http") then
     table.insert(lite_xls, LiteXL.new(nil, { version = version, mod_version = MOD_VERSION or LATEST_MOD_VERSION, files = { { arch = ARCH, url = path, checksum = "SKIP" } } }))
   else
-    local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. EXECUTABLE_EXTENSION))
+    local binary_path  = BINARY or (path and(path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1])))
     local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
     local binary_stat = assert(system.stat(binary_path), "can't find binary path " .. binary_path)
     local data_stat = assert(system.stat(data_path), "can't find data path " .. data_path)
@@ -2450,7 +2461,7 @@ function lpm.setup()
 
   if BINARY and not system.stat(BINARY) then error("can't find specified --binary") end
   if DATADIR and not system.stat(DATADIR) then error("can't find specified --datadir") end
-  local lite_xl_binary = BINARY or common.path("lite-xl" .. EXECUTABLE_EXTENSION)
+  local lite_xl_binary = BINARY or common.path("lite-xl" .. get_executable_extension(PLATFORM))
   if lite_xl_binary then
     local stat = system.stat(lite_xl_binary)
     if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
