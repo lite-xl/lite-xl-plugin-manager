@@ -1561,7 +1561,7 @@ function Bottle:construct(hardcopy)
 
   if self.lite_xl and (not self.lite_xl:is_installed() or REINSTALL) then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
-  common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", self.config == "system" and common.read(USERDIR .. PATHSEP .. "init.lua") or (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or "")))
+  common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", self.config == "system" and system.stat(USERDIR .. PATHSEP .. "init.lua") and common.read(USERDIR .. PATHSEP .. "init.lua") or (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or "")))
 
   if hardcopy == nil then
     hardcopy = SYMLINK == false
