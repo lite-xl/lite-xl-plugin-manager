@@ -1,3 +1,7 @@
+# 1.4.7
+
+* Fixed UTC timestamp handling.
+
 # 1.4.6
 
 * Allowed `lpm` to `HEAD` various URLs, allowing for updating of `SKIP` checksum binaries as part of `update`.
