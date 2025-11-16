@@ -1,3 +1,8 @@
+# 1.4.6
+
+* Allowed `lpm` to `HEAD` various URLs, allowing for updating of `SKIP` checksum binaries as part of `update`.
+* Defaulted to non-shallow cloning of repositories, as otherwise, and update pulls the entire repository every time.
+
 # 1.4.5
 
 * Removed outdated simplified build from manifest.
