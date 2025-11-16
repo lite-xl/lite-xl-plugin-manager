@@ -1443,6 +1443,7 @@ function LiteXL:is_installed(arch) return system.stat(self.local_path) ~= nil an
 
 function LiteXL:install(arch)
   if self:is_installed(arch) and not REINSTALL then log.warning("lite-xl " .. self.version .. " already installed") return end
+  assert(not self:is_local(), "cannot install a local copy of lite-xl")
   local local_path = self.local_path
   self.local_path = TMPDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.version
   common.rmrf(self.local_path)
@@ -1490,6 +1491,7 @@ function LiteXL:install(arch)
     end
   end
   if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1])) then error("can't find executable for lite-xl " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
+  common.rmrf(local_path)
   common.rename(self.local_path, local_path)
   self.local_path = local_path
 end
