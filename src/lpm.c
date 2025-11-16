@@ -880,7 +880,7 @@ static int lpm_trace(lua_State* L) {
     memset(context, 0, sizeof(fetch_context_t));
     context->repository = luaL_checkgitrepo(L, 1);
     const char* refspec = args >= 3 ? luaL_optstring(L, 3, NULL) : NULL;
-    context->depth = args >= 4 && lua_toboolean(L, 4) ? GIT_FETCH_DEPTH_FULL : 1;
+    context->depth = args >= 4 && !lua_isnil(L, 4) && !lua_toboolean(L, 4) ? 1 : GIT_FETCH_DEPTH_FULL;
     if (args >= 5 && lua_isstring(L, 5)) {
       git_proxy_options_init(&context->proxy_options, GIT_PROXY_OPTIONS_VERSION);
       strncpy(context->proxy_url, lua_tostring(L, 5), sizeof(context->proxy_url));
