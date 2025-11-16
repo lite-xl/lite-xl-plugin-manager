@@ -1909,7 +1909,7 @@ end
 
 local function parseJSDate(date)
   -- Mon, 10 Nov 2025 20:01:24 GMT
-  local dow, day, month, year, hour, minute, second, time_zone = date:match("(%w+),%s+(%d+)%s+(%w+)%s+(%d+)%s+(%d+):(%d+):(%d+)%s+(%w+)")
+  local dow, day, month, year, hour, minute, second, time_zone = date:match("(%w+),%s+(%d+)%s+(%w+)%s+(%d+)%s+(%d+):(%d+):(%d+)%s+GMT$")
   if not dow then return nil end
   local months = {
     ["Jan"] = 1,
@@ -1925,7 +1925,7 @@ local function parseJSDate(date)
     ["Nov"] = 11,
     ["Dec"] = 12
   }
-  return os.time({ year = year, month = months[month], day = day, hour = hour, minute = minute, second = second })
+  return system.utctime({ year = year, month = months[month], day = day, hour = hour, min = minute, sec = second })
 end
 
 local function get_lite_xls()

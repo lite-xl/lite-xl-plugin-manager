@@ -2047,6 +2047,36 @@ static int lpm_setenv(lua_State* L) {
   return 0;
 }
 
+static int lpm_utctime(lua_State* L) {
+  time_t now = time(NULL);
+  struct tm* t = NULL;
+  t = gmtime(&now);
+  lua_pushnil(L);
+  while (lua_next(L, 1) != 0) {
+    const char* key = luaL_checkstring(L, -2);
+    int value = luaL_checkinteger(L, -1);
+    if (strcmp(key, "year") == 0)
+      t->tm_year = value - 1900;
+    else if (strcmp(key, "month") == 0)
+      t->tm_mon = value - 1;
+    else if (strcmp(key, "day") == 0)
+      t->tm_mday = value;
+    else if (strcmp(key, "hour") == 0)
+      t->tm_hour = value;
+    else if (strcmp(key, "min") == 0)
+      t->tm_min = value;
+    else if (strcmp(key, "sec") == 0)
+      t->tm_sec = value;
+    lua_pop(L, 1);
+  }
+  #if _WIN32
+  lua_pushinteger(L, _mkgmtime(t));
+  #else 
+  lua_pushinteger(L, timegm(t));
+  #endif
+  return 1;
+}
+
 
 static const luaL_Reg system_lib[] = {
   { "ls",        lpm_ls    },    // Returns an array of files.
@@ -2070,6 +2100,7 @@ static const luaL_Reg system_lib[] = {
   { "flock",     lpm_flock },    // Locks a file.
   { "time",      lpm_time },     // Get high-precision system time.
   { "setenv",    lpm_setenv },   // Sets a system environment variable.
+  { "utctime",    lpm_utctime }, // Converts a local timestamp to a UTC timestamp.
   { NULL,        NULL }
 };
 
