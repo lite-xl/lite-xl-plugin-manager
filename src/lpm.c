@@ -1542,7 +1542,13 @@ static int lpm_extract(lua_State* L) {
     STATE_RECV_BODY
   } get_state_e;
 
+  typedef enum {
+    METHOD_GET,
+    METHOD_HEAD
+  } get_method_e;
+
   typedef struct {
+    get_method_e method;
     get_state_e state;
     int s;
     int is_ssl;
@@ -1679,6 +1685,28 @@ static int lpm_extract(lua_State* L) {
                   lpm_set_error(context, "received non 200-response of %d", code);
                 goto report;
               }
+              lua_newtable(L);
+              const char* start = strstr(context->buffer, "\r\n")+2;
+              while (start < header_end - 2) {
+                const char* end = strstr(start, "\r\n");
+                const char* divider = strstr(start, ":");
+                if (!divider || !end) {
+                  lpm_set_error(context, "received invalid %d-response", code);
+                  goto report;
+                }
+                char header_name[1024];
+                int i;
+                for (i = 0; i < sizeof(header_name) - 1 && i < divider - start; ++i)
+                  header_name[i] = tolower(*(start + i));
+                header_name[i] = 0;
+                lua_pushlstring(L, header_name, i);
+                while (*(++divider) == ' ');
+                lua_pushlstring(L, divider, end - divider);
+                lua_rawset(L, -3);
+                start = end + 2;
+              }
+              if (context->method == METHOD_HEAD)
+                goto report;
               const char* transfer_encoding = get_header(context->buffer, "transfer-encoding", NULL);
               context->chunked = transfer_encoding && strncmp(transfer_encoding, "chunked", 7) == 0 ? 1 : 0;
               const char* content_length_value = get_header(context->buffer, "content-length", NULL);
@@ -1778,7 +1806,7 @@ static int lpm_extract(lua_State* L) {
     finish:
     if (context->file) {
       lua_pushnil(L);
-      lua_newtable(L);
+      lua_pushvalue(L, -2);
     } else {
       // We leave this table on teh stack, because buffer functions can add unknowable amounts of stuff until luaL_pushresult is used.
       lua_rawgeti(L, LUA_REGISTRYINDEX, context->lua_buffer);
@@ -1794,7 +1822,7 @@ static int lpm_extract(lua_State* L) {
         luaL_addlstring(&b, str, str_len);
       }
       luaL_pushresult(&b);
-      lua_newtable(L);
+      lua_pushvalue(L, -2);
     }
     if (context->content_length != -1 && context->total_downloaded != context->content_length && lpm_set_error(context, "error retrieving full response"))
       goto cleanup;
@@ -1822,16 +1850,23 @@ static int lpm_extract(lua_State* L) {
     return 2;
   }
   
-  static int lpm_get(lua_State* L) {
+  static int lpm_request(lua_State* L) {
     get_context_t* context = lua_newuserdata(L, sizeof(get_context_t));
     memset(context, 0, sizeof(get_context_t));
     int threaded = !lua_is_main_thread(L);
 
-    const char* protocol = luaL_checkstring(L, 1);
-    strncpy(context->hostname, luaL_checkstring(L, 2), sizeof(context->hostname));
-    context->port = luaL_checkinteger(L, 3);
-    strncpy(context->rest, luaL_checkstring(L, 4), sizeof(context->rest));
-    const char* path = luaL_optstring(L, 5, NULL);
+    const char* method = luaL_checkstring(L, 1);
+    if (strcmp(method, "GET") == 0)
+      context->method = METHOD_GET;
+    else if (strcmp(method, "HEAD") == 0)
+      context->method = METHOD_HEAD;
+    else
+      return luaL_error(L, "unknown method %s", method);
+    const char* protocol = luaL_checkstring(L, 2);
+    strncpy(context->hostname, luaL_checkstring(L, 3), sizeof(context->hostname));
+    context->port = luaL_checkinteger(L, 4);
+    strncpy(context->rest, luaL_checkstring(L, 5), sizeof(context->rest));
+    const char* path = luaL_optstring(L, 6, NULL);
     if (path) {
       if ((context->file = lua_fopen(L, path, "wb")) == NULL)
         return luaL_error(L, "can't open file %s: %s", path, strerror(errno));
@@ -1839,17 +1874,17 @@ static int lpm_extract(lua_State* L) {
       lua_newtable(L);
       context->lua_buffer = luaL_ref(L, LUA_REGISTRYINDEX);
     }
-    if (lua_type(L, 6) == LUA_TFUNCTION) {
-      lua_pushvalue(L, 6);
+    if (lua_type(L, 7) == LUA_TFUNCTION) {
+      lua_pushvalue(L, 7);
       context->callback_function = luaL_ref(L, LUA_REGISTRYINDEX);
     }
     context->state = STATE_CONNECT;
     const char* proxy_hostname = context->hostname;
     int proxy_port = context->port;
-    if (lua_type(L, 7) == LUA_TSTRING)
-      proxy_hostname = luaL_checkstring(L, 7);
-    if (lua_type(L, 8) == LUA_TSTRING || lua_type(L, 8) == LUA_TNUMBER)
-      proxy_port = lua_tointeger(L, 8);
+    if (lua_type(L, 8) == LUA_TSTRING)
+      proxy_hostname = luaL_checkstring(L, 8);
+    if (lua_type(L, 9) == LUA_TSTRING || lua_type(L, 9) == LUA_TNUMBER)
+      proxy_port = lua_tointeger(L, 9);
     if (strcmp(protocol, "https") == 0) {
       char port[12];
       snprintf(port, sizeof(port), "%d", proxy_port);
@@ -1901,7 +1936,7 @@ static int lpm_extract(lua_State* L) {
     return lua_yieldk(L, 0, luaL_ref(L, LUA_REGISTRYINDEX), lpm_getk);
   }
 #else
-  static int lpm_get(lua_State* L) { return luaL_error(L, "this binary was compiled without network suport"); }
+  static int lpm_request(lua_State* L) { return luaL_error(L, "this binary was compiled without network suport"); }
   static int lpm_certs(lua_State* L) { return luaL_error(L, "this binary was compiled without network suport"); }
 #endif
 
@@ -2026,7 +2061,7 @@ static const luaL_Reg system_lib[] = {
   { "init",      lpm_init },     // Initializes a git repository with the specified remote.
   { "fetch",     lpm_fetch },    // Updates a git repository with the specified remote.
   { "reset",     lpm_reset },    // Updates a git repository to the specified commit/hash/branch.
-  { "get",       lpm_get },      // HTTP(s) GET request.
+  { "request",   lpm_request },  // HTTP(s) GET/HEAD request.
   { "extract",   lpm_extract },  // Extracts .tar.gz, and .zip files.
   { "trace",     lpm_trace },    // Sets trace bit.
   { "certs",     lpm_certs },    // Sets the SSL certificate chain folder/file.

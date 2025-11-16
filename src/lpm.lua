@@ -647,7 +647,7 @@ local function prompt(message)
 end
 
 
-function common.get(source, options)
+function common.request(method, source, options)
   assert(not NO_NETWORK, "aborting networking action")
   options = options or {}
   if not options.depth then options.depth = {} end
@@ -655,6 +655,7 @@ function common.get(source, options)
   local target, checksum, callback, depth = options.target, options.checksum or "SKIP", options.callback, options.depth
   if not source then error("requires url") end
   if #depth > 10 then error("too many redirects") end
+  if VERBOSE then log.action(method .. "ing " .. source .. "...") end
   local _, _, protocol, hostname, port, rest = source:find("^(https?)://([^:/?]+):?(%d*)(.*)$")
   if #depth == 1 then log.progress_action("Downloading " .. options.depth[1]:sub(1, 100) .. "...") end
   if not protocol then error("malfomed url " .. source) end
@@ -663,18 +664,17 @@ function common.get(source, options)
   local res, headers
   local proxy_host, proxy_port = (os.getenv(protocol:upper() .. "_PROXY") or ""):gsub("^https?://", ""):match("^([^:]+):?(.*)$")
   if checksum == "SKIP" and not target then
-    res, headers = system.get(protocol, hostname, port, rest, target, callback, proxy_host, proxy_port)
-    if headers.location then return common.get(headers.location, common.merge(options, { })) end
-    return res
+    res, headers = system.request(method, protocol, hostname, port, rest, target, callback, proxy_host, proxy_port)
+    if headers.location then return common.request(method, headers.location, common.merge(options, { })) end
+    return res, headers
   end
   local cache_dir = checksum == "SKIP" and TMPDIR or (options.cache or CACHEDIR)
   if not system.stat(cache_dir .. PATHSEP .. "files") then common.mkdirp(cache_dir .. PATHSEP .. "files") end
   local cache_path = cache_dir .. PATHSEP .. "files" .. PATHSEP .. system.hash(checksum .. options.depth[1])
   if checksum ~= "SKIP" and system.stat(cache_path) and system.hash(cache_path, "file") ~= checksum then common.rmrf(cache_path) end
-  local res
   if not system.stat(cache_path) then
-    res, headers = system.get(protocol, hostname, port, rest, cache_path .. ".part", callback, proxy_host, proxy_port)
-    if headers.location then return common.get(headers.location, common.merge(options, {  })) end
+    res, headers = system.request(method, protocol, hostname, port, rest, cache_path .. ".part", callback, proxy_host, proxy_port)
+    if headers.location then return common.request(method, headers.location, common.merge(options, {  })) end
     if checksum ~= "SKIP" and system.hash(cache_path .. ".part", "file") ~= checksum then
       common.rmrf(cache_path .. ".part")
       log.fatal_warning("checksum doesn't match for " .. options.depth[1])
@@ -683,8 +683,10 @@ function common.get(source, options)
   end
   if target then common.copy(cache_path, target) else res = io.open(cache_path, "rb"):read("*all") end
   if checksum == "SKIP" then common.rmrf(cache_path) end
-  return res
+  return res, headers
 end
+function common.get(source, options) return common.request("GET", source, options) end
+function common.head(source, options) return select(2, common.request("HEAD", source, options)) end
 
 
 -- Determines whether two addons located at different paths are actually different based on their contents.
@@ -1323,7 +1325,7 @@ function Repository:fetch()
       path = self.local_path
       local exists = system.stat(path)
       if not exists then
-        temporary_path = TMPDIR .. PATHSEP .. "tranient-repo"
+        temporary_path = TMPDIR .. PATHSEP .. "transient-repo"
         common.rmrf(temporary_path)
         common.mkdirp(temporary_path)
         system.init(temporary_path, self.remote)
@@ -1492,10 +1494,11 @@ function LiteXL:install(arch)
   self.local_path = local_path
 end
 
-function LiteXL:uninstall()
+function LiteXL:uninstall(force)
   if not system.stat(self.local_path) then error("lite-xl " .. self.version .. " not installed") end
-  if prompt("This will delete " .. self.local_path .. ". Are you sure you want to continue?") then 
-    common.rmrf(self.local_path) 
+  if force or prompt("This will delete " .. self.local_path .. ". Are you sure you want to continue?") then 
+    log.action("Uninstalling lite-xl " .. self.version .. " from "  .. self.local_path)
+    common.rmrf(self.local_path)
   end
 end
 
@@ -1902,9 +1905,65 @@ function lpm.repo_update(...)
   end
 end
 
+local function parseJSDate(date)
+  -- Mon, 10 Nov 2025 20:01:24 GMT
+  local dow, day, month, year, hour, minute, second, time_zone = date:match("(%w+),%s+(%d+)%s+(%w+)%s+(%d+)%s+(%d+):(%d+):(%d+)%s+(%w+)")
+  if not dow then return nil end
+  local months = {
+    ["Jan"] = 1,
+    ["Feb"] = 2,
+    ["Mar"] = 3,
+    ["Apr"] = 4,
+    ["May"] = 5,
+    ["Jun"] = 6,
+    ["Jul"] = 7,
+    ["Aug"] = 8,
+    ["Sep"] = 9,
+    ["Oct"] = 10,
+    ["Nov"] = 11,
+    ["Dec"] = 12
+  }
+  return os.time({ year = year, month = months[month], day = day, hour = hour, minute = minute, second = second })
+end
+
+local function get_lite_xls()
+  return common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end))
+end
+
+function lpm.update(...)
+  lpm.repo_update(...)
+  -- check to see if any files without checksums have changed if we can HEAD them and determine if they've been updated since we last
+  for _, lite_xl in ipairs(get_lite_xls()) do
+    if lite_xl:is_installed() and not lite_xl:is_local() then
+      for _, file in ipairs(lite_xl.files) do
+        if file.checksum == "SKIP" and file.url and #common.intersection(file.arch, ARCH) > 0 then
+          local stat = system.stat(lite_xl.local_path)
+          local status, err = pcall(common.head, file.url)
+          if status and err then
+            if err['last-modified'] then
+              local lastModified = parseJSDate(err['last-modified'])
+              if lastModified and lastModified > (stat.modified - 120) then
+                log.action(string.format("SKIP checksum file in lite-xl %s has been changed; %d vs. %d. Redownloading...", lite_xl.version, stat.modified, lastModified))
+                lite_xl:uninstall(true)
+                lite_xl:install()
+              else
+                if VERBOSE then log.action(string.format("Checked modified times for %s; %s local, %s remote, no update required.", file.url, stat.modified, lastModified or "unknown")) end
+              end
+            else
+              log.warning("Can't get last-modified date for " .. file.url)
+            end
+          else
+            log.warning(err)
+          end
+        end
+      end
+    end
+  end
+end
+
 function lpm.get_lite_xl(version)
   if version == "primary" then return primary_lite_xl end
-  return common.first(common.concat(lite_xls, common.flat_map(repositories, function(e) return e.lite_xls end)), function(lite_xl) return lite_xl.version == version end)
+  return common.first(get_lite_xls(), function(lite_xl) return lite_xl.version == version end)
 end
 
 function lpm.lite_xl_save()
@@ -2515,7 +2574,7 @@ function lpm.command(ARGS)
   elseif ARGS[2] == "repo" and ARGS[3] == "rm" then lpm.repo_rm(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "add" then lpm.repo_add(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "rm" then lpm.repo_rm(table.unpack(common.slice(ARGS, 3)))
-  elseif ARGS[2] == "update" then lpm.repo_update(table.unpack(common.slice(ARGS, 3)))
+  elseif ARGS[2] == "update" then lpm.update(table.unpack(common.slice(ARGS, 3)))
   elseif ARGS[2] == "repo" and ARGS[3] == "update" then lpm.repo_update(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "repo" and (#ARGS == 2 or ARGS[3] == "list") then return lpm.repo_list()
   elseif ARGS[2] == "apply" then return lpm.apply(table.unpack(common.slice(ARGS, 3)))
@@ -2875,6 +2934,7 @@ not commonly used publically.
   BOTTLEDIR = common.normalize_path(ARGS["bottledir"]) or os.getenv("LPM_BOTTLEDIR") or ((os.getenv("XDG_STATE_HOME") or (HOME .. PATHSEP .. ".local" .. PATHSEP  .. "state")) .. PATHSEP .. "lpm" .. PATHSEP .. "bottles")
   if ARGS["trace"] then system.trace(true) end
 
+
   MASK = {}
   if ARGS["mask"] then
     if type(ARGS["mask"]) ~= "table" then ARGS["mask"] = { ARGS["mask"] } end
@@ -3043,7 +3103,7 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
       end
     end
   end
-
+  
   local lpm_plugins_path = HOME .. PATHSEP .. ".config" .. PATHSEP .. "lpm" .. PATHSEP .. "plugins"
   local lpm_plugins = {}
   if system.stat(lpm_plugins_path) then
