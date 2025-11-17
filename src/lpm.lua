@@ -2042,7 +2042,7 @@ function lpm.lite_xl_switch(version, target)
     local find_new_location = target or not lite_xl_binary
     if lite_xl_binary then 
       local stat = assert(system.stat(lite_xl_binary), "can't stat lite-xl binary " .. lite_xl_binary)
-      if (stat.symlink or lite_xl_binary) == primary_lite_xl:get_binary_path() then
+      if SYMLINK ~= false and (stat.symlink or lite_xl_binary) == primary_lite_xl:get_binary_path() then
         if VERBOSE then log.warning("lite-xl " .. primary_lite_xl.version .. " is already first on path, making no changes.") end
         return
       end
@@ -2085,7 +2085,11 @@ function lpm.lite_xl_switch(version, target)
           if REINSTALL then
             common.rmrf(bin_folder .. PATHSEP .. "lite-xl")
             common.rmrf(bin_folder .. PATHSEP .. "data")
-            primary_lite_xl:reference("bundle", bin_folder)
+            if SYMLINK then
+              primary_lite_xl:reference("symlink", bin_folder)
+            else
+              primary_lite_xl:reference("bundle", bin_folder)
+            end
           else
             find_new_location = true
           end
