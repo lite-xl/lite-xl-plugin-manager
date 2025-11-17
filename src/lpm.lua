@@ -1441,6 +1441,27 @@ function LiteXL:is_manifest() return self.repository end
 function LiteXL:is_compatible(addon) return not addon.mod_version or MOD_VERSION == "any" or compatible_modversion(self.mod_version, addon.mod_version) end
 function LiteXL:is_installed(arch) return system.stat(self.local_path) ~= nil and self:get_binary_path(arch) end
 
+function LiteXL:reference(reference_type, target, force)
+  if reference_type == "share" then
+    local share_folder = target .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"
+    local binary_folder = target .. PATHSEP .. "bin"
+    assert(system.stat(share_folder), "can't find share folder " .. share_folder)
+    assert(system.stat(binary_folder), "can't find binary folder" .. binary_folder)
+    log.action(string.format("Installing lite-xl %s into %s and %s." , self.version, binary_folder, share_folder), "green")
+    common.copy(self.datadir_path, share_folder .. PATHSEP .. "data")
+    common.copy(self:get_binary_path(ARCH), bin_folder .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH))
+  elseif reference_type == "symlink" then
+    log.action(string.format("Symlinking lite-xl %s to %s." , self.version, target), "green")
+    common.symlink(self:get_binary_path(ARCH), target)
+  elseif reference_type == "bundle" then
+    log.action(string.format("Bundling lite-xl %s into %s." , self.version, target), "green")
+    common.copy(self:get_binary_path(ARCH), target .. PATHSEP .. get_executable_extension(ARCH))
+    common.copy(self.datadir_path, target .. PATHSEP .. "data")
+  else
+    error("unknown reference type: " .. reference_type)
+  end
+end
+
 function LiteXL:install(arch)
   if self:is_installed(arch) and not REINSTALL then log.warning("lite-xl " .. self.version .. " already installed") return end
   assert(not self:is_local(), "cannot install a local copy of lite-xl")
@@ -1969,7 +1990,7 @@ function lpm.get_lite_xl(version)
 end
 
 function lpm.lite_xl_save()
-  settings.lite_xls = common.map(common.grep(lite_xls, function(l) return (l:is_local() or not l:is_manifest()) and not l:is_system() end), function(l) 
+  settings.lite_xls = common.map(common.grep(lite_xls, function(l) return (l:is_local() or not l:is_manifest()) and l.version ~= "system" end), function(l) 
     return { version = l.version, mod_version = l.mod_version, path = l.path, binary_path = l.binary_path, datadir_path = l.datadir_path, primary = primary_lite_xl == l, files = l.files } 
   end)
   lpm.settings_save()
@@ -2012,6 +2033,111 @@ end
 function lpm.lite_xl_switch(version, target)
   primary_lite_xl = (lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version))
   lpm.lite_xl_save()
+  -- If we're not a package manager version, then allow for a symlink to be placed in the user's path.
+  -- Automatic determination of *where* to place the symlink is complicated.
+  if DEFAULT_RELEASE_URL and #DEFAULT_RELEASE_URL > 0 then 
+    if not primary_lite_xl:is_installed() then primary_lite_xl:install() end
+    -- first, we check where the current lite-xl is on the path:
+    local lite_xl_binary = BINARY or common.path("lite-xl" .. get_executable_extension(PLATFORM)), "can't find executable"
+    local find_new_location = target or not lite_xl_binary
+    if lite_xl_binary then 
+      local stat = assert(system.stat(lite_xl_binary), "can't stat lite-xl binary " .. lite_xl_binary)
+      if (stat.symlink or lite_xl_binary) == primary_lite_xl:get_binary_path() then
+        if VERBOSE then log.warning("lite-xl " .. primary_lite_xl.version .. " is already first on path, making no changes.") end
+        return
+      end
+      -- from there, identify what type of lite-xl install this is: in a /share /bin situation, a symlink, or a portable-ish structure.
+      local bin_folder = common.dirname(lite_xl_binary)
+      local usr_folder = common.dirname(bin_folder)
+      local share_folder = usr_folder .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"
+      if not target then
+        if stat.symlink then
+          -- if the symlinked install corresponds to a lite_xl we have on record, then it's likely managed by lpm and can be changed freely.
+          if common.first(get_lite_xls(), function(l) return l:get_binary_path() == stat.symlink end) then
+            common.rmrf(lite_xl_binary)
+            if SYMLINK == false then
+              primary_lite_xl:reference("bundle", bin_folder)
+            else
+              primary_lite_xl:reference("symlink", lite_xl_binary)
+            end
+          else
+            -- this is a symlink to somewhere else
+            -- if that's the case the case, then find a better place on the path to place our symlink/bundle
+            find_new_location = true
+          end
+        elseif system.stat(share_folder) and bin_folder:find("bin$") and not system.stat(bin_folder .. PATHSEP .. "data") then
+          -- /bin /share sitatuion
+          if REINSTALL then
+            -- nuke the binary and /share/lite-xl folders
+            common.rmrf(lite_xl_binary)
+            common.rmrf(share_folder)
+            if SYMLINK then
+              primary_lite_xl:reference("symlink", lite_xl_binary)
+            else
+              primary_lite_xl:reference("share", usr_folder)
+            end
+          else
+            -- if we're not reinstalling, find a better place for this bundle
+            find_new_location = true
+          end
+        elseif system.stat(bin_folder .. PATHSEP .. "data") then
+          -- portable ish install
+          if REINSTALL then
+            common.rmrf(bin_folder .. PATHSEP .. "lite-xl")
+            common.rmrf(bin_folder .. PATHSEP .. "data")
+            primary_lite_xl:reference("bundle", bin_folder)
+          else
+            find_new_location = true
+          end
+        else
+          error("unsupported lite-xl format (possbily AIO?), please specify a specific switch path")
+        end
+      end
+    end
+    if find_new_location then
+      -- find a place on the PATH to place a symlink or bundle, or share reference.
+      -- it must be BEFORE lite_xl_binary in the path
+      -- if it is not possible to find a place to put the new binary, then replace the binary with a prompt
+      -- start from the extant path location,
+      local binary_index = nil
+      local paths
+      if target then
+        paths = { target, common.dirname(lite_xl_binary) }
+      else
+        paths = common.split(":", os.getenv("PATH"))
+        for i, path in ipairs(paths) do
+          if lite_xl_binary:find(path, 1, true) == 1 then
+            binary_index = i
+            break
+          end
+        end
+      end
+      for i = binary_index - 1, 1, -1 do
+        -- check to see if we can modify this folder (i.e. did we sudo)
+        local directory = paths[i]
+        local tmp_path = directory .. PATHSEP .. ".lpm-test"
+        local f = io.open(tmp_path, "ab")
+        if f then f:close() end
+        common.rmrf(tmp_path)
+        if f then
+          if SYMLINK ~= false then
+            if prompt(string.format("Install symlink to lite-xl %s in %s?", primary_lite_xl.version, paths[i])) then
+              primary_lite_xl:reference("symlink", paths[i] .. PATHSEP .. common.basename(primary_lite_xl:get_binary_path()))
+            end
+          elseif path:find("bin$") and system.stat(common.dirname(paths[i]) .. PATHSEP .. "share") then
+            if prompt(string.format("Install lite-xl %s into %s and %s?", primary_lite_xl.version, paths[i], common.dirname(paths[i]) .. PATHSEP .. "share")) then
+              primary_lite_xl:reference("share", common.dirname(paths[i]))
+            end
+          else
+            if prompt(string.format("Install lite-xl %s into %s as a bundle?", primary_lite_xl.version, paths[i])) then
+              primary_lite_xl:reference("bundle", paths[i])
+            end
+          end
+        end
+      end
+      assert(i > 0, "Can't find a good place to place a reference to lite-xl. Either supply a path, adjust your $PATH or `sudo lpm switch`.")
+    end
+  end
 end
 
 
@@ -2598,6 +2724,7 @@ function lpm.command(ARGS)
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "run" then return lpm.lite_xl_run(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm.lite_xl_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "rm" then return lpm.lite_xl_rm(table.unpack(common.slice(ARGS, 4)))
+  elseif ARGS[2] == "lite-xl" and ARGS[3] == "upgrade" then return lpm.lite_xl_upgrade(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" then error("unknown lite-xl command: " .. ARGS[3])
   elseif ARGS[2] == "bottle" and ARGS[3] == "add" then return lpm.bottle_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "rm" then return lpm.bottle_rm(table.unpack(common.slice(ARGS, 4)))
