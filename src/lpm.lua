@@ -565,7 +565,7 @@ local function get_executable_extension(arch)
 end
 
 global({
-  LATEST_MOD_VERSION = "3.0.0",
+  LATEST_MOD_VERSION = "4.0.0",
   EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or "",
   SHOULD_COLOR = ((PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")) or false
 })
@@ -1589,7 +1589,7 @@ function Bottle:construct(hardcopy)
   self.local_path = TMPDIR .. PATHSEP .. "bottles" .. PATHSEP .. (self.name or self.hash)
   common.rmrf(self.local_path)
 
-  if self.lite_xl and (not self.lite_xl:is_installed() or REINSTALL) then self.lite_xl:install() end
+  if self.lite_xl and (not self.lite_xl:is_installed() or REINSTALL) and not self.lite_xl:is_local() then self.lite_xl:install() end
   common.mkdirp(self.local_path .. PATHSEP .. "user")
   common.write(self.local_path .. PATHSEP .. "user" .. PATHSEP .. "init.lua", self.config == "system" and system.stat(USERDIR .. PATHSEP .. "init.lua") and common.read(USERDIR .. PATHSEP .. "init.lua") or (DEFAULT_CONFIG_HEADER .. (MOD_VERSION == "any" and "config.skip_plugins_version = true\n" or "") .. (self.config or "")))
 
@@ -2123,25 +2123,22 @@ function lpm.lite_xl_switch(version, target)
       for i = binary_index - 1, 1, -1 do
         -- check to see if we can modify this folder (i.e. did we sudo)
         local directory = paths[i]
-        -- disallow placing into /usr/bin, /bin, and sbin folders in general
-        if directory ~= (PATHSEP .. "usr" .. PATHSEP .. "bin") and directory ~= (PATHSEP .. "bin") and not directory:find(PATHSEP .. "sbin") and directory then
-          local tmp_path = directory .. PATHSEP .. ".lpm-test"
-          local f = io.open(tmp_path, "ab")
-          if f then f:close() end
-          common.rmrf(tmp_path)
-          if f then
-            if SYMLINK ~= false then
-              if prompt(string.format("Install symlink to lite-xl %s in %s?", primary_lite_xl.version, paths[i])) then
-                primary_lite_xl:reference("symlink", paths[i] .. PATHSEP .. common.basename(primary_lite_xl:get_binary_path()))
-              end
-            elseif path:find("bin$") and system.stat(common.dirname(paths[i]) .. PATHSEP .. "share") then
-              if prompt(string.format("Install lite-xl %s into %s and %s?", primary_lite_xl.version, paths[i], common.dirname(paths[i]) .. PATHSEP .. "share")) then
-                primary_lite_xl:reference("share", common.dirname(paths[i]))
-              end
-            else
-              if prompt(string.format("Install lite-xl %s into %s as a bundle?", primary_lite_xl.version, paths[i])) then
-                primary_lite_xl:reference("bundle", paths[i])
-              end
+        local tmp_path = directory .. PATHSEP .. ".lpm-test"
+        local f = io.open(tmp_path, "ab")
+        if f then f:close() end
+        common.rmrf(tmp_path)
+        if f then
+          if SYMLINK ~= false then
+            if prompt(string.format("Install symlink to lite-xl %s in %s?", primary_lite_xl.version, paths[i])) then
+              primary_lite_xl:reference("symlink", paths[i] .. PATHSEP .. common.basename(primary_lite_xl:get_binary_path()))
+            end
+          elseif path:find("bin$") and system.stat(common.dirname(paths[i]) .. PATHSEP .. "share") then
+            if prompt(string.format("Install lite-xl %s into %s and %s?", primary_lite_xl.version, paths[i], common.dirname(paths[i]) .. PATHSEP .. "share")) then
+              primary_lite_xl:reference("share", common.dirname(paths[i]))
+            end
+          else
+            if prompt(string.format("Install lite-xl %s into %s as a bundle?", primary_lite_xl.version, paths[i])) then
+              primary_lite_xl:reference("bundle", paths[i])
             end
           end
         end
