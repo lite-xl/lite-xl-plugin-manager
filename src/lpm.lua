@@ -785,6 +785,10 @@ function Addon.new(repository, metadata)
   return self
 end
 
+function Addon:get_unique_identifier()
+  return self.id .. ":" .. self.version .. (self.mod_version and ("-" .. self.mod_version) or "")
+end
+
 function Addon:is_stub() return self.remote end
 function Addon:is_asset() return self.type == "font" end
 
@@ -1680,7 +1684,7 @@ end
 local function get_repository_addons()
   local t, hash = { }, { }
   for i,p in ipairs(common.flat_map(repositories, function(r) return r.addons end)) do
-    local id = p.id .. ":" .. p.version
+    local id = p:get_unique_identifier()
     if not hash[id] then
       table.insert(t, p)
       hash[id] = p
