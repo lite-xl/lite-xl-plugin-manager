@@ -81,7 +81,16 @@
       "version": "1.0",
       "description": "JSON support plugin, provides encoding/decoding.",
       "type": "library",
-      "path": "libraries/json.lua"
+      "path": "libraries/json.lua",
+      "dependencies": {
+        "cjson": { "optional": "true" }
+      }
+    },
+    {
+      "id": "cjson",
+      "version": "0.3",
+      "type": "library",
+      "remote": "https://github.com/adamharrison/lite-xl-cjson.git:a740cea674e1cbae9cacf1ce165daefe006135fd"
     }
   ],
   "lite-xls": [],
