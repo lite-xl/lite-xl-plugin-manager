@@ -112,8 +112,8 @@ jobs:
     strategy:
       matrix:
         config:
-          - { arch: x86_64, runner: macos-13 } # macos-13 runs on Intel runners
-          - { arch: aarch64, runner: macos-14 } # macos-14 runs on M1 runners
+          - { arch: x86_64, runner: macos-latest, macosarch: x86_64 }
+          - { arch: aarch64, runner: macos-latest, macosarch: arm64 }
 
     runs-on: ${{ matrix.config.runner }}
     env: { CC: clang }
@@ -134,7 +134,7 @@ jobs:
 
       - name: Build
         run: |
-          ./build.sh clean && ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3
+          ./build.sh clean && COMPILE_FLAGS="-arch ${{ matrix.config.macosarch }}" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3 
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
