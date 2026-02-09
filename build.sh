@@ -31,7 +31,7 @@ LINK_FLAGS="$LDFLAGS -lm -L`pwd`/lib/prefix/lib -L`pwd`/lib/prefix/lib64"   # An
 cmake --version >/dev/null 2>/dev/null || { echo "Please ensure that you have cmake installed." && exit -1; }
 
 # Build supporting libraries, libz, liblzma, libmbedtls, libmbedcrypto, libgit2, libzip, libmicrotar, liblua
-[[ " $@" != *" -g"* ]] && CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release" || CMAKE_DEFUALT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Debug"
+[[ " $@" != *" -g"* ]] && CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Release" || CMAKE_DEFAULT_FLAGS="$CMAKE_DEFAULT_FLAGS -DCMAKE_BUILD_TYPE=Debug"
 if [[ " $@" != *" -O"* ]]; then
   [[ " $@" != *" -g"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -O3" || COMPILE_FLAGS="$COMPILE_FLAGS -O0"
 fi
