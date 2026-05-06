@@ -1604,10 +1604,10 @@ function Bottle:construct(hardcopy)
   end
   local construct = hardcopy and common.copy or common.symlink
   if lite_xl then -- if no lite_xl, we're assuming that we're using the system version with a LITE_PREFIX environment variable. 
-    construct(lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1]))
-    if hardcopy then
+    common.copy(lite_xl:get_binary_path(), self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1]))
+    --if hardcopy then
       system.chmod(self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1]), 448) -- chmod to rwx-------\
-    end
+    --end
     construct(lite_xl.datadir_path, self.local_path .. PATHSEP .. "data")
     if VERBOSE then log.action(string.format("Constructing bottle from %s, %s", lite_xl:get_binary_path(), lite_xl.datadir_path)) end
   end
@@ -3322,7 +3322,8 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
       for _, file in ipairs(common.concat({ section }, section.files or {})) do
         if (not filter or (section.id and filter[section.id])) and file.url and file.checksum ~= "SKIP" and type(file.checksum) == "string" then
           log.action("Computing checksum for " .. (section.id or section.version) .. " (" .. file.url .. ")...")
-          local checksum = system.hash(common.get(file.url))
+          local file_contents = common.get(file.url)
+          local checksum = system.hash(file_contents)
           if computed[file.checksum] and computed[file.checksum] ~= checksum then
             error("can't update manifest; existing checksum " .. file.checksum .. " exists in two separate places that now have disparate checksum values")
           end
