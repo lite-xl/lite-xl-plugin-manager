@@ -37,6 +37,19 @@ if get_option('static')
     cflags += '-DLPM_STATIC'
 endif
 
+allow_upgrade = get_option('allow_self-upgrade')
+release_url = get_option('release_download_url')
+if not allow_upgrade
+    cflags += ('-DLPM_DEFAULT_RELEASE=\'\'')
+    if release_url != ''
+        warning('The release_download_url option was specified while self-upgrading was disabled by the allow_self-upgrade option.')
+    endif
+else
+    if release_url != ''
+        cflags += ('-DLPM_DEFAULT_RELEASE=\'"@0@"\'').format(release_url)
+    endif
+endif
+
 lpm_exe = executable('lpm',
     lpm_source,
     dependencies: [
