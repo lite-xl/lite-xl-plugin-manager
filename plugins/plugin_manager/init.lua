@@ -20,7 +20,7 @@ config.plugins.plugin_manager = common.merge({
   -- Restarts the plugin manager on changes.
   restart_on_change = true,
   -- Path to a local copy of all repositories.
-  cachdir = nil,
+  cachedir = nil,
   -- Path to the folder that holds user-specified plugins.
   userdir = USERDIR,
   -- Path to ssl certificate directory or bunde. Nil will auto-detect.
@@ -88,14 +88,19 @@ local function extract_progress(chunk)
   return chunk:sub(1, newline - 1), chunk:sub(newline + 1)
 end
 
+local function resolve_path(path)
+  if type(path) == 'function' then return path() end
+  return path
+end
+
 local function run(cmd, options)
   options = options or {}
   table.insert(cmd, 1, config.plugins.plugin_manager.lpm_binary_path)
   table.insert(cmd, "--json")
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--progress")
-  if options.cachedir then table.insert(cmd, "--cachedir=" .. options.cachedir) end
-  table.insert(cmd, "--userdir=" .. (options.userdir or USERDIR))
+  if options.cachedir or config.plugins.plugin_manager.cachedir then table.insert(cmd, "--cachedir=" .. resolve_path(options.cachedir or config.plugins.plugin_manager.cachedir)) end
+  table.insert(cmd, "--userdir=" .. resolve_path(options.userdir or config.plugins.plugin_manager.userdir or USERDIR))
   for i,v in ipairs(default_arguments) do table.insert(cmd, v) end
   local proc = process.start(cmd)
   if config.plugins.plugin_manager.debug then for i, v in ipairs(cmd) do io.stdout:write((i > 1 and " " or "") .. v) end io.stdout:write("\n") io.stdout:flush() end
