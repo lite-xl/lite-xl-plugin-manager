@@ -1,3 +1,6 @@
 option('static', type : 'boolean', value : false, description: 'Build the pre-packaged lua file into the executable.')
 option('install_plugin', type : 'boolean', value : false, description: 'Install the Lite-XL plugin for lpm')
 option('lite_datadir', type : 'string', value : '', description: 'Path to the Lite-XL data directory, usually \'share/lite-xl\'')
+option('allow_self-upgrade', type : 'boolean', value : true, description: 'Allow lpm to `self-upgrade`.')
+option('release_download_url', type : 'string', value : '', description: 'Release URL for lpm `self-upgrade`. An empty string keeps the default.')
+option('version', type : 'string', value : '', description: 'Application version string, visible to the user. An empty string will default to "unknown"')
