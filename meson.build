@@ -50,6 +50,11 @@ else
     endif
 endif
 
+version = get_option('version')
+if version != ''
+    cflags += ('-DLPM_VERSION=\'"@0@"\'').format(version)
+endif
+
 lpm_exe = executable('lpm',
     lpm_source,
     dependencies: [
