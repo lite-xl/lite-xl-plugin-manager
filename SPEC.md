@@ -17,7 +17,7 @@ the form of a git remote url, i.e. `<url>:<ref>`. An example would be:
 
 Addons are the primary objects specified in this specification. An addon
 consists of a series of metadata, the path to the addon in this repository,
-or its location on a remote repository, or a publically accessible URL, and a
+or its location on a remote repository, or a publicly accessible URL, and a
 set of files to be downloaded with the plugin (usually releases, but can be
 data files, or fonts, or anything else).
 
@@ -92,7 +92,7 @@ Dependency values are an object which contain the following keys:
 
 ### Stubs
 
-If an addon likes, it can specify a particular `remote`; a publically acessible
+If an addon likes, it can specify a particular `remote`; a publicly accessible
 git repository, accessed via HTTPS, pinned at a specific commit to be used as a
 source for its data. In that case, the package manager must download the repository,
 and interpret the manifest file found there to determine the addon's metadata.
@@ -106,7 +106,7 @@ can also optionally contain the `arch` and `path` keys.
 
 * `url` represents the URL to grab the particular file from.
 * `checksum` is the sha256hex checksum for the file. If `"SKIP"` is specified, the
-  check is skipped. This is fine for development purposes, but any publically
+  check is skipped. This is fine for development purposes, but any publicly
   accessible manifest, should specify a checksum.
 * `arch` is the lite-xl/clang architecture tuple that the file is relevant for.
   if omitted, file is to be assumed to be valid for all arhcitectures. Can be an array.
@@ -154,7 +154,7 @@ that any version greater than `0.1` can be used.
       ],
       "files": [ # A list of files (usually binaries) this plugin requires to function.
         {
-          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-linux", # A publically accessible URL to download from.
+          "url": "https://github.com/adamharrison/lite-xl-plugin-manager/releases/download/v0.1/lpm.x86_64-linux", # A publicly accessible URL to download from.
           "arch": "x86_64-linux", # The lite-xl/clang target tuple that represents the architecture this file is for.
           "checksum": "d27f03c850bacdf808436722cd16e2d7649683e017fe6267934eeeedbcd21096" # the sha256hex checksum that corresponds to this file.
         },
