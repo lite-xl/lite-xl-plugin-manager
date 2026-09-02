@@ -60,4 +60,5 @@ if (get_option('install_plugin'))
     endif
 
     install_subdir('plugins', install_dir : lite_datadir)
+    install_subdir('libraries', install_dir : lite_datadir)
 endif
