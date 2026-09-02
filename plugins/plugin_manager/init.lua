@@ -19,6 +19,10 @@ config.plugins.plugin_manager = common.merge({
   show_libraries = false,
   -- Restarts the plugin manager on changes.
   restart_on_change = true,
+  -- Path to a folder where lpm stores configuration files
+  configdir = nil,
+  -- Path to a folder where lpm stores temporary files
+  tmpdir = nil,
   -- Path to a local copy of all repositories.
   cachedir = nil,
   -- Path to the folder that holds user-specified plugins.
@@ -99,6 +103,8 @@ local function run(cmd, options)
   table.insert(cmd, "--json")
   table.insert(cmd, "--quiet")
   table.insert(cmd, "--progress")
+  if options.configdir or config.plugins.plugin_manager.configdir then table.insert(cmd, "--configdir=" .. resolve_path(options.configdir or config.plugins.plugin_manager.configdir)) end
+  if options.tmpdir or config.plugins.plugin_manager.tmpdir then table.insert(cmd, "--tmpdir=" .. resolve_path(options.tmpdir or config.plugins.plugin_manager.tmpdir)) end
   if options.cachedir or config.plugins.plugin_manager.cachedir then table.insert(cmd, "--cachedir=" .. resolve_path(options.cachedir or config.plugins.plugin_manager.cachedir)) end
   table.insert(cmd, "--userdir=" .. resolve_path(options.userdir or config.plugins.plugin_manager.userdir or USERDIR))
   for i,v in ipairs(default_arguments) do table.insert(cmd, v) end
