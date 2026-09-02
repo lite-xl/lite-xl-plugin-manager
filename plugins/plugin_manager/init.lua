@@ -75,7 +75,7 @@ local default_arguments = {
   "--binary=" .. EXEFILE,
   "--assume-yes"
 }
-if config.plugins.plugin_manager.ssl_certs then table.insert(default_arguments, "--ssl_certs") table.insert(cmd, config.plugins.plugin_manager.ssl_certs) end
+if config.plugins.plugin_manager.ssl_certs then table.insert(default_arguments, "--ssl-certs") table.insert(default_arguments, config.plugins.plugin_manager.ssl_certs) end
 if config.plugins.plugin_manager.force then table.insert(default_arguments, "--force") end
 
 local function extract_progress(chunk)
