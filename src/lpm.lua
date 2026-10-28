@@ -565,7 +565,7 @@ local function get_executable_extension(arch)
 end
 
 global({
-  LATEST_MOD_VERSION = "3.0.0",
+  LATEST_MOD_VERSION = "4.0.0",
   EXECUTABLE_EXTENSION = PLATFORM == "windows" and ".exe" or "",
   SHOULD_COLOR = ((PLATFORM == "windows" or (os.getenv("TERM") and os.getenv("TERM") ~= "dumb")) and not os.getenv("NO_COLOR")) or false
 })
