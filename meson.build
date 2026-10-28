@@ -37,6 +37,24 @@ if get_option('static')
     cflags += '-DLPM_STATIC'
 endif
 
+allow_upgrade = get_option('allow_self-upgrade')
+release_url = get_option('release_download_url')
+if not allow_upgrade
+    cflags += ('-DLPM_DEFAULT_RELEASE=\'\'')
+    if release_url != ''
+        warning('The release_download_url option was specified while self-upgrading was disabled by the allow_self-upgrade option.')
+    endif
+else
+    if release_url != ''
+        cflags += ('-DLPM_DEFAULT_RELEASE=\'"@0@"\'').format(release_url)
+    endif
+endif
+
+version = get_option('version')
+if version != ''
+    cflags += ('-DLPM_VERSION=\'"@0@"\'').format(version)
+endif
+
 lpm_exe = executable('lpm',
     lpm_source,
     dependencies: [
@@ -59,6 +77,7 @@ if (get_option('install_plugin'))
         lite_datadir = get_option('datadir') + '/lite-xl'
     endif
 
-    install_subdir('plugins', install_dir : lite_datadir)
+    # Only install the plugin_manager plugin
+    install_subdir('plugins/plugin_manager', install_dir : lite_datadir + '/plugins')
     install_subdir('libraries', install_dir : lite_datadir)
 endif

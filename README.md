@@ -3,12 +3,12 @@
 ![image](https://user-images.githubusercontent.com/1034518/216748882-3ae8c8d4-a767-4d97-acc4-c1cde7e3e331.png)
 
 A standalone binary that provides an easy way of installing, and uninstalling
-plugins from lite-xl, as well as different version of lite-xl.
+plugins from Lite XL, as well as different version of Lite XL.
 
 Can be used by a package manager plugin that works from inside the editor
 and calls this binary.
 
-Also contains a `plugin_manager.lua` plugin to integrate the binary with lite-xl in
+Also contains a `plugin_manager.lua` plugin to integrate the binary with Lite XL in
 the form of an easy-to-use GUI.
 
 By default in releases, `lpm` will automatically consume the `manifest.json`
@@ -55,8 +55,8 @@ The fastest way to get started with lpm is to simply pull a release.
 wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.$(uname -m | sed 's/arm64/aarch64/')-$(uname | tr '[:upper:]' '[:lower:]') -O lpm && chmod +x lpm
 ```
 
-If you want to get the GUI version installed with lite-xl, you can tell `lpm` to install `plugin_manager`, which will allow
-you to access `Plugin Manager: Show` in the command palette in `lite-xl`.
+If you want to get the GUI version installed with Lite XL, you can tell `lpm` to install `plugin_manager`, which will allow
+you to access `Plugin Manager: Show` in the command palette in Lite XL.
 
 ```sh
 ./lpm install plugin_manager --assume-yes
@@ -121,7 +121,7 @@ for `mbedtls` and `libgit2`, `cmake` is also required.
 
 ## Supported Platforms
 
-`lpm` should work on all platforms `lite-xl` works on; but releases are offered for the following:
+`lpm` should work on all platforms Lite XL works on; but releases are offered for the following:
 
 * Windows x86_64
 * Linux x86_64
