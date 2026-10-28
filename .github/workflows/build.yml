@@ -134,7 +134,7 @@ jobs:
 
       - name: Build
         run: |
-          ./build.sh clean && COMPILE_FLAGS="-arch ${{ matrix.config.macosarch }}" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3 
+          ./build.sh clean && CFLAGS="-arch ${{ matrix.config.macosarch }}" ./build.sh -DLPM_STATIC -DLPM_VERSION='"'$FULL_VERSION-$ARCH'"' -O3 
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
