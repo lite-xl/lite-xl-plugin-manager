@@ -77,6 +77,7 @@ if (get_option('install_plugin'))
         lite_datadir = get_option('datadir') + '/lite-xl'
     endif
 
-    install_subdir('plugins', install_dir : lite_datadir)
+    # Only install the plugin_manager plugin
+    install_subdir('plugins/plugin_manager', install_dir : lite_datadir + '/plugins')
     install_subdir('libraries', install_dir : lite_datadir)
 endif
