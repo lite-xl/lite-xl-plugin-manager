@@ -43,7 +43,7 @@ if [[ "$@" != *"-lz"* ]]; then
   LINK_FLAGS="$LINK_FLAGS -lz"
 fi
 if [[ "$@" != *"-llzma"* ]]; then
-  [ ! -e "lib/xz/build" ] && { cd lib/xz && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DHAVE_ENCODERS=false && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  [ ! -e "lib/xz/build" ] && { cd lib/xz && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DXZ_TOOL_LZMAINFO=OFF -DXZ_NLS=OFF -DXZ_TOOL_XZDEC=OFF -DXZ_TOOL_LZMADEC=OFF -DHAVE_ENCODERS=false && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -llzma"
 fi
 if [[ "$@" != *"-DLPM_NO_NETWORK"* && "$@" != *"-lmbedtls"* && "$@" != *"-lmbedcrypto"* && "$@" != *"-lmbedx509"* ]]; then
@@ -56,7 +56,7 @@ if [[ "$@" != *"-DLPM_NO_GIT"* && "$@" != *"-lgit2"* ]]; then
   LINK_FLAGS="-lgit2 $LINK_FLAGS"
 fi
 if [[ "$@" != *"-lzip"* ]]; then
-  [ ! -e "lib/libzip/build" ] && { cd lib/libzip && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=ON -DENABLE_ZSTD=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
+  [ ! -e "lib/libzip/build" ] && { cd lib/libzip && mkdir build && cd build && CFLAGS="$COMPILE_FLAGS -Wno-incompatible-pointer-types" cmake .. -G "Unix Makefiles" $CMAKE_DEFAULT_FLAGS -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_OPENSSL=OFF -DENABLE_BZIP2=OFF -DENABLE_LZMA=ON -DENABLE_ZSTD=OFF -DBUILD_OSSFUZZ=OFF -DBUILD_REGRESS=OFF && $MAKE -j $JOBS && $MAKE install && cd ../../../ || exit -1; }
   LINK_FLAGS="$LINK_FLAGS -lzip -llzma"
 fi
 [[ "$@" != *"-lmicrotar"* ]] && COMPILE_FLAGS="$COMPILE_FLAGS -Ilib/microtar/src" && SRCS="$SRCS lib/microtar/src/microtar.c"
