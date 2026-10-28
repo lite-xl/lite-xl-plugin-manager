@@ -1,6 +1,6 @@
 # Manifest Specification
 
-A lite-xl manifest is a JSON file containing three different keys:
+A Lite XL manifest is a JSON file containing three different keys:
 
 * Remotes
 * Addons
@@ -119,18 +119,18 @@ it will automatically be extracted inside the addon's directory.
 
 ## Lite-XLs
 
-Lite-XLs represent different version of lite-xl that are registered in this
+Lite-XLs represent different version of Lite XL that are registered in this
 repository. Lite-XLs has the following metadata, as well as a `files` array.
 
 * `version`: A version specifier. Must take the form of x(.x)\*(-suffix).
-  Suffixes can be used to denote different flavours of lite-xl.
+  Suffixes can be used to denote different flavours of Lite XL.
 * `mod_version`: The modversion the binary corresponds to.
 
 ### Files
 
 The files array is identical to that of the `files` array under `addons`.
 Conventionally, there should be a single file per architecture that is a
-`.tar.gz` or `.zip` containing all necessary files for `lite-xl` to run.
+`.tar.gz` or `.zip` containing all necessary files for Lite XL to run.
 
 ## Version Specifiers
 
