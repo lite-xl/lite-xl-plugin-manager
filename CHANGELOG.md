@@ -1,3 +1,27 @@
+# 1.5.1
+
+* Fixed typos.
+* Updated build process for MacOS, which was building in the wrong architecutre for MacOS x64.
+* Fixed issues with underlying packages that were broken due to issues with their underlying build processes and the github CI runners.
+* Added additional meson options to better mirror what's in build.sh.
+* Bumped mbedtls version.
+
+# 1.5.0
+
+* Reverted error of selecting `4.0.0` as the default mod-version.
+* Fixed some typos.
+
+# 1.4.9
+
+* Added additional options in `config.plugin_manager` for `configdir` and `tmpdir`.
+* Also installed relevant libraries when building in meson.
+
+# 1.4.8
+
+* Added in optional CJSON dependency for JSON to be used instead of JSON if wanted.
+* Allowed for functional specification of directories in `config.plugin_manager`, rather than static, which is more flexible.
+* Update build procedures for MacOS.
+
 # 1.4.7
 
 * Fixed UTC timestamp handling.
