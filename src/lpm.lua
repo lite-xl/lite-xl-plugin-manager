@@ -1418,7 +1418,7 @@ end
 
 function LiteXL.__index(t, k) return LiteXL[k] end
 function LiteXL.new(repository, metadata)
-  if not metadata.version then error("lite-xl entry requires a version") end
+  if not metadata.version then error("Lite XL entry requires a version") end
   local self = setmetatable(common.merge({
     repository = repository,
     tags = {},
@@ -1451,14 +1451,14 @@ function LiteXL:reference(reference_type, target, force)
     local binary_folder = target .. PATHSEP .. "bin"
     assert(system.stat(share_folder), "can't find share folder " .. share_folder)
     assert(system.stat(binary_folder), "can't find binary folder" .. binary_folder)
-    log.action(string.format("Installing lite-xl %s into %s and %s." , self.version, binary_folder, share_folder), "green")
+    log.action(string.format("Installing Lite XL %s into %s and %s." , self.version, binary_folder, share_folder), "green")
     common.copy(self.datadir_path, share_folder .. PATHSEP .. "data")
     common.copy(self:get_binary_path(ARCH), bin_folder .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH))
   elseif reference_type == "symlink" then
-    log.action(string.format("Symlinking lite-xl %s to %s." , self.version, target), "green")
+    log.action(string.format("Symlinking Lite XL %s to %s." , self.version, target), "green")
     common.symlink(self:get_binary_path(ARCH), target)
   elseif reference_type == "bundle" then
-    log.action(string.format("Bundling lite-xl %s into %s." , self.version, target), "green")
+    log.action(string.format("Bundling Lite XL %s into %s." , self.version, target), "green")
     common.copy(self:get_binary_path(ARCH), target .. PATHSEP .. get_executable_extension(ARCH))
     common.copy(self.datadir_path, target .. PATHSEP .. "data")
   else
@@ -1467,19 +1467,19 @@ function LiteXL:reference(reference_type, target, force)
 end
 
 function LiteXL:install(arch)
-  if self:is_installed(arch) and not REINSTALL then log.warning("lite-xl " .. self.version .. " already installed") return end
-  assert(not self:is_local(), "cannot install a local copy of lite-xl")
+  if self:is_installed(arch) and not REINSTALL then log.warning("Lite XL " .. self.version .. " already installed") return end
+  assert(not self:is_local(), "cannot install a local copy of Lite XL")
   local local_path = self.local_path
   self.local_path = TMPDIR .. PATHSEP .. "lite-xls" .. PATHSEP .. self.version
   common.rmrf(self.local_path)
   common.mkdirp(self.local_path)
   if system_bottle.lite_xl == self then -- system lite-xl. We have to copy it because we can't really set the user directory.
     local executable, datadir = common.path("lite-xl" .. get_executable_extension(ARCH[1]))
-    if not executable then error("can't find system lite-xl executable") end
+    if not executable then error("can't find system Lite XL executable") end
     local stat = system.stat(executable)
     executable = stat.symlink and stat.symlink or executable
     datadir = common.dirname(executable) .. PATHSEP .. "data"
-    if not system.stat(datadir) then error("can't find system lite-xl data dir") end
+    if not system.stat(datadir) then error("can't find system Lite XL data dir") end
     common.copy(executable, self.local_path .. PATHSEP .. "lite-xl")
     system.chmod(self.local_path .. PATHSEP .. "lite-xl", 448) -- chmod to rwx-------
     common.copy(datadir, self.local_path .. PATHSEP .. "data")
@@ -1496,7 +1496,7 @@ function LiteXL:install(arch)
       if file_arch and common.grep(ARCH, function(e) return common.grep(file_arch, function(a) return a == e end)[1] end)[1] then
         if not file.checksum then error("requires a checksum") end
         local basename = common.basename(file.url)
-        local archive = assert(basename:find("%.zip$") or basename:find("%.tar%.gz$"), "lite-xl files must be archives")
+        local archive = assert(basename:find("%.zip$") or basename:find("%.tar%.gz$"), "Lite XL files must be archives")
         local path = self.local_path .. PATHSEP .. (archive and basename or "lite-xl")
         log.action("Downloading file " .. file.url .. "...")
         common.get(file.url, { target = path, checksum = file.checksum, callback = write_progress_bar })
@@ -1504,7 +1504,7 @@ function LiteXL:install(arch)
         if archive then
           log.action("Extracting file " .. basename .. " in " .. self.local_path)
           system.extract(path, self.local_path)
-          -- because this is a lite-xl archive binary, we should expect to find a `lite-xl` folder, containing the lite-xl binary, and a data directory
+          -- because this is a Lite XL archive binary, we should expect to find a `lite-xl` folder, containing the Lite XL binary, and a data directory
           -- we want to move these into the primary directory, then delete the archive and the directory
           common.rename(self.local_path .. PATHSEP .. "lite-xl", self.local_path .. PATHSEP .. "dir")
           common.rename(self.local_path .. PATHSEP .. "dir" .. PATHSEP .. "data", self.local_path .. PATHSEP .. "data")
@@ -1515,16 +1515,16 @@ function LiteXL:install(arch)
       end
     end
   end
-  if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1])) then error("can't find executable for lite-xl " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
+  if not system.stat(self.local_path .. PATHSEP .. "lite-xl" .. get_executable_extension(ARCH[1])) then error("can't find executable for Lite XL " .. self.version .. "; does this release exist for " .. common.join(" & ", ARCH) .. "?") end
   common.rmrf(local_path)
   common.rename(self.local_path, local_path)
   self.local_path = local_path
 end
 
 function LiteXL:uninstall(force)
-  if not system.stat(self.local_path) then error("lite-xl " .. self.version .. " not installed") end
+  if not system.stat(self.local_path) then error("Lite XL " .. self.version .. " not installed") end
   if force or prompt("This will delete " .. self.local_path .. ". Are you sure you want to continue?") then 
-    log.action("Uninstalling lite-xl " .. self.version .. " from "  .. self.local_path)
+    log.action("Uninstalling Lite XL " .. self.version .. " from "  .. self.local_path)
     common.rmrf(self.local_path)
   end
 end
@@ -1598,7 +1598,7 @@ function Bottle:construct(hardcopy)
   end
   local lite_xl = self.lite_xl
   if SYMLINK ~= false and common.exists((lite_xl or primary_lite_xl).local_path .. PATHSEP .. "user") then
-    log.warning("your " .. (lite_xl and "specified" or "primary") .. " lite-xl has a user folder next to it. creating a hard copy of lite-xl for this bottle")
+    log.warning("your " .. (lite_xl and "specified" or "primary") .. " Lite XL has a user folder next to it. creating a hard copy of Lite XL for this bottle")
     lite_xl = lite_xl or primary_lite_xl
     hardcopy = true
   end
@@ -1970,7 +1970,7 @@ function lpm.update(...)
             if err['last-modified'] then
               local lastModified = parseJSDate(err['last-modified'])
               if lastModified and lastModified > (stat.modified - 120) then
-                log.action(string.format("SKIP checksum file in lite-xl %s has been changed; %d vs. %d. Redownloading...", lite_xl.version, stat.modified, lastModified))
+                log.action(string.format("SKIP checksum file in Lite XL %s has been changed; %d vs. %d. Redownloading...", lite_xl.version, stat.modified, lastModified))
                 lite_xl:uninstall(true)
                 lite_xl:install()
               else
@@ -2003,7 +2003,7 @@ end
 function lpm.lite_xl_add(version, path)
   if not version then error("requires a version") end
   if not version:find("^%d") then error("versions must begin numerically (i.e. 2.1.1-debug)") end
-  if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " lite-xl already exists") end
+  if common.first(lite_xls, function(lite_xl) return lite_xl.version == version end) then error(version .. " Lite XL already exists") end
   if path:find("^http") then
     table.insert(lite_xls, LiteXL.new(nil, { version = version, mod_version = MOD_VERSION or LATEST_MOD_VERSION, files = { { arch = ARCH, url = path, checksum = "SKIP" } } }))
   else
@@ -2011,7 +2011,7 @@ function lpm.lite_xl_add(version, path)
     local data_path = DATADIR or (path and (path .. PATHSEP .. "data"))
     local binary_stat = assert(system.stat(binary_path), "can't find binary path " .. binary_path)
     local data_stat = assert(system.stat(data_path), "can't find data path " .. data_path)
-    local path_stat = assert(system.stat(path:gsub(PATHSEP .. "$", "")), "can't find lite-xl path " .. path)
+    local path_stat = assert(system.stat(path:gsub(PATHSEP .. "$", "")), "can't find Lite XL path " .. path)
     local mod_version = MOD_VERSION
     if mod_version == "any" or not mod_version then
       mod_version = common.read(data_path .. PATHSEP .. "core" .. PATHSEP .. "start.lua"):match("MOD_VERSION_MAJOR%s=%s(%d+)")
@@ -2030,12 +2030,12 @@ end
 
 function lpm.lite_xl_install(version)
   if not version then error("requires a version") end
-  (lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)):install()
+  (lpm.get_lite_xl(version) or error("can't find Lite XL version " .. version)):install()
 end
 
 
 function lpm.lite_xl_switch(version, target)
-  primary_lite_xl = (lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version))
+  primary_lite_xl = (lpm.get_lite_xl(version) or error("can't find Lite XL version " .. version))
   lpm.lite_xl_save()
   -- If we're not a package manager version, then allow for a symlink to be placed in the user's path.
   -- Automatic determination of *where* to place the symlink is complicated.
@@ -2045,12 +2045,12 @@ function lpm.lite_xl_switch(version, target)
     local lite_xl_binary = BINARY or common.path("lite-xl" .. get_executable_extension(PLATFORM)), "can't find executable"
     local find_new_location = target or not lite_xl_binary
     if lite_xl_binary then 
-      local stat = assert(system.stat(lite_xl_binary), "can't stat lite-xl binary " .. lite_xl_binary)
+      local stat = assert(system.stat(lite_xl_binary), "can't stat Lite XL binary " .. lite_xl_binary)
       if SYMLINK ~= false and (stat.symlink or lite_xl_binary) == primary_lite_xl:get_binary_path() then
-        if VERBOSE then log.warning("lite-xl " .. primary_lite_xl.version .. " is already first on path, making no changes.") end
+        if VERBOSE then log.warning("Lite XL " .. primary_lite_xl.version .. " is already first on path, making no changes.") end
         return
       end
-      -- from there, identify what type of lite-xl install this is: in a /share /bin situation, a symlink, or a portable-ish structure.
+      -- from there, identify what type of Lite XL install this is: in a /share /bin situation, a symlink, or a portable-ish structure.
       local bin_folder = common.dirname(lite_xl_binary)
       local usr_folder = common.dirname(bin_folder)
       local share_folder = usr_folder .. PATHSEP .. "share" .. PATHSEP .. "lite-xl"
@@ -2098,7 +2098,7 @@ function lpm.lite_xl_switch(version, target)
             find_new_location = true
           end
         else
-          error("unsupported lite-xl format (possbily AIO?), please specify a specific switch path")
+          error("unsupported Lite XL format (possbily AIO?), please specify a specific switch path")
         end
       end
     end
@@ -2129,28 +2129,28 @@ function lpm.lite_xl_switch(version, target)
         common.rmrf(tmp_path)
         if f then
           if SYMLINK ~= false then
-            if prompt(string.format("Install symlink to lite-xl %s in %s?", primary_lite_xl.version, paths[i])) then
+            if prompt(string.format("Install symlink to Lite XL %s in %s?", primary_lite_xl.version, paths[i])) then
               primary_lite_xl:reference("symlink", paths[i] .. PATHSEP .. common.basename(primary_lite_xl:get_binary_path()))
             end
           elseif path:find("bin$") and system.stat(common.dirname(paths[i]) .. PATHSEP .. "share") then
-            if prompt(string.format("Install lite-xl %s into %s and %s?", primary_lite_xl.version, paths[i], common.dirname(paths[i]) .. PATHSEP .. "share")) then
+            if prompt(string.format("Install Lite XL %s into %s and %s?", primary_lite_xl.version, paths[i], common.dirname(paths[i]) .. PATHSEP .. "share")) then
               primary_lite_xl:reference("share", common.dirname(paths[i]))
             end
           else
-            if prompt(string.format("Install lite-xl %s into %s as a bundle?", primary_lite_xl.version, paths[i])) then
+            if prompt(string.format("Install Lite XL %s into %s as a bundle?", primary_lite_xl.version, paths[i])) then
               primary_lite_xl:reference("bundle", paths[i])
             end
           end
         end
       end
-      assert(i > 0, "Can't find a good place to place a reference to lite-xl. Either supply a path, adjust your $PATH or `sudo lpm switch`.")
+      assert(i > 0, "Can't find a good place to place a reference to Lite XL. Either supply a path, adjust your $PATH or `sudo lpm switch`.")
     end
   end
 end
 
 
 function lpm.lite_xl_uninstall(version)
-  (lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)):uninstall()
+  (lpm.get_lite_xl(version) or error("can't find Lite XL version " .. version)):uninstall()
 end
 
 
@@ -2172,7 +2172,7 @@ function lpm.lite_xl_list()
     max_version = math.max(max_version, #lite_xl.version)
   end
   for i,repo in ipairs(repositories) do
-    if not repo.lite_xls then error("can't find lite-xl for repo " .. repo:url()) end
+    if not repo.lite_xls then error("can't find Lite XL for repo " .. repo:url()) end
     for j, lite_xl in ipairs(repo.lite_xls) do
       if not common.first(result["lite-xls"], function(l) return l.version == lite_xl.version end) then
         table.insert(result["lite-xls"], {
@@ -2305,7 +2305,7 @@ function lpm.lite_xl_run(...)
     repositories[1].explicit = true
     table.remove(arguments, 1)
   end
-  local lite_xl = (bottle and bottle.lite_xl) or lpm.get_lite_xl(version) or error("can't find lite-xl version " .. version)
+  local lite_xl = (bottle and bottle.lite_xl) or lpm.get_lite_xl(version) or error("can't find Lite XL version " .. version)
   local addons, i = lpm.retrieve_installable_addons(lite_xl, arguments)
   bottle = bottle or Bottle.new({ lite_xl = lite_xl, addons = addons, config = CONFIG })
   if not bottle:is_constructed() or REINSTALL then bottle:construct() end
@@ -2559,7 +2559,7 @@ function lpm.bottle_add(name, version, ...)
     table.insert(arguments, 1, version)
     version = nil
   end
-  local lite_xl = lpm.get_lite_xl(version or "primary") or error("can't find lite-xl version " .. (version or "primary"))
+  local lite_xl = lpm.get_lite_xl(version or "primary") or error("can't find Lite XL version " .. (version or "primary"))
   local addons, i = lpm.retrieve_installable_addons(lite_xl, arguments)
   if #arguments >= i then error("invalid use of --") end
   Bottle.new({ lite_xl = version and lite_xl, name = name, addons = addons, config = CONFIG }):construct()
@@ -2571,7 +2571,7 @@ function lpm.bottle_dump(name, version, ...)
     table.insert(arguments, 1, version)
     version = nil
   end
-  local lite_xl = lpm.get_lite_xl(version or "primary") or error("can't find lite-xl version " .. (version or "primary"))
+  local lite_xl = lpm.get_lite_xl(version or "primary") or error("can't find Lite XL version " .. (version or "primary"))
   local addons, i = lpm.retrieve_installable_addons(lite_xl, arguments)
   if #arguments >= i then error("invalid use of --") end
   Bottle.new({ lite_xl = version and lite_xl, name = name, addons = addons, config = CONFIG, local_path = name }):construct(true)
@@ -2632,7 +2632,7 @@ function lpm.purge()
   end
 end
 
--- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local lite-xl's.
+-- Base setup; initialize default repos if applicable, read them in. Determine Lite XL system binary if not specified, and pull in a list of all local Lite XL installs.
 function lpm.setup()
   settings = { lite_xls = {}, repositories = {}, installed = {}, version = VERSION }
   lpm.repo_init(ARGS[2] == "init" and #ARGS > 2 and (ARGS[3] ~= "none" and common.map(common.slice(ARGS, 3), function(url) return Repository.url(url) end) or {}) or nil)
@@ -2659,7 +2659,7 @@ function lpm.setup()
   local lite_xl_binary = BINARY or common.path("lite-xl" .. get_executable_extension(PLATFORM))
   if lite_xl_binary then
     local stat = system.stat(lite_xl_binary)
-    if not stat then error("can't find lite-xl binary " .. lite_xl_binary) end
+    if not stat then error("can't find Lite XL binary " .. lite_xl_binary) end
     lite_xl_binary = stat.symlink or lite_xl_binary
     local system_lite_xl = common.first(common.concat(common.flat_map(repositories, function(r) return r.lite_xls end), lite_xls), function(lite_xl) return lite_xl:get_binary_path() == lite_xl_binary end)
     if not system_lite_xl then
@@ -2733,7 +2733,7 @@ function lpm.command(ARGS)
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "add" then return lpm.lite_xl_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "rm" then return lpm.lite_xl_rm(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "lite-xl" and ARGS[3] == "upgrade" then return lpm.lite_xl_upgrade(table.unpack(common.slice(ARGS, 4)))
-  elseif ARGS[2] == "lite-xl" then error("unknown lite-xl command: " .. ARGS[3])
+  elseif ARGS[2] == "lite-xl" then error("unknown Lite XL command: " .. ARGS[3])
   elseif ARGS[2] == "bottle" and ARGS[3] == "add" then return lpm.bottle_add(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "rm" then return lpm.bottle_rm(table.unpack(common.slice(ARGS, 4)))
   elseif ARGS[2] == "bottle" and ARGS[3] == "run" then return lpm.bottle_run(table.unpack(common.slice(ARGS, 4)))
@@ -2811,11 +2811,11 @@ Usage: lpm COMMAND [...ARGUMENTS] [--json] [--userdir=directory]
   [--datadir=directory] [--binary=path] [--symlink] [--post] [--reinstall]
   [--no-color] [--table=...] [--plugin=file/url] [--tmpdir=directory] [--configdir=directory]
 
-LPM is a package manager for `lite-xl`, written in C (and packed-in lua).
+LPM is a package manager for Lite XL, written in C (and packed-in lua).
 
 It's designed to install packages from our central github repository (and
-affiliated repositories), directly into your lite-xl user directory. It can
-be called independently, or from the lite-xl `plugin_manager` addon.
+affiliated repositories), directly into your Lite XL user directory. It can
+be called independently, or from the Lite XL `plugin_manager` addon.
 
 LPM will always use
 ]] .. DEFAULT_REPO_URL .. [[
@@ -2862,22 +2862,22 @@ It has the following commands:
   lpm self-upgrade [version]               Upgrades lpm to a new version,
                                            if applicable. Defaults to
                                            latest.
-  lpm [lite-xl] install <version>          Installs lite-xl. Infers the
+  lpm [lite-xl] install <version>          Installs Lite XL. Infers the
     [binary] [datadir]                     paths on your system if not
                                            supplied. Automatically
                                            switches to be your system default
                                            if path auto inferred.
-  lpm lite-xl add <version> <path>         Adds a local version of lite-xl to
+  lpm lite-xl add <version> <path>         Adds a local version of Lite XL to
                                            the managed list, allowing it to be
                                            easily bottled.
-  lpm lite-xl rm <path>                    Removes a local version of lite-xl
+  lpm lite-xl rm <path>                    Removes a local version of Lite XL
                                            from the managed list.
-  lpm [lite-xl] switch <version> [<path>]  Sets the active version of lite-xl
+  lpm [lite-xl] switch <version> [<path>]  Sets the active version of Lite XL
                                            to be the specified version. Auto-detects
-                                           current install of lite-xl; if none found
+                                           current install of Lite XL; if none found
                                            path can be specified.
   lpm lite-xl list [name pattern]          Lists all installed versions of
-     [...filters]                          lite-xl. Can specify the flags listed
+     [...filters]                          Lite XL. Can specify the flags listed
                                            in the filtering section.
   lpm run <version> [...addons]            Sets up a "bottle" to run the specified
                                            lite version, with the specified addons
@@ -2896,19 +2896,19 @@ It has the following commands:
 Flags have the following effects:
 
   --json                   Performs all communication in JSON.
-  --userdir=directory      Sets the lite-xl userdir manually.
-                           If omitted, uses the normal lite-xl logic.
+  --userdir=directory      Sets the Lite XL userdir manually.
+                           If omitted, uses the normal Lite XL logic.
   --cachedir=directory     Sets the directory to store all repositories.
   --configdir=directory    Sets the directory where we store lpm configuration data.
   --tmpdir=directory       During install, sets the staging area.
   --datadir=directory      Sets the data directory where core addons are located
-                           for the system lite-xl.
+                           for the system Lite XL.
   --bottledir=directory    Sets the directory where bottles are stored.
-  --binary=path            Sets the lite-xl binary path for the system lite-xl.
+  --binary=path            Sets the Lite XL binary path for the system Lite XL.
   --verbose                Spits out more information, including intermediate
                             steps to install and whatnot.
   --quiet                  Outputs nothing but explicit responses.
-  --mod-version=version    Sets the mod version of lite-xl to install addons.
+  --mod-version=version    Sets the mod version of Lite XL to install addons.
                            Can be set to "any", which will retrieve the latest
                            specified, and will add 
                            `config.skip_plugins_version = true` to a bottle.
